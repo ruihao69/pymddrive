@@ -112,8 +112,8 @@ class NonadiabaticDynamics(Dynamics):
         else:
             raise ValueError("The solver should be either 'Ehrenfest', ...")
         
-    def step(self, t: float, s: State, dt: float) -> Tuple[float, State]:
-        return rk4(t, s, self.deriv, dt)
+    def step(self, t: float, s: State) -> Tuple[float, State]:
+        return rk4(t, s, self.deriv, self.dt)
 
 def _deriv_ehrenfest(
     model: NonadiabaticHamiltonian, 
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     
     mass = 2000.0
     dyn = NonadiabaticDynamics(model, t0, s0, mass, solver='Ehrenfest', dt=0.1)
-    dyn.dt = 0.01
+    # dyn.dt = 0.01
     
     t = t0
     s = s0
@@ -214,7 +214,7 @@ if __name__ == "__main__":
     out_PE = np.array([-model.A])
     out_TE = np.array([out_KE[0] + out_PE[0]])
     while (s.data['R'] < 10) or (s.data['R'] < -10):
-        t, s = dyn.step(t, s, dyn.dt)
+        t, s = dyn.step(t, s)
         dyn.nsteps += 1
         if dyn.nsteps % dyn.save_every == 0:
             out_t = np.append(out_t, t)
@@ -229,28 +229,29 @@ if __name__ == "__main__":
         # out_states = np.append(out_states, s.data)
         # print(s.data['R'])
     
-# %%
-r = out_states['R']
-p = out_states['P']
-rho = out_states['rho']
-KE = p**2 / (2 * mass)
-import matplotlib.pyplot as plt
-fig, axs = plt.subplots(4, 1, figsize=(4, 8), dpi=300)
-axs[0].plot(out_t, r)
-axs[0].set_ylabel('r')
-axs[1].plot(out_t, p)
-axs[1].set_ylabel('p')
-axs[2].plot(out_t, rho[:, 0, 0].real, label='rho11')
-axs[2].plot(out_t, rho[:, 1, 1].real, label='rho22')
-axs[2].legend()
-# axs[3].plot(out_t, KE, label='KE')
-# axs[3].plot(out_t, out_PE, label='PE')
-axs[3].plot(out_t, out_TE, label='TE')
-axs[3].axhline(y=out_TE[0], color='k', linestyle='--')
-axs[3].set_ylabel('E')
+    r = out_states['R']
+    p = out_states['P']
+    rho = out_states['rho']
+    KE = p**2 / (2 * mass)
+    import matplotlib.pyplot as plt
+    fig, axs = plt.subplots(4, 1, figsize=(4, 8), dpi=300)
+    axs[0].plot(out_t, r)
+    axs[0].set_ylabel('r')
+    axs[1].plot(out_t, p)
+    axs[1].set_ylabel('p')
+    axs[2].plot(out_t, rho[:, 0, 0].real, label='rho11')
+    axs[2].plot(out_t, rho[:, 1, 1].real, label='rho22')
+    axs[2].legend()
+    # axs[3].plot(out_t, KE, label='KE')
+    # axs[3].plot(out_t, out_PE, label='PE')
+    axs[3].plot(out_t, out_TE, label='TE')
+    axs[3].axhline(y=out_TE[0], color='k', linestyle='--')
+    axs[3].axhline(y=out_TE[-1], color='k', linestyle='-.')
+    axs[3].set_ylabel('E')
+    print(out_TE[-1])
 
-axs[3].legend()
-for ax in axs:
-    ax.set_xlabel('t')
+    axs[3].legend()
+    for ax in axs:
+        ax.set_xlabel('t')
 
 # %%
