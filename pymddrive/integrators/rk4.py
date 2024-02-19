@@ -96,11 +96,10 @@ if __name__ == "__main__":
     plt.plot(r[:, -1], p[:, -1])
     plt.show()
     
-# %%
-E = np.nansum(r**2 + p**2, axis=-1)
-print(E)
-print(E.shape)
-plt.plot(time, E-E[0])
-plt.yscale('symlog')
+    E = np.nansum(r**2 + p**2, axis=-1)
+    print(E)
+    print(E.shape)
+    plt.plot(time, E-E[0])
+    plt.yscale('symlog')
 
 # %%

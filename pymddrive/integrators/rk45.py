@@ -145,7 +145,7 @@ if __name__ == "__main__":
             # out[i] = s.state
             time[i] = t
             i += 1
-            print("dt: ", rk45.h)
+            # print("dt: ", rk45.h)
             
         time_elapsed = timeit.default_timer() - start
         print(f"The speed of the integrator: {N/time_elapsed} iteractions per second")

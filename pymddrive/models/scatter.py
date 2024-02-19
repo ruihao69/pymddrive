@@ -4,7 +4,7 @@ import scipy.linalg as LA
 from numba import jit
 
 from numpy.typing import ArrayLike
-from typing import Any, Union
+from typing import Any, Union, Tuple
 
 class NonadiabaticHamiltonian:
     def __init__(
@@ -77,54 +77,116 @@ class NonadiabaticHamiltonian:
             np.dot(H, U, out=out)
             np.dot(U.conj().T, out, out=out)
         else:
-            return np.dot(U.conj().T, np.dot(H, U))
+            return np.dot(U.conj().T, np.dot(H, U)) 
         
+    @staticmethod
+    def _evaluate_nonadiabatic_couplings_scalar(
+        out_d: ArrayLike,
+        evals: ArrayLike
+    ) -> None:
+        if np.iscomplexobj(evals):
+            _evaluate_nonadiabatic_couplings_cplx(out_d, evals)
+        else:
+            _evaluate_nonadiabatic_couplings_real(out_d, evals)
+    
+    @staticmethod
+    def _evaluate_nonadiabatic_couplings_array(
+        out_d: ArrayLike,
+        evals: ArrayLike
+    ) -> None:
+        if np.iscomplexobj(evals):
+            _evaluate_nonadiabatic_couplings_cplx_array(out_d, evals)
+        else:
+            _evaluate_nonadiabatic_couplings_real_array(out_d, evals)
+            
     @staticmethod
     def get_nonadiabatic_couplings(
         dHdx: ArrayLike,
         evecs: ArrayLike,
         evals: ArrayLike,
-        out_d: ArrayLike = None,
-        out_F: ArrayLike = None,
-    ):
-        if out_d is not None and out_F is not None:
-            NonadiabaticHamiltonian.diabatic_to_adiabatic(dHdx, evecs, out=out_d)
-            out_F[:] = - np.diag(out_d).astype(np.float64)
-            np.fill_diagonal(out_d, 0)
+    ) -> Tuple[ArrayLike, ArrayLike]:
+        if (dHdx.ndim == 2): 
+            return _get_nonadiabatic_couplings_scalar(dHdx, evecs, evals)
+        elif dHdx.ndim == 3:
+            return _get_nonadiabatic_couplings_array(dHdx, evecs, evals)
         else:
-            out_d = NonadiabaticHamiltonian.diabatic_to_adiabatic(dHdx, evecs)
-            out_F = - np.diag(out_d).astype(np.float64)
-            np.fill_diagonal(out_d, 0)
-        if np.iscomplexobj(out_d): 
-            NonadiabaticHamiltonian._evaluate_nonadiabatic_couplings_cplx(out_d, evals)  
-        else:
-            NonadiabaticHamiltonian._evaluate_nonadiabatic_couplings_real(out_d, evals)
-        return out_d, out_F
-        
-    @staticmethod
-    @jit(nopython=True)
-    def _evaluate_nonadiabatic_couplings_real(
-        out_d: ArrayLike,
-        evals: ArrayLike,
-    ):
-        dim = evals.shape[0]
-        for ii in range(dim):
-            for jj in range(ii+1, dim):
-                out_d[ii, jj] /= (evals[jj] - evals[ii])
-                out_d[jj, ii] = -out_d[ii, jj] 
-    
-    @staticmethod
-    @jit(nopython=True)
-    def _evaluate_nonadiabatic_couplings_cplx(
-        out_d: ArrayLike,
-        evals: ArrayLike,
-    ):
-        dim = evals.shape[0]
-        for ii in range(dim):
-            for jj in range(ii+1, dim):
-                out_d[ii, jj] /= (evals[jj] - evals[ii])    
-                out_d[jj, ii] = -out_d[ii, jj].conj() 
-    
+            raise ValueError("The input dHdx must be either 2D or 3D.")
+            
+@jit(nopython=True) 
+def _evaluate_nonadiabatic_couplings_real(
+    out_d: ArrayLike,
+    evals: ArrayLike
+) -> None:
+    dim = evals.shape[0]
+    for ii in range(dim):
+        out_d[ii, ii] = 0
+        for jj in range(ii+1, dim):
+            out_d[ii, jj] /= (evals[jj] - evals[ii])
+            out_d[jj, ii] = -out_d[ii, jj]
+            
+@jit(nopython=True)
+def _evaluate_nonadiabatic_couplings_cplx(
+    out_d: ArrayLike,
+    evals: ArrayLike
+) -> None:
+    dim = evals.shape[0]
+    for ii in range(dim):
+        out_d[ii, ii] = 0
+        for jj in range(ii+1, dim):
+            out_d[ii, jj] /= (evals[jj] - evals[ii])
+            out_d[jj, ii] = -out_d[ii, jj].conj()
+            
+@jit(nopython=True) 
+def _evaluate_nonadiabatic_couplings_real_array(
+    out_d: ArrayLike,
+    evals: ArrayLike
+) -> None:
+    dim_qm = evals.shape[0]
+    dim_cl = out_d.shape[0]
+    for ii in range(dim_cl):
+        for jj in range(dim_qm):
+            out_d[ii, jj, jj] = 0
+            for kk in range(jj+1, dim_qm):
+                out_d[ii, jj, kk] /= (evals[kk] - evals[jj])
+                out_d[ii, kk, jj] = -out_d[ii, jj, kk]
+            
+@jit(nopython=True)
+def _evaluate_nonadiabatic_couplings_cplx_array(
+    out_d: ArrayLike,
+    evals: ArrayLike
+) -> None:
+    dim_qm = evals.shape[0]
+    dim_cl = out_d.shape[0]
+    for ii in range(dim_cl):
+        for jj in range(dim_qm):
+            out_d[ii, jj, jj] = 0
+            for kk in range(jj+1, dim_qm):
+                out_d[ii, jj, kk] /= (evals[kk] - evals[jj])
+                out_d[ii, kk, jj] = -out_d[ii, jj, kk].conj()
+
+def _get_nonadiabatic_couplings_scalar(
+    dHdx: ArrayLike,
+    evecs: ArrayLike,
+    evals: ArrayLike,
+) -> Tuple[ArrayLike, ArrayLike]:
+    out_d = NonadiabaticHamiltonian.diabatic_to_adiabatic(dHdx, evecs)
+    out_F = - np.diagonal(out_d).astype(np.float64)
+    NonadiabaticHamiltonian._evaluate_nonadiabatic_couplings_scalar(out_d, evals)
+    return out_d, out_F
+
+def _get_nonadiabatic_couplings_array(
+    dHdx: ArrayLike,
+    evecs: ArrayLike,
+    evals: ArrayLike,
+) -> Tuple[ArrayLike, ArrayLike]:
+    out_d = np.array(tuple(
+        np.dot(evecs.conj().T, np.dot(dHdx[:, :, kk], evecs)) for kk in range(dHdx.shape[-1])
+    ))
+    # out_d = np.einsum('ji,jkn,kl->nil', evecs.conj(), dHdx, evecs)
+    out_F = -np.diagonal(out_d, axis1=1, axis2=2).T.astype(np.float64)
+    NonadiabaticHamiltonian._evaluate_nonadiabatic_couplings_array(out_d, evals)
+    return out_d, out_F
+            
 
 # %% The tepmerary test code
 if __name__ == "__main__":

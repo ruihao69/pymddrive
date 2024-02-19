@@ -38,7 +38,7 @@ class TullyOnePulseOne(TullyOne):
             H = self.get_H(x, t)
             evals, evecs = self.diagonalize(H, use_numerical_eigen)
             dHdx = self.get_dHdx(x, t)
-            d, F = TullyOne.get_nonadiabatic_couplings(dHdx, evecs, evals)
+            d, F = NonadiabaticHamiltonian.get_nonadiabatic_couplings(dHdx, evecs, evals)
             d12 = d[0, 1]
             
             return H, evals, evecs, d12, F
@@ -110,7 +110,7 @@ class TullyOnePulseTwo(TullyOne):
             H = self.get_H(x, t)
             evals, evecs = self.diagonalize(H, use_numerical_eigen)
             dHdx = self.get_dHdx(x, t)
-            d, F = TullyOne.get_nonadiabatic_couplings(dHdx, evecs, evals)
+            d, F = NonadiabaticHamiltonian.get_nonadiabatic_couplings(dHdx, evecs, evals)
             d12 = d[0, 1]
             
             return H, evals, evecs, d12, F
@@ -187,7 +187,7 @@ class TullyOnePulseThree(TullyOne):
             H = self.get_H(x, t)
             evals, evecs = self.diagonalize(H, use_numerical_eigen)
             dHdx = self.get_dHdx(x, t)
-            d, F = TullyOne.get_nonadiabatic_couplings(dHdx, evecs, evals)
+            d, F = NonadiabaticHamiltonian.get_nonadiabatic_couplings(dHdx, evecs, evals)
             d12 = d[0, 1]
             
             return H, evals, evecs, d12, F
