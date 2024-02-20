@@ -160,7 +160,12 @@ cython_debug/
 #.idea/
 
 # Simulation data or figures
+*.npz
 *.pdf
+*.dat
 
 # nohup 
 nohup.out
+
+# temporary
+tmp*

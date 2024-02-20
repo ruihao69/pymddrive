@@ -14,7 +14,10 @@ class Morlet(Pulse):
         tau: float = 1,
         Omega: float = 1,
         phi: float = 0,
+        cache_length: int = 1000
     ):
+        super().__init__(cache_length)
+        
         self.A = A
         self.t0 = t0
         self.tau = tau
@@ -23,13 +26,13 @@ class Morlet(Pulse):
         
     def __repr__(self) -> str:
         return f"Morlet(A={self.A}, t0={self.t0}, tau={self.tau}, Omega={self.Omega}, phi={self.phi})"
-        
-    def __call__(
-        self, 
-        time: Union[float, ArrayLike]
-    ):
-        return Morlet.morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
     
+    def __call__(self, time: float):
+        return super().__call__(time)
+    
+    def _pulse_func(self, time: float):
+        return Morlet.morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
+     
     @staticmethod
     def morlet_pulse(
         A: float,
@@ -49,7 +52,9 @@ class MorletReal(Pulse):
         tau: float = 1,
         Omega: float = 1,
         phi: float = 0,
+        cache_length: int = 1000
     ):
+        super().__init__(cache_length)
         self.A = A
         self.t0 = t0
         self.tau = tau
@@ -59,10 +64,10 @@ class MorletReal(Pulse):
     def __repr__(self) -> str:  
         return f"MorletReal(A={self.A}, t0={self.t0}, tau={self.tau}, Omega={self.Omega}, phi={self.phi})"
         
-    def __call__(
-        self, 
-        time: Union[float, ArrayLike]
-    ):
+    def __call__(self, time: float):
+        return super().__call__(time) 
+    
+    def _pulse_func(self, time: float):
         return MorletReal.real_morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
     
     @staticmethod
@@ -81,8 +86,7 @@ if __name__ == "__main__":
     import numpy as np
     import matplotlib.pyplot as plt
     from pymddrive.pulses.pulses import MultiPulse
-    
-    print("Hello.")
+    # Test for single pulse 
     p1 = MorletReal(A=1, t0=4, tau=1, Omega=10, phi=0)
     # p2 = MorletReal(A=1, t0=-10, tau=2, Omega=10, phi=0)
     # p3 = MorletReal(A=1, t0=+10, tau=2, Omega=10, phi=0)
@@ -91,13 +95,25 @@ if __name__ == "__main__":
     # p = MultiPulse(p1, p2, p3, p4)
     p = p1
     
-    t = np.linspace(-0, 10, 1000)
-    sig = p(t)
+    t = np.linspace(-0, 15, 3000)
+    sig = [p(tt) for tt in t]
     fig = plt.figure(figsize=(3, 2), dpi=200)
     
     ax = fig.add_subplot(111)
     ax.plot(t, sig, lw=.5)
     ax.set_xlabel("Time")
     ax.set_ylabel("Pulse Signal")
+    plt.show()
+    
+    # Test for multi pulse
+    p2 = MorletReal(A=1, t0=8, tau=1, Omega=10, phi=0)
+    p = MultiPulse(p1, p2)
+    sig = [p(tt) for tt in t]
+    fig = plt.figure(figsize=(3, 2), dpi=200)
+    ax = fig.add_subplot(111)
+    ax.plot(t, sig, lw=.5)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Multi Pulse Signal")
+    
 
 # %%

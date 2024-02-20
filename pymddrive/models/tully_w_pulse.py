@@ -26,58 +26,28 @@ class TullyOnePulseOne(TullyOne):
     def __repr__(self) -> str:
         return f"Nonadiabatic Hamiltonian TullyOnePulseOne(A={self.A}, B={self.B}, pulse={self.pulse})"
     
-    def __call__(
-        self, 
-        x: Union[float, ArrayLike],
-        t: float,
-        use_numerical_eigen: bool = False, 
-        *args: Any,
-        **kwargs: Any,
-    ):
-        if isinstance(x, float):
-            H = self.get_H(x, t)
-            evals, evecs = self.diagonalize(H, use_numerical_eigen)
-            dHdx = self.get_dHdx(x, t)
-            d, F = NonadiabaticHamiltonian.get_nonadiabatic_couplings(dHdx, evecs, evals)
-            d12 = d[0, 1]
-            
-            return H, evals, evecs, d12, F
-            
-        elif isinstance(x, np.ndarray):
-            raise NotImplementedError("The batch mode is not implemented at this time.")
-        else:
-            raise ValueError("The input x should be either float or numpy.ndarray.")
-            
     @staticmethod
     def V12(
         t: float, 
+        r: Union[float, ArrayLike],
         pulse: Pulse,
     ):
-        return pulse(t) 
+        return pulse(t) * np.ones_like(r)
     
     def get_H(
         self, 
-        x: Union[float, ArrayLike],
-        t: float
+        t: float,
+        r: Union[float, ArrayLike],
     ):
-        if isinstance(x, float):
-            V11 = TullyOne.V11(x, self.A, self.B)
-            V22 = -V11
-            V12 = V21 = TullyOnePulseOne.V12(t, self.pulse)
-            return np.array(
-                [[V11, V12], 
-                 [V21, V22]]
-            )
-        elif isinstance(x, np.ndarray):
-            raise NotImplementedError("The batch mode is not implemented at this time.")
+        V11 = TullyOne.V11(r, self.A, self.B)
+        V12 = TullyOnePulseOne.V12(t, r, self.pulse)
+        return TullyOne._H(r, V11, V12)
             
-    def get_dHdx(self, x: float, *args: Any, **kwargs: Any):
-        dV11 = self.A * self.B * np.exp(-np.abs(x) * self.B)
-        return np.array(
-            [[dV11, 0.0], 
-             [0.0, -dV11]]
-        )
-        
+    def get_dHdr(self, t: float, r: Union[float, ArrayLike]):
+        _ = t
+        dV11 = self.A * self.B * np.exp(-np.abs(r) * self.B)
+        return TullyOne._dHdr(dV11, np.zeros_like(dV11))
+                    
 """ Pulse #2: position dependent, real, Morlet pulse. """
 class TullyOnePulseTwo(TullyOne):
     def __init__(
@@ -98,62 +68,25 @@ class TullyOnePulseTwo(TullyOne):
     def __repr__(self) -> str:
         return f"Nonadiabatic Hamiltonian TullyOnePulseTwo(A={self.A}, B={self.B}, C={self.C}, D={self.D}, pulse={self.pulse})"
     
-    def __call__(
-        self, 
-        x: Union[float, ArrayLike],
-        t: float,
-        use_numerical_eigen: bool = False, 
-        *args: Any,
-        **kwargs: Any,
-    ):
-        if isinstance(x, float):
-            H = self.get_H(x, t)
-            evals, evecs = self.diagonalize(H, use_numerical_eigen)
-            dHdx = self.get_dHdx(x, t)
-            d, F = NonadiabaticHamiltonian.get_nonadiabatic_couplings(dHdx, evecs, evals)
-            d12 = d[0, 1]
-            
-            return H, evals, evecs, d12, F
-            
-        elif isinstance(x, np.ndarray):
-            raise NotImplementedError("The batch mode is not implemented at this time.")
-        else:
-            raise ValueError("The input x should be either float or numpy.ndarray.")
-    
     @staticmethod
     def V12(
-        x: float,
         t: float, 
+        r: Union[float, ArrayLike],
         C: float,
         D: float,
         pulse: Pulse,
     ):
-        return pulse(t) * TullyOne.V12(x, C, D)
+        return pulse(t) * TullyOne.V12(r, C, D)
     
-    def get_H(
-        self, 
-        x: Union[float, ArrayLike],
-        t: float
-    ):
-        if isinstance(x, float):
-            # V11 = TullyOnePulseOne.V11(x, self.A, self.B)
-            V11 = TullyOne.V11(x, self.A, self.B)
-            V22 = -V11
-            V12 = V21 = TullyOnePulseTwo.V12(x, t, self.C, self.D, self.pulse) 
-            return np.array(
-                [[V11, V12], 
-                 [V21, V22]]
-            )
-        elif isinstance(x, np.ndarray):
-            raise NotImplementedError("The batch mode is not implemented at this time.")
-            
-    def get_dHdx(self, x: float, t: float, *args: Any, **kwargs: Any):
-        dV11 = self.A * self.B * np.exp(-np.abs(x) * self.B)
-        dV12 = -2 * self.C * self.D * x * np.exp(-self.D * x**2) * self.pulse(t)
-        return np.array(
-            [[dV11, dV12], 
-             [dV12, -dV11]]
-        )
+    def get_H(self, t: float, r: Union[float, ArrayLike]):
+        V11 = TullyOne.V11(r, self.A, self.B)
+        V12 = TullyOnePulseTwo.V12(t, r, self.C, self.D, self.pulse)
+        return TullyOne._H(r, V11, V12)
+    
+    def get_dHdr(self, t: float, r: Union[float, ArrayLike]):
+        dV11 = self.A * self.B * np.exp(-np.abs(r) * self.B)
+        dV12 = -2 * self.C * self.D * r * np.exp(-self.D * r**2) * self.pulse(t)
+        return TullyOne._dHdr(dV11, dV12)
         
 """ Pulse #3: Morlet pulse superposition over a time independent coupling. """
 class TullyOnePulseThree(TullyOne):
@@ -175,62 +108,29 @@ class TullyOnePulseThree(TullyOne):
     def __repr__(self) -> str:
         return f"Nonadiabatic Hamiltonian TullyOnePulseTwo(A={self.A}, B={self.B}, C={self.C}, D={self.D}, pulse={self.pulse})"
     
-    def __call__(
-        self, 
-        x: Union[float, ArrayLike],
-        t: float,
-        use_numerical_eigen: bool = False, 
-        *args: Any,
-        **kwargs: Any,
-    ):
-        if isinstance(x, float):
-            H = self.get_H(x, t)
-            evals, evecs = self.diagonalize(H, use_numerical_eigen)
-            dHdx = self.get_dHdx(x, t)
-            d, F = NonadiabaticHamiltonian.get_nonadiabatic_couplings(dHdx, evecs, evals)
-            d12 = d[0, 1]
-            
-            return H, evals, evecs, d12, F
-            
-        elif isinstance(x, np.ndarray):
-            raise NotImplementedError("The batch mode is not implemented at this time.")
-        else:
-            raise ValueError("The input x should be either float or numpy.ndarray.")
-    
     @staticmethod
     def V12(
-        x: float,
         t: float, 
+        r: float,
         C: float,
         D: float,
         pulse: Pulse,
     ):
-        return pulse(t) + TullyOne.V12(x, C, D)
+        return pulse(t) + TullyOne.V12(r, C, D)
     
     def get_H(
         self, 
-        x: Union[float, ArrayLike],
-        t: float
+        t: float,
+        r: Union[float, ArrayLike],
     ):
-        if isinstance(x, float):
-            # V11 = TullyOnePulseOne.V11(x, self.A, self.B)
-            V11 = TullyOne.V11(x, self.A, self.B)
-            V22 = -V11
-            V12 = V21 = TullyOnePulseThree.V12(x, t, self.C, self.D, self.pulse) 
-            return np.array(
-                [[V11, V12], 
-                 [V21, V22]]
-            )
-        elif isinstance(x, np.ndarray):
-            raise NotImplementedError("The batch mode is not implemented at this time.")
+        V11 = TullyOne.V11(r, self.A, self.B)
+        V12 = TullyOnePulseThree.V12(t, r, self.C, self.D, self.pulse)
+        return TullyOne._H(r, V11, V12)
             
-    def get_dHdx(self, x: float, t: float, *args: Any, **kwargs: Any):
-        dV11 = self.A * self.B * np.exp(-np.abs(x) * self.B)
-        dV12 = -2 * self.C * self.D * x * np.exp(-self.D * x**2) * self.pulse(t)
-        return np.array(
-            [[dV11, dV12], 
-             [dV12, -dV11]]
-        ) 
+    def get_dHdr(self, t: float, r: Union[float, ArrayLike]):
+        dV11 = self.A * self.B * np.exp(-np.abs(r) * self.B)
+        dV12 = -2 * self.C * self.D * r * np.exp(-self.D * r**2) * self.pulse(t)
+        return TullyOne._dHdr(dV11, dV12)
             
 # %% Temprarory test code
 
@@ -253,11 +153,12 @@ if __name__ == "__main__":
     
     for ii, tt in enumerate(t):
         for jj, xx in enumerate(x):
-            H, evals, evecs, d12[ii, jj], F = t1p1(xx, tt)
+            H, evals, evecs, d, F = t1p1(xx, tt)
             Eg[ii, jj] = evals[0]
             Ee[ii, jj] = evals[1]
             Fg[ii, jj] = F[0]
             Fe[ii, jj] = F[1]    
+            d12[ii, jj] = d[0, 1]
             
     import matplotlib.pyplot as plt
     
@@ -320,11 +221,12 @@ if __name__ == "__main__":
     
     for ii, tt in enumerate(t):
         for jj, xx in enumerate(x):
-            H, evals, evecs, d12[ii, jj], F = t1p2(xx, tt)
+            H, evals, evecs, d, F = t1p2(xx, tt)
             Eg[ii, jj] = evals[0]
             Ee[ii, jj] = evals[1]
             Fg[ii, jj] = F[0]
             Fe[ii, jj] = F[1]
+            d12[ii, jj] = d[0, 1]
             
     water_fall_plot(x, t, np.array([Eg, Ee]), xlabel="x (a.u.)", title="Pulse #2: energies", scale1=2000, scale2=10, inverse_fill=True)
     water_fall_plot(x, t, np.array([Fg, Fe]), xlabel="x (a.u.)", title="Pulse #2: forces", scale1=2000, scale2=10)
@@ -346,11 +248,12 @@ if __name__ == "__main__":
     
     for ii, tt in enumerate(t):
         for jj, xx in enumerate(x):
-            H, evals, evecs, d12[ii, jj], F = t1p3(xx, tt)
+            H, evals, evecs, d, F = t1p3(xx, tt)
             Eg[ii, jj] = evals[0]
             Ee[ii, jj] = evals[1]
             Fg[ii, jj] = F[0]
             Fe[ii, jj] = F[1]
+            d12[ii, jj] = d[0, 1]
             
     water_fall_plot(x, t, np.array([Eg, Ee]), xlabel="x (a.u.)", title="Pulse #3: energies", scale1=2000, scale2=10, inverse_fill=True)
     water_fall_plot(x, t, np.array([Fg, Fe]), xlabel="x (a.u.)", title="Pulse #3: forces", scale1=2000, scale2=10)

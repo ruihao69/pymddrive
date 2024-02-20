@@ -24,14 +24,15 @@ class TullyOne(NonadiabaticHamiltonian):
     
     def __call__(
         self, 
+        t: float,
         r: Union[float, ArrayLike],
         use_numerical_eigen: bool = False, 
         *args: Any,
         **kwargs: Any,
     ):
-        H = self.get_H(r)
+        H = self.get_H(t, r)
         evals, evecs = self.diagonalize(H, use_numerical_eigen)
-        dHdr = self.get_dHdr(r)
+        dHdr = self.get_dHdr(t, r)
         # if isinstance(x, np.ndarray):
         #     # Transpose the dHdx so that the first dimention matches the shape of nuclear coordinates
         #     dHdx = dHdx.transpose(2, 0, 1)
@@ -57,33 +58,53 @@ class TullyOne(NonadiabaticHamiltonian):
     ):
         return C * np.exp(-D * r**2)
     
-    def get_H(
-        self, 
-        r: Union[float, ArrayLike]
-    ):
-        V11 = TullyOne.V11(r, self.A, self.B)
-        V22 = -V11
-        V12 = V21 = TullyOne.V12(r, self.C, self.D)
+    @staticmethod
+    def _H(
+        r: Union[float, ArrayLike],
+        V11: Union[float, ArrayLike],
+        V12: Union[float, ArrayLike],
+    ) -> ArrayLike:
         if isinstance(r, float):
             return np.array(
                 [[V11, V12], 
-                 [V21, V22]]
+                 [V12, -V11]]
             )
         elif isinstance(r, np.ndarray):
-            return np.sum(np.array(
-                [[V11, V12], 
-                 [V12, V22]]
-            ), axis=-1)
+            try:
+                return np.sum(np.array(
+                    [[V11, V12], 
+                     [V12, -V11]]
+                ), axis=-1)
+            except:
+                print(r, type(r))
+                print(V11, type(V11))
+                print(V12, type(V12))
+                raise RuntimeError
         else:
             raise ValueError("The input r should be either float or numpy.ndarray.")
-            
-    def get_dHdr(self, r: Union[float, ArrayLike]):
-        dV11 = self.A * self.B * np.exp(-np.abs(r) * self.B)
-        dV12 = -2 * self.C * self.D * r * np.exp(-self.D * r**2)
+        
+    @staticmethod
+    def _dHdr(dV11: Union[float, ArrayLike], dV12: Union[float, ArrayLike]) -> ArrayLike:   
         return np.array(
             [[dV11, dV12], 
              [dV12, -dV11]]
         )
+      
+    def get_H(
+        self, 
+        t: float,
+        r: Union[float, ArrayLike]
+    ):
+        _ = t
+        V11 = TullyOne.V11(r, self.A, self.B)
+        V12 = TullyOne.V12(r, self.C, self.D)
+        return self._H(r, V11, V12)
+            
+    def get_dHdr(self, t: float, r: Union[float, ArrayLike]):
+        _ = t
+        dV11 = self.A * self.B * np.exp(-np.abs(r) * self.B)
+        dV12 = -2 * self.C * self.D * r * np.exp(-self.D * r**2)
+        return TullyOne._dHdr(dV11, dV12)
             
     def _diagonalize_numerical(self, H):
         return NonadiabaticHamiltonian.diagonalize_numerical(H)

@@ -40,6 +40,19 @@ def _process_mass(
             return mass
     raise ValueError("The mass should be a float, int, list, tuple or numpy.ndarray.") 
 
+def estimate_scatter_dt(deriv: callable, r_bounds: tuple, p0: float, model: NonadiabaticHamiltonian, mass: float=2000, nsample=30, t_bounds=None) -> float:
+    r_list = np.linspace(*r_bounds, nsample)
+    if t_bounds is not None:
+        t_list = np.random.uniform(*t_bounds, nsample)
+    else:
+        t_list = np.zeros(nsample)
+    _dt = 99999999999
+    for i in range(nsample):
+        s0 = State(float(r_list[i]), float(p0), np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128))
+        _dt = min(_dt, evaluate_initial_dt(deriv, t_list[i], s0, order=4, atol=1e-8, rtol=1e-6,))
+    return _dt
+ 
+
 class Dynamics:
     def __init__(
         self,
@@ -79,6 +92,8 @@ class NonadiabaticDynamics(Dynamics):
         mass: Union[float, None, ArrayLike] = None,
         solver: Union[str, None] = 'Ehrenfest',
         dt: Union[float, None] = None,
+        r_bounds: Union[Tuple[float, float], None] = None,
+        t_bounds: Union[Tuple[float, float], None] = None,
         save_every: int = 10,
         save_func: Union[None, callable] = None,
         safty: float = 0.9,
@@ -86,18 +101,17 @@ class NonadiabaticDynamics(Dynamics):
         super().__init__(model, t0, s0, mass, dt, safty)
         self.safty = safty
         self.solver = solver
-        _dt = evaluate_initial_dt(self.deriv, t0, s0, order=4, atol=1e-8, rtol=1e-6,)
-        _prop_dt = _dt * self.safty
-        if dt is None:
-            self.dt = _prop_dt
-            print("The initial step size is set to ", _prop_dt)
-        elif dt > _prop_dt:
-            warnings.warn(f"The initial step size is set to {dt}, which is larger than the recommended step size {_prop_dt}. Please consider using a smaller step size.")
-            self.dt = _prop_dt
+        if r_bounds is None:
+            _dt = evaluate_initial_dt(self.deriv, t0, s0, order=4, atol=1e-8, rtol=1e-6,)
+            _prop_dt = _dt * self.safty
         else:
-            print("The initial step size is set to ", dt, ", which is smaller than the recommended step size ", _prop_dt)
-            self.dt = _prop_dt
+            _dt = estimate_scatter_dt(self.deriv, r_bounds, s0.data['P'][0], model, mass, nsample=30, t_bounds=t_bounds)
+            _prop_dt = _dt * self.safty
             
+            
+        self.dt = min(dt, _prop_dt) if dt is not None else _prop_dt
+        print(f"The recommended step size is {_prop_dt}, the final decision is {self.dt}.")
+        
         self.save_every = save_every
         self.save_func = save_func
         self.nsteps = 0
@@ -203,7 +217,7 @@ if __name__ == "__main__":
     s0 = State(r0, p0, rho0)
     
     mass = 2000.0
-    dyn = NonadiabaticDynamics(model, t0, s0, mass, solver='Ehrenfest', dt=0.1)
+    dyn = NonadiabaticDynamics(model, t0, s0, mass, solver='Ehrenfest', dt=0.1, r_bounds=(-10, 10))
     # dyn.dt = 0.01
     
     t = t0
