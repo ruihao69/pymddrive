@@ -2,7 +2,6 @@
 import warnings
 
 import numpy as np
-from numba import jit
 
 from typing import (
     Union, 
@@ -12,15 +11,11 @@ from typing import (
 from numpy.typing import ArrayLike
 
 from pymddrive.models.scatter import NonadiabaticHamiltonian
-from pymddrive.integrators.state import (
-    State, 
-    zeros_like
-)
-from pymddrive.integrators.rk4 import rk4
+from pymddrive.integrators.state import State
 from pymddrive.integrators.rungekutta import evaluate_initial_dt
 
-# from pymddrive.dynamics.ehrenfest import *
-import ehrenfest
+from pymddrive.dynamics import ehrenfest 
+# import ehrenfest
 
 from functools import partial
 
@@ -217,26 +212,17 @@ if __name__ == "__main__":
     print(f"The time for the simulation is {end-start} s.")
     
 # %%
-import matplotlib.pyplot as plt
-
-t = output['time']
-r = output['states']['R']
-p = output['states']['P']
-rho = output['states']['rho']
-
-plt.plot(t, r)  
-plt.show()
-plt.plot(t, p)
-plt.show()
-plt.plot(t, rho[:, 0, 0].real, label='rho00')
-plt.plot(t, rho[:, 1, 1].real, label='rho11')
-plt.show()
-
-
-
-# %%
-
-print(r.shape)
-
-
-# %%
+# import matplotlib.pyplot as plt
+# 
+# t = output['time']
+# r = output['states']['R']
+# p = output['states']['P']
+# rho = output['states']['rho']
+# 
+# plt.plot(t, r)  
+# plt.show()
+# plt.plot(t, p)
+# plt.show()
+# plt.plot(t, rho[:, 0, 0].real, label='rho00')
+# plt.plot(t, rho[:, 1, 1].real, label='rho11')
+# plt.show()

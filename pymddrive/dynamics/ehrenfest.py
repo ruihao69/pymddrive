@@ -9,7 +9,7 @@ from pymddrive.integrators.state import State, zeros_like
 
 from pymddrive.integrators.rk4 import rk4
 
-from _misc import (
+from pymddrive.dynamics._misc import (
     eval_nonadiabatic_hamiltonian,
     rhs_density_matrix,
     rhs_wavefunction,
