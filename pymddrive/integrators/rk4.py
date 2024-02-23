@@ -12,31 +12,33 @@ def rkgill4(
     t: type_time,
     y: State,
     derivative: Callable[[type_time, State], State],
+    deriv_options: dict,
     dt: type_time = 1.0,
     nstep: int = 1,
 ) -> Tuple[type_time, State]:
-    k1 = dt * derivative(t, y)
-    k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1)
-    k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * (1.0 - np.sqrt(2.0)) * k1 + 0.5 * (1.0 + np.sqrt(2.0)) * k2)
-    k4 = dt * derivative(t + 1.0 * dt, y - 0.5 * np.sqrt(2.0) * k2 + (1.0 + 0.5 * np.sqrt(2.0)) * k3)
-    
+    k1 = dt * derivative(t, y, **deriv_options)
+    k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
+    k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * (1.0 - np.sqrt(2.0)) * k1 + 0.5 * (1.0 + np.sqrt(2.0)) * k2, **deriv_options)
+    k4 = dt * derivative(t + 1.0 * dt, y - 0.5 * np.sqrt(2.0) * k2 + (1.0 + 0.5 * np.sqrt(2.0)) * k3, **deriv_options)
+
     t += dt
     y += 1.0 / 6.0 * (k1 + (2.0 - np.sqrt(2.0)) * k2 + (2.0 + np.sqrt(2.0)) * k3 + k4)
-        
+
     return (t, y)
 
 def rk4(
     t: type_time,
     y: State,
     derivative: Callable[[type_time, State], State],
+    deriv_options: dict,
     dt: type_time = 1.0,
     nstep: int = 1,
 ) -> Tuple[type_time, State]:
-    k1 = dt * derivative(t, y)
-    k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1)
-    k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * k2)
-    k4 = dt * derivative(t + 1.0 * dt, y + k3)
-        
+    k1 = dt * derivative(t, y, **deriv_options)
+    k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
+    k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * k2, **deriv_options)
+    k4 = dt * derivative(t + 1.0 * dt, y + k3, **deriv_options)
+
     t += dt
     y += 1.0 / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
     return (t, y)

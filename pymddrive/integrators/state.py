@@ -113,6 +113,9 @@ class State(CompositeData):
         
         # self.r, self.p, self.rho = self.get_variables()
         
+    def __array__(self) -> ArrayLike:
+        return self.data
+        
     def get_variables(self):
         r = self.data['R'] if "R" in self.data.dtype.names else None
         p = self.data['P'] if "P" in self.data.dtype.names else None
