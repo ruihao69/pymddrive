@@ -106,7 +106,7 @@ class NonadiabaticDynamics(Dynamics):
             
             
         self.dt = min(dt, _prop_dt) if dt is not None else _prop_dt
-        print(f"The recommended step size is {_prop_dt}, the final decision is {self.dt}.")
+        print(f"The recommended step size is {_prop_dt}, the final decision is {self.dt}.", flush=True)
         
         self.save_every = save_every
         self.nsteps = 0

@@ -186,7 +186,7 @@ def accumulate_output(p0_list, out_gen: Generator):
             if has_pulse:
                 pulses = []
         if has_pulse: 
-            pulse, output = _output
+            output, pulse = _output
         else:
             output = _output
             

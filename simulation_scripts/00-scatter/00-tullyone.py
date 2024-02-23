@@ -44,7 +44,6 @@ def main(sim_signature: str, n_samples: int, p_bounds: tuple=(0.5, 35.0)):
         
     r0 = -10.0
     _r0_list = np.array([r0]*n_samples)
-    # _p0_list = linspace_log10(0.5, 35.0, n_samples)
     _p0_list = linspace_log10(*p_bounds, n_samples)
     
     runner = ParaRunScatter(n_jobs=ncpus, r0=_r0_list, p0=_p0_list)
