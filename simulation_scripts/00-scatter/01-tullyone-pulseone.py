@@ -8,8 +8,11 @@ from pymddrive.pulses.morlet import MorletReal
 from pymddrive.integrators.state import State
 from pymddrive.dynamics.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics 
 
-
 from tullyone_utils import *
+
+import sys
+
+import argparse
 
 def stop_condition(t, s, states):
     r, _, _ = s.get_variables()
@@ -96,28 +99,18 @@ def main(sim_signature: str, n_samples: int, Omega, tau, p_bounds: tuple=(0.5, 3
     
 # %% 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    # out, pulse = run_tullyone_pulseone(-10.0, 30.0, Omega=0.01*5, tau=60.0)
     
-    # plt.plot(out['time'], out['states']['R'])
-    # plt.show()
+    desc = "The parser for TullyOne with Pulse One"
+    parser = argparse.ArgumentParser(description=desc)
+    parser.add_argument('--Omega', type=float, help='The Omega value')
+    parser.add_argument('--tau', type=float, help='The tau value')
+    args = parser.parse_args() 
     
-    # plt.plot(out['time'], out['states']['P'])
-    # plt.show()
+    Omega, tau= args.Omega, args.tau 
     
-    # plt.plot(out['time'], out['states']['rho'][:, 0, 0].real)
-    # plt.plot(out['time'], out['states']['rho'][:, 1, 1].real)
-    # plt.show()
-    
-    # plt.plot(out['time'], [pulse(t) for t in out['time']])
-    
-    Omega = 0.01 * 3
-    tau = 60.0
-    
-    sim_signature = "data_tullyone_pulseone-Omega-0.01-tau-60"
-    nsamples = 8
-    # p_bounds = (0.5, 35)
-    p_bounds = (20, 35)
+    sim_signature = f"data_tullyone_pulseone-Omega-{Omega}-tau-{tau}"
+    nsamples = 48
+    p_bounds = (0.5, 35)
     main(sim_signature, nsamples, Omega, tau, p_bounds)
 
 # %%
