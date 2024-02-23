@@ -8,6 +8,23 @@ from pymddrive.integrators.state import State, zeros_like
 # Type short hand
 type_time = float
 
+def rkgill4(
+    t: type_time,
+    y: State,
+    derivative: Callable[[type_time, State], State],
+    dt: type_time = 1.0,
+    nstep: int = 1,
+) -> Tuple[type_time, State]:
+    k1 = dt * derivative(t, y)
+    k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1)
+    k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * (1.0 - np.sqrt(2.0)) * k1 + 0.5 * (1.0 + np.sqrt(2.0)) * k2)
+    k4 = dt * derivative(t + 1.0 * dt, y - 0.5 * np.sqrt(2.0) * k2 + (1.0 + 0.5 * np.sqrt(2.0)) * k3)
+    
+    t += dt
+    y += 1.0 / 6.0 * (k1 + (2.0 - np.sqrt(2.0)) * k2 + (2.0 + np.sqrt(2.0)) * k3 + k4)
+        
+    return (t, y)
+
 def rk4(
     t: type_time,
     y: State,
