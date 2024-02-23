@@ -6,7 +6,8 @@ from numba import jit
 
 from typing import (
     Union, 
-    Tuple
+    Tuple,
+    Any
 )
 from numpy.typing import ArrayLike
 
@@ -17,6 +18,14 @@ from pymddrive.integrators.state import (
 )
 from pymddrive.integrators.rk4 import rk4
 from pymddrive.integrators.rungekutta import evaluate_initial_dt
+
+# from pymddrive.dynamics.ehrenfest import *
+import ehrenfest
+
+from functools import partial
+
+SOLVERS = ('Ehrenfest',)
+INTEGRATORS = ('rk4', 'vv_rk4',)
 
 def _process_mass(
     s0: State,
@@ -70,17 +79,7 @@ class Dynamics:
         self.dt = dt
         self.safty = safty
         
-    def deriv(
-        self,
-        t: float,
-        state: State,
-    ) -> State:
-        pass
-    
-    def step(self, t: float, s: State, dt: float) -> State:
-        pass
-    
-    def run(self, t: float, dt: float) -> State:
+    def step(self, t: float, s: State, c: Any) -> Tuple[float, State, Any]:
         pass
     
 class NonadiabaticDynamics(Dynamics):
@@ -91,16 +90,18 @@ class NonadiabaticDynamics(Dynamics):
         s0: Union[State, None] = None,
         mass: Union[float, None, ArrayLike] = None,
         solver: Union[str, None] = 'Ehrenfest',
+        method: Union[str, None] = 'rk4',
         dt: Union[float, None] = None,
         r_bounds: Union[Tuple[float, float], None] = None,
         t_bounds: Union[Tuple[float, float], None] = None,
         save_every: int = 10,
-        save_func: Union[None, callable] = None,
         safty: float = 0.9,
     ) -> None:
         super().__init__(model, t0, s0, mass, dt, safty)
         self.safty = safty
         self.solver = solver
+        if solver == 'Ehrenfest':
+            self.deriv = partial(ehrenfest._deriv_ehrenfest_dm, model=model, mass=mass)
         if r_bounds is None:
             _dt = evaluate_initial_dt(self.deriv, t0, s0, order=4, atol=1e-8, rtol=1e-6,)
             _prop_dt = _dt * self.safty
@@ -113,159 +114,129 @@ class NonadiabaticDynamics(Dynamics):
         print(f"The recommended step size is {_prop_dt}, the final decision is {self.dt}.")
         
         self.save_every = save_every
-        self.save_func = save_func
         self.nsteps = 0
         
-    def deriv(
-        self,
-        t: float,
-        state: State,
-    ) -> State: 
-        if self.solver == 'Ehrenfest':
-            return _deriv_ehrenfest(self.model, t, state, mass=self.mass)
-        else:
-            raise ValueError("The solver should be either 'Ehrenfest', ...")
+        if method not in INTEGRATORS:
+            raise ValueError(f"The method {method} is not supported.")
         
-    def step(self, t: float, s: State) -> Tuple[float, State]:
-        return rk4(t, s, self.deriv, self.dt)
+        if solver not in SOLVERS:
+            raise ValueError(f"The solver {solver} is not supported.")
+        
+        if solver == 'Ehrenfest': 
+            if method == 'rk4':
+                self.step = partial(ehrenfest.step_rk, dt=self.dt, model=model, mass=mass)
+            elif method == 'vv_rk4':
+                self.step = partial(ehrenfest.step_vv_rk, dt=self.dt, model=model, mass=mass)
+            else:
+                raise ValueError(f"The method {method} is not supported for the {solver} solver.")
+            self.calculate_properties = ehrenfest.calculate_properties
+            self.deriv = ehrenfest._deriv_ehrenfest_dm
+        else:
+            raise ValueError(f"The solver {solver} is not supported.")
 
-def _deriv_ehrenfest(
-    model: NonadiabaticHamiltonian, 
-    t: float,
-    state: State,
-    mass: Union[float, ArrayLike]=1.0,
-) -> State:
-    # get the states variables and output variables
-    out = zeros_like(state)
-    r, p, rho = state.get_variables()
-    kr, kp, k_rho =  out.get_variables()
+def run_nonadiabatic_dynamics(
+    dyn: NonadiabaticDynamics,
+    stop_condition: callable,
+    break_condition: callable,
+    max_iters: int=int(1e8),
+):
+    check_stop_every = dyn.save_every * 30
+    check_break_every = dyn.save_every * 30
+    output = {
+        'time': [],
+        'states': [],
+        'KE': [],
+        'PE': [],
+    }
     
-    # evaluate the nonadiabatic Hamiltonian
-    if r.shape[0] == 1:
-        _, evals, _, d, F = model(r=r[0], t=t)
-        d = d[np.newaxis, :, :]
-        F = F[:, np.newaxis]
-    else:
-        _, evals, _, d, F = model(r=r, t=t)
+    t, s = dyn.t0, dyn.s0
+    cache = None
     
-    # nonadiabatic dynamics: position
-    kr[:] = p / mass
-    
-    # nonadiabatic dynamics: momentum
-    meanF = _expected_value(rho=rho, O=F, is_O_diagonal_operator=True)
-    kp[:] = meanF
-    
-    # nonadiabatic dynamics: density matrix
-    vdotd = _v_dot_d(P=p, d=d, mass=mass)
-    _rhs_density_matrix(rho=rho, evals=evals, vdotd=vdotd, k_rho=k_rho)
-    
-    return out
-
-def _expected_value(
-    rho: ArrayLike,
-    O: ArrayLike,
-    is_O_diagonal_operator: bool = False,
-) -> float:
-    if is_O_diagonal_operator:
-        return rho.diagonal().dot(O).real
-    else:
-        return np.trace(np.dot(rho, O)).real
-   
-def _v_dot_d(
-    P: ArrayLike,
-    d: ArrayLike,
-    mass: Union[float, ArrayLike]=1.0,
-) -> ArrayLike:
-    return np.tensordot(P/mass, d, axes=(0, 0)) 
-
-@jit(nopython=True)
-def _rhs_density_matrix(
-    rho: ArrayLike,
-    evals: ArrayLike,
-    vdotd: ArrayLike,
-    k_rho: ArrayLike,
-) -> None:
-    for kk in range(rho.shape[0]):
-        for jj in range(rho.shape[0]):
-            # k_rho[kk, jj] += -1.0j * (rho[kk, jj] * evals[kk] - rho[kk, jj] * evals[jj])
-            k_rho[kk, jj] += -1.0j * rho[kk, jj] * (evals[kk] - evals[jj])
-            for ll in range(rho.shape[0]):
-                k_rho[kk, jj] += (-rho[ll, jj] * vdotd[kk, ll] + rho[kk, ll] * vdotd[ll, jj])
-                
-                
-def _output_ehrenfest(
-    t: float, 
-    s: State, 
-    model: NonadiabaticHamiltonian, 
-    mass: Union[float, ArrayLike]
-) -> None:
-    r, p, rho = s.get_variables()
-    _, evals, _, _, _ = model(r=r, t=t)
-    PE = _expected_value(rho=rho, O=evals, is_O_diagonal_operator=True)
-    KE = np.sum(p**2 / (2 * mass))
-    return {'PE': PE, 'KE': KE, 'TE': PE + KE}
-                
+    for istep in range(max_iters):
+        if istep % dyn.save_every == 0:
+            properties = dyn.calculate_properties(t, s, dyn.model, dyn.mass)
+            output['time'] = np.append(output['time'], t)
+            output['states'] = np.append(output['states'], s.data) if len(output['states']) > 0 else s.data
+            output['KE'] = np.append(output['KE'], properties['KE'])
+            output['PE'] = np.append(output['PE'], properties['PE'])
+            if istep % check_stop_every == 0:
+                if stop_condition(t, s, output['states']):
+                    break
+            if istep % check_break_every == 0:
+                if break_condition(t, s, output['states']):
+                    warnings.warn("The break condition is met.")
+                    break
+        t, s, cache = dyn.step(t, s, cache)
+    output['states'] = np.array(output['states'])
+        
+    return output
+        
 # %% The temporary test code
 if __name__ == "__main__":
     from pymddrive.models.tully import TullyOne
+    
+    import time
+    
     model = TullyOne()
-    t0 = 0.0
-    r0 = -10.0
-    p0 = 30.0
-    rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
-    
-    s0 = State(r0, p0, rho0)
-    
     mass = 2000.0
-    dyn = NonadiabaticDynamics(model, t0, s0, mass, solver='Ehrenfest', dt=0.1, r_bounds=(-10, 10))
-    # dyn.dt = 0.01
     
-    t = t0
-    s = s0
-    out_t = np.array([t0])
-    out_states = np.copy(s0.data)
-    out_KE = np.array([0.5 * p0**2 / mass])
-    out_PE = np.array([-model.A])
-    out_TE = np.array([out_KE[0] + out_PE[0]])
-    while (s.data['R'] < 10) or (s.data['R'] < -10):
-        t, s = dyn.step(t, s)
-        dyn.nsteps += 1
-        if dyn.nsteps % dyn.save_every == 0:
-            out_t = np.append(out_t, t)
-            out_states = np.append(out_states, s.data)
-            out_props = _output_ehrenfest(t, s, dyn.model, dyn.mass)
-            out_KE = np.append(out_KE, out_props['KE'])
-            out_PE = np.append(out_PE, out_props['PE'])
-            out_TE = np.append(out_TE, out_props['TE']) 
-            
-            # print(s.data['R']) 
-        # out_t = np.append(out_t, t)
-        # out_states = np.append(out_states, s.data)
-        # print(s.data['R'])
+    t0 = 0.0    
+    s0 = State(
+        r=-10.0,
+        p=30.0,
+        rho=np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
+    )
     
-    r = out_states['R']
-    p = out_states['P']
-    rho = out_states['rho']
-    KE = p**2 / (2 * mass)
-    import matplotlib.pyplot as plt
-    fig, axs = plt.subplots(4, 1, figsize=(4, 8), dpi=300)
-    axs[0].plot(out_t, r)
-    axs[0].set_ylabel('r')
-    axs[1].plot(out_t, p)
-    axs[1].set_ylabel('p')
-    axs[2].plot(out_t, rho[:, 0, 0].real, label='rho11')
-    axs[2].plot(out_t, rho[:, 1, 1].real, label='rho22')
-    axs[2].legend()
-    # axs[3].plot(out_t, KE, label='KE')
-    # axs[3].plot(out_t, out_PE, label='PE')
-    axs[3].plot(out_t, out_TE, label='TE')
-    axs[3].axhline(y=out_TE[0], color='k', linestyle='--')
-    axs[3].axhline(y=out_TE[-1], color='k', linestyle='-.')
-    axs[3].set_ylabel('E')
-    print(out_TE[-1])
+    dyn = NonadiabaticDynamics(
+        model=model,
+        t0=t0,
+        s0=s0,
+        mass=mass,
+        solver='Ehrenfest',
+        # method='rk4',
+        method='vv_rk4',
+        r_bounds=(-10.0, 10.0),
+    )
+    def stop_condition(t, s, states):
+        r, _, _ = s.get_variables()
+        return (r>10.0) or (r<-10.0)
+    
+    def break_condition(t, s, states):
+        r = np.array(states['R'])
+        def count_re_crossings(r, r_TST=0.0):
+            r_sign = np.sign(r - r_TST)
+            r_sign_diff = np.diff(r_sign)
+            n = np.sum(r_sign_diff != 0) - 1
+            n_re_crossings = 0 if n < 0 else n
+            return n_re_crossings
+        return (count_re_crossings(r) > 10)
+    
+    start = time.time() 
+    output = run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
+    end = time.time()
+    print(f"The time for the simulation is {end-start} s.")
+    
+# %%
+import matplotlib.pyplot as plt
 
-    axs[3].legend()
-    for ax in axs:
-        ax.set_xlabel('t')
+t = output['time']
+r = output['states']['R']
+p = output['states']['P']
+rho = output['states']['rho']
+
+plt.plot(t, r)  
+plt.show()
+plt.plot(t, p)
+plt.show()
+plt.plot(t, rho[:, 0, 0].real, label='rho00')
+plt.plot(t, rho[:, 1, 1].real, label='rho11')
+plt.show()
+
+
+
+# %%
+
+print(r.shape)
+
 
 # %%
