@@ -1,4 +1,7 @@
 # %% The package: pymddrive.integrators.rk4
+import warnings
+warnings.warn("The RK45(Tsit5) integrator has not been fully tested yet.")
+
 import dataclasses
 
 import numpy as np
