@@ -1,30 +1,33 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-from pymddrive.integrators.state import State
 from dataclasses import dataclass
-from typing import List
-from multiprocessing import cpu_count
+from typing import List, Union, Generator
 
 __all__ = [
     'ScatterResult',
     'linspace_log',
     'linspace_log10',
     'inside_boundary',
-    'ehrenfest_scatter_result',
+    'outside_boundary',
+    'is_trapped',
+    'get_scatter_result',
     'FWHM_to_sigma',
     'sigma_to_FWHM',
-    'save_data',
-    'save_trajectory',
-    'save_pulses',
-    'get_ncpus',
+    # 'save_data',
+    # 'save_trajectory',
+    # 'save_pulses',
+    # 'get_ncpus',
     'plot_scatter_result',
-    '_load_data_for_plotting',
+    'load_data_for_plotting',
+    'accumulate_output',
+    'post_process_output'
 ]
 
-@dataclass
+@dataclass(frozen=True)
 class ScatterResult:
-    is_transmission: bool
+    is_transmission: Union[bool, None]
+    is_trapped: bool
     prob_up: float
     prob_down: float
     
@@ -34,21 +37,36 @@ def linspace_log(start, stop, num=50):
 def linspace_log10(start, stop, num=50):
     return np.power(10, np.linspace(np.log10(start), np.log10(stop), num))
 
-def inside_boundary(s: State):
-    r, p, _ = s.get_variables()
-    if (r > 10.0) and (p > 0.0):
-        return False
-    elif (r < -10.0) and (p < 0.0):
-        return False
-    else:
-        return True
+def outside_boundary(r: float, r_bounds) -> bool:
+    return (r < r_bounds[0]) or (r > r_bounds[1])
+
+def inside_boundary(r: float, r_bounds) -> bool:
+    return (r >= r_bounds[0]) and (r <= r_bounds[1])
     
-def ehrenfest_scatter_result(s: State):
-    r, p, rho = s.get_variables()
-    is_transmission = (r > 0) and (p > 0)
-    prob_down = rho[0, 0].real
-    prob_up = rho[1, 1].real
-    return ScatterResult(is_transmission, prob_up, prob_down)
+def _count_re_crossings(r, r_TST):
+     r_sign = np.sign(r - r_TST)
+     r_sign_diff = np.diff(r_sign)
+     n = np.sum(r_sign_diff != 0) - 1
+     n_re_crossings = 0 if n < 0 else n
+     return n_re_crossings
+
+def is_trapped(r_traj: np.array, r_TST: float=0.0, recross_tol:int=10) -> bool:
+    return _count_re_crossings(r_traj, r_TST) > recross_tol
+    
+
+def get_scatter_result(traj: dict, r_TST: float = 0.0):
+    r_f = traj['R'][-1]
+    p_f = traj['P'][-1]
+    rho_f = traj['rho'][-1]
+    pop_f = rho_f.diagonal().real
+    
+    _is_trapped = is_trapped(traj['R'], r_TST)
+    
+    if _is_trapped:
+        return ScatterResult(None, True, pop_f[1], pop_f[0])
+    else:
+        is_transmission = (r_f > r_TST) and (p_f > 0)
+        return ScatterResult(is_transmission, False, pop_f[1], pop_f[0])
 
 def FWHM_to_sigma(FWHM: float) -> float:
     return FWHM / (2.0 * np.sqrt(2.0 * np.log(2)))
@@ -56,39 +74,33 @@ def FWHM_to_sigma(FWHM: float) -> float:
 def sigma_to_FWHM(sigma: float) -> float:
     return sigma * (2.0 * np.sqrt(2.0 * np.log(2)))
 
-def save_data(p0_list: List, output_list: List, sr_list: List, filename: str):
-    assert len(p0_list) == len(output_list) == len(sr_list)
-    res = np.zeros((len(output_list), 5))
-    for ii, (p0, output, sr) in enumerate(zip(p0_list, output_list, sr_list)):
+def save_data(p0_list: List, output_dict: dict, sr_list: List, filename: str):
+    assert len(p0_list) == len(sr_list)
+    res = np.zeros((len(p0_list), 6))
+    for ii, (p0, sr) in enumerate(zip(p0_list, sr_list)):
         res[ii, 0] = p0
-        res[ii, 1] = output['states']['R'][-1]
-        res[ii, 2] = output['states']['P'][-1]
+        res[ii, 1] = output_dict['R'][ii][-1]
+        res[ii, 2] = output_dict['P'][ii][-1]
         res[ii, 3] = sr.prob_down
         res[ii, 4] = sr.prob_up
+        res[ii, 5] = 1 if sr.is_trapped else 0
 
-    fmt = ["%10.5f", "%10.5f", "%10.5f", "%10.5f", "%10.5f"]
-    header = f"{'p0':>8s}{'r':>11s}{'p':>11s}{'prob_down':>11s}{'prob_up':>11s}"
+    fmt = ["%10.5f", "%10.5f", "%10.5f", "%10.5f", "%10.5f", "%10d"]
+    header = f"{'p0':>8s}{'r':>11s}{'p':>11s}{'prob_down':>11s}{'prob_up':>11s}{'trapped':>11s}"
     np.savetxt(filename, res, fmt=fmt, header=header)
     return res
 
 def save_trajectory(output: dict, filename: str):
     np.savez(filename, **output)
 
-def get_ncpus(): 
-    if os.environ.get('SLURM_CPUS_PER_TASK'):
-        print("We are on a SLURM system!, using SLURM_CPUS_PER_TASK to determine ncpus.")
-        ncpus = int(os.environ['SLURM_CPUS_PER_TASK'])
-    else:
-        print("We are not on a SLURM system, using cpu_count to determine ncpus.")
-        ncpus = cpu_count()
-        
-    return ncpus
-        
 def plot_scatter_result(p0_list: List, sr_list: List[ScatterResult], fig=None, fname: str = None):
     from cycler import cycler
     sr = np.zeros((4, len(sr_list)))
     tu, tl, ru, rl = sr
     for ii, sr in enumerate(sr_list):
+        if sr.is_trapped:
+            tu[ii] = tl[ii] = ru[ii] = rl[ii] = np.nan
+            continue
         if sr.is_transmission:
             tu[ii] = sr.prob_up
             tl[ii] = sr.prob_down
@@ -116,7 +128,6 @@ def plot_scatter_result(p0_list: List, sr_list: List[ScatterResult], fig=None, f
             ax.text(0.90, 0.90, alph_label[i], ha='center', va='center', transform=ax.transAxes)
             ax.set_ylim(-0.05, 1.05)
             # ax.legend(loc='best')
-
     else:
         c_cycler = cycler(color=['g', 'b', 'y', 'r'])
         ls_cycler = cycler(linestyle=[':', '-', '--', '-.', ])
@@ -128,19 +139,90 @@ def plot_scatter_result(p0_list: List, sr_list: List[ScatterResult], fig=None, f
     fig.tight_layout()
     if fname is not None:
         fig.savefig(fname)
-    
-def _load_data_for_plotting(filename: str):
+
+def load_data_for_plotting(filename: str):
     res = np.loadtxt(filename)
-    pi_list = res[:, 0]
+    p0_list = res[:, 0]
     rf_list = res[:, 1]
     prob_down_list = res[:, 3]
     prob_up_list = res[:, 4]
-    sr_list = [ScatterResult(rf > 0, prob_up, prob_down) for rf, prob_up, prob_down in zip(rf_list, prob_up_list, prob_down_list)]
-    return pi_list, sr_list
-
+    is_trapped_list = res[:, 5].astype('bool')
+    sr_list = []
+    for rf, pop0, pop1, _is_trapped in zip(rf_list, prob_down_list, prob_up_list, is_trapped_list):
+        if _is_trapped:
+            sr_list.append(ScatterResult(None, True, pop0, pop1))
+        else:
+            sr_list.append(ScatterResult(rf>0, False, pop0, pop1))
+            
+    return p0_list, sr_list
+        
 def save_pulses(p0_list, pulse_list, filename):
     pulse_dict = {
-        'p0': p0_list,
-        'pulse': pulse_list,
+        'p0_list': p0_list,
+        'pulses': pulse_list,
     }
     np.savez(filename, **pulse_dict)
+    
+def accumulate_output(p0_list, out_gen: Generator):
+    # assert len(p0_list) == len(out_gen)
+    traj_dict = {
+        'p0': np.array(p0_list),
+        'traj': {
+            'time': [],
+            'R': [],
+            'P': [],
+            'rho': [],
+            'KE': [],
+            'PE': [],
+        }
+    }
+    traj = traj_dict['traj']
+    has_pulse = None
+    pulse = None
+    pulses = None
+    for _output in out_gen:
+        if has_pulse is None:
+            has_pulse = True if (len(_output) == 2) and isinstance(_output, tuple) else False
+            if has_pulse:
+                pulses = []
+        if has_pulse: 
+            pulse, output = _output
+        else:
+            output = _output
+            
+        traj['time'].append(output['time'])
+        traj['R'].append(output['states']['R'])
+        traj['P'].append(output['states']['P'])
+        traj['rho'].append(output['states']['rho'])
+        traj['KE'].append(output['KE'])
+        traj['PE'].append(output['PE'])
+        if pulse is not None:
+            pulses.append(pulse)
+        
+    return traj_dict, pulses
+
+def loop_over_traj_dict(traj_dict: dict):
+    get_single_traj = lambda traj_dict, i: {key: traj_dict[key][i] for key in traj_dict}
+    n = len(traj_dict['time'])
+    return (get_single_traj(traj_dict, i) for i in range(n))
+    
+
+def post_process_output(sim_signature: str, traj_dict: dict, pulse_list: list | None=None):
+    fn_fig = os.path.join(sim_signature, f"scatter.pdf")
+    fn_trajectories = os.path.join(sim_signature, f"trajectories.npz")
+    fn_scatter = os.path.join(sim_signature, f"scatter.dat")
+    fn_pulses = os.path.join(sim_signature, f"pulses.npz")
+    
+    # save txt file from plotting scattering results    
+    scatter_list = [get_scatter_result(traj) for traj in loop_over_traj_dict(traj_dict['traj'])]
+    save_data(traj_dict['p0'], traj_dict['traj'], scatter_list, fn_scatter)
+    
+    # save the trajectory into npz file
+    save_trajectory(traj_dict, fn_trajectories)
+    
+    # plot the scatter result
+    plot_scatter_result(traj_dict['p0'], scatter_list, fname=fn_fig)
+    
+    # save the pulse
+    if pulse_list is not None:
+        save_pulses(p0_list=traj_dict['p0'], pulse_list=pulse_list, filename=fn_pulses)
