@@ -129,7 +129,7 @@ class TullyOnePulseThree(TullyOne):
             
     def get_dHdr(self, t: float, r: Union[float, ArrayLike]):
         dV11 = self.A * self.B * np.exp(-np.abs(r) * self.B)
-        dV12 = -2 * self.C * self.D * r * np.exp(-self.D * r**2) * self.pulse(t)
+        dV12 = -2 * self.C * self.D * r * np.exp(-self.D * r**2)
         return TullyOne._dHdr(dV11, dV12)
             
 # %% Temprarory test code

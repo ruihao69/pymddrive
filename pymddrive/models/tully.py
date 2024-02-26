@@ -127,6 +127,7 @@ class TullyOne(NonadiabaticHamiltonian):
 if __name__ == "__main__":
     
     # Testing scalar input
+    t = t0 = 0.0
     x = np.linspace(-10, 10, 1000)
     tl1 = TullyOne()    
     Eg_out = np.zeros_like(x)
@@ -135,7 +136,7 @@ if __name__ == "__main__":
     Fe_out = np.zeros_like(x)
     d12_out = np.zeros_like(x)
     for i, xx in enumerate(x):
-        H, evals, evecs, d12, F = tl1(xx, use_numerical_eigen=True)
+        H, evals, evecs, d12, F = tl1(t, xx, use_numerical_eigen=True)
         Eg_out[i] = evals[0]
         Ee_out[i] = evals[1]
         d12_out[i] = d12[0, 1]
@@ -143,7 +144,9 @@ if __name__ == "__main__":
         Fe_out[i] = F[1]
         
     import matplotlib.pyplot as plt
-    fig = plt.figure(dpi=200, figsize=(3, 2*2))
+    import scienceplots
+    plt.style.use('science')
+    fig = plt.figure(dpi=300, figsize=(3.5, 2.12*2))
     ax_E = fig.add_subplot(211)
     ax_E.plot(x, Eg_out, label="E ground")
     ax_E.plot(x, Ee_out, label="E excited")
@@ -177,7 +180,7 @@ if __name__ == "__main__":
     Fe_out = np.zeros(x.shape[0])
     d12_out = np.zeros(x.shape[0])
     for i, xx in enumerate(x):
-        H, evals, evecs, d12, F = tl1(xx, use_numerical_eigen=True)
+        H, evals, evecs, d12, F = tl1(t, xx, use_numerical_eigen=True)
         Eg_out[i] = evals[0]
         Ee_out[i] = evals[1]
         d12_out[i] = d12[0, 0, 1]
@@ -221,7 +224,7 @@ if __name__ == "__main__":
         d12_out = np.zeros(x.shape[0])
         start = time.time() 
         for i, xx in enumerate(x):
-            H, evals, evecs, d12, F = tl1(xx, use_numerical_eigen=True)
+            H, evals, evecs, d12, F = tl1(t, xx, use_numerical_eigen=True)
             # Eg_out[i] = evals[0]
             # Ee_out[i] = evals[1]
             # d12_out[i] = d12[0, 0, 1]

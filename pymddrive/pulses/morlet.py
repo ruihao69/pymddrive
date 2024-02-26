@@ -85,6 +85,8 @@ class MorletReal(Pulse):
 if __name__ == "__main__":
     import numpy as np
     import matplotlib.pyplot as plt
+    import scienceplots
+    plt.style.use('science')
     from pymddrive.pulses.pulses import MultiPulse
     # Test for single pulse 
     p1 = MorletReal(A=1, t0=4, tau=1, Omega=10, phi=0)
@@ -95,7 +97,7 @@ if __name__ == "__main__":
     # p = MultiPulse(p1, p2, p3, p4)
     p = p1
     
-    t = np.linspace(-0, 15, 3000)
+    t = np.linspace(-0, 12, 3000)
     sig = [p(tt) for tt in t]
     fig = plt.figure(figsize=(3, 2), dpi=200)
     
