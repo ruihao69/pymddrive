@@ -2,16 +2,14 @@
 """
 This module defines the Pulse and MultiPulse classes for handling pulse signals.
 """
-
+import numpy as np
 from collections import OrderedDict
-from pymddrive.utils import zeros
-from numbers import Real
 
 class Pulse:
     def __init__(
         self,
         Omega: float = 1,
-        cache_length: int = 1000
+        cache_length: int = 30
     ):
         """
         Initialize a Pulse object.
@@ -75,12 +73,48 @@ class Pulse:
             Omega (float): The carrier frequency.
         """
         self.Omega = Omega
+
+class UnitPulse(Pulse):
+    def __init__(self, A: float=1.0, Omega: float = 1, cache_length: int = 1000):
+        super().__init__(Omega, cache_length)
+        self.A = A
+        
+    @staticmethod
+    def _pulse_func(t: float) -> float:
+        return 1.0
+
+class CosinePulse(Pulse):
+    def __init__(
+        self,
+        A: float = 1,        # the amplitude of the cosine pulse
+        Omega: float = 1,    # the carrier frequency of the pulse
+        cache_length: int = 40
+    ):
+        super().__init__(Omega, cache_length)
+        self.A = A
+    
+    def _pulse_func(self, time: float):
+        return self.A * np.cos(self.Omega * time)
+    
+    
+class SinePulse(Pulse):
+    def __init__(
+        self,
+        A: float = 1,        # the amplitude of the sine pulse
+        Omega: float = 1,    # the carrier frequency of the pulse
+        cache_length: int = 40
+    ):
+        super().__init__(Omega, cache_length)
+        self.A = A
+    
+    def _pulse_func(self, time: float):
+        return self.A * np.sin(self.Omega * time)
     
 class MultiPulse(Pulse):
     def __init__(
         self,
         *pulses: Pulse,
-        cache_length: int = 1000
+        cache_length: int = 40
     ):
         """
         Initialize a MultiPulse object.

@@ -14,7 +14,7 @@ class Morlet(Pulse):
         tau: float = 1,
         Omega: float = 1,
         phi: float = 0,
-        cache_length: int = 1000
+        cache_length: int = 40
     ):
         super().__init__(Omega=Omega, cache_length=cache_length)
         
@@ -51,7 +51,7 @@ class MorletReal(Pulse):
         tau: float = 1,
         Omega: float = 1,
         phi: float = 0,
-        cache_length: int = 1000
+        cache_length: int = 40
     ):
         super().__init__(Omega=Omega, cache_length=cache_length)
         self.A = A
