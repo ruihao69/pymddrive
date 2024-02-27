@@ -16,12 +16,11 @@ class Morlet(Pulse):
         phi: float = 0,
         cache_length: int = 1000
     ):
-        super().__init__(cache_length)
+        super().__init__(Omega=Omega, cache_length=cache_length)
         
         self.A = A
         self.t0 = t0
         self.tau = tau
-        self.Omega = Omega  
         self.phi = phi
         
     def __repr__(self) -> str:
@@ -54,11 +53,10 @@ class MorletReal(Pulse):
         phi: float = 0,
         cache_length: int = 1000
     ):
-        super().__init__(cache_length)
+        super().__init__(Omega=Omega, cache_length=cache_length)
         self.A = A
         self.t0 = t0
         self.tau = tau
-        self.Omega = Omega  
         self.phi = phi
         
     def __repr__(self) -> str:  

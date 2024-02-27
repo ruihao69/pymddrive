@@ -8,6 +8,7 @@ from typing import (
     Tuple,
     Any
 )
+from numbers import Real
 from numpy.typing import ArrayLike
 
 from pymddrive.models.scatter import NonadiabaticHamiltonian
@@ -20,15 +21,15 @@ from pymddrive.dynamics import ehrenfest
 from functools import partial
 
 SOLVERS = ('Ehrenfest',)
-INTEGRATORS = ('rk4', 'vv_rk4',)
+INTEGRATORS = ('rk4', 'vv_rk4', 'vv_rk4_gpaw')
 
 def _process_mass(
     s0: State,
-    mass: Union[float, None, ArrayLike],
+    mass: Union[Real, None, ArrayLike],
 ) -> Union[float, ArrayLike]:
     if mass is None:
         return 1.0
-    elif isinstance(mass, (float, int)):
+    elif isinstance(mass, Real):
         if mass < 0:
             raise ValueError("The mass should be positive.")
         return mass
@@ -44,7 +45,7 @@ def _process_mass(
             return mass
     raise ValueError("The mass should be a float, int, list, tuple or numpy.ndarray.") 
 
-def estimate_scatter_dt(deriv: callable, r_bounds: tuple, p0: float, model: NonadiabaticHamiltonian, mass: float=2000, nsample=30, t_bounds=None) -> float:
+def estimate_scatter_dt(deriv: callable, r_bounds: tuple, p0: float, model: NonadiabaticHamiltonian, mass: Real=2000, nsample: Real=30, t_bounds: Tuple[Real]=None) -> float:
     r_list = np.linspace(*r_bounds, nsample)
     if t_bounds is not None:
         t_list = np.random.uniform(*t_bounds, nsample)
@@ -61,10 +62,10 @@ class Dynamics:
     def __init__(
         self,
         model: Union[NonadiabaticHamiltonian, None] = None,
-        t0: float = 0.0,
+        t0: Real = 0.0,
         s0: Union[State, None] = None,
-        mass: Union[float, None, ArrayLike] = None,
-        dt: Union[float, None] = None,
+        mass: Union[Real, None, ArrayLike] = None,
+        dt: Union[Real, None] = None,
         safty: float = 0.9,
     ) -> None:
         self.model = model
@@ -74,21 +75,21 @@ class Dynamics:
         self.dt = dt
         self.safty = safty
         
-    def step(self, t: float, s: State, c: Any) -> Tuple[float, State, Any]:
+    def step(self, t: Real, s: State, c: Any) -> Tuple[Real, State, Any]:
         pass
     
 class NonadiabaticDynamics(Dynamics):
     def __init__(
         self,
         model: Union[NonadiabaticHamiltonian, None] = None,
-        t0: float = 0.0,
+        t0: Real= 0.0,
         s0: Union[State, None] = None,
-        mass: Union[float, None, ArrayLike] = None,
+        mass: Union[Real, None, ArrayLike] = None,
         solver: Union[str, None] = 'Ehrenfest',
         method: Union[str, None] = 'rk4',
         dt: Union[float, None] = None,
-        r_bounds: Union[Tuple[float, float], None] = None,
-        t_bounds: Union[Tuple[float, float], None] = None,
+        r_bounds: Union[Tuple[Real], None] = None,
+        t_bounds: Union[Tuple[Real], None] = None,
         save_every: int = 10,
         safty: float = 0.9,
     ) -> None:
@@ -122,6 +123,8 @@ class NonadiabaticDynamics(Dynamics):
                 self.step = partial(ehrenfest.step_rk, dt=self.dt, model=model, mass=mass)
             elif method == 'vv_rk4':
                 self.step = partial(ehrenfest.step_vv_rk, dt=self.dt, model=model, mass=mass)
+            elif method == 'vv_rk4_gpaw':
+                self.step = partial(ehrenfest.step_vv_rk_gpaw, dt=self.dt, model=model, mass=mass)
             else:
                 raise ValueError(f"The method {method} is not supported for the {solver} solver.")
             self.calculate_properties = ehrenfest.calculate_properties

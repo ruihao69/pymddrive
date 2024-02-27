@@ -1,10 +1,11 @@
 import numpy as np
 from numba import jit   
 from typing import Union, Tuple
+from numbers import Real
 from numpy.typing import ArrayLike  
 from pymddrive.models.scatter import NonadiabaticHamiltonian
 
-def eval_nonadiabatic_hamiltonian(t, R: ArrayLike, model: NonadiabaticHamiltonian) -> Tuple:
+def eval_nonadiabatic_hamiltonian(t: Real, R: ArrayLike, model: NonadiabaticHamiltonian) -> Tuple:
     if R.shape[0] == 1:
         _, evals, evecs, d, F = model(t, R[0])
         d = d[np.newaxis, :, :]
@@ -13,21 +14,21 @@ def eval_nonadiabatic_hamiltonian(t, R: ArrayLike, model: NonadiabaticHamiltonia
         _, evals, evecs, d, F = model(t, R)
     return evals, evecs, d, F
 
-def rhs_density_matrix(rho, evals, vdotd, k_rho=None):
+def rhs_density_matrix(rho: ArrayLike, evals: ArrayLike, vdotd: ArrayLike, k_rho:Union[ArrayLike, None]=None):
     if k_rho is None:
         k_rho = np.zeros_like(rho)
     return _rhs_density_matrix(rho=rho, evals=evals, vdotd=vdotd, k_rho=k_rho)
 
-def rhs_wavefunction(c, evals, vdotd, k_c=None):
+def rhs_wavefunction(c: ArrayLike, evals:ArrayLike, vdotd:ArrayLike, k_c: Union[ArrayLike, None]=None):
     if k_c is None:
         k_c = np.zeros_like(c)
     return _rhs_wavefunction(c=c, evals=evals, vdotd=vdotd, k_c=k_c)
 
 def v_dot_d(
-     v: ArrayLike,
-     d: ArrayLike,
+    v: ArrayLike,
+    d: ArrayLike,
 ) -> ArrayLike:
-     return np.tensordot(v, d, axes=(0, 0))
+    return np.tensordot(v, d, axes=(0, 0))
  
 def _expected_value_dm(
     rho: ArrayLike, # density matrix
@@ -51,7 +52,7 @@ def _expected_value_wf(
     else:
         raise ValueError("Invalid shape for operator O: {}".format(O.shape))
     
-def expected_value(qm, O):
+def expected_value(qm: ArrayLike, O: ArrayLike):
     if qm.ndim == 2:
         return _expected_value_dm(rho=qm, O=O)
     else:

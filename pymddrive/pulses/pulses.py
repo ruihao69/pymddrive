@@ -5,10 +5,12 @@ This module defines the Pulse and MultiPulse classes for handling pulse signals.
 
 from collections import OrderedDict
 from pymddrive.utils import zeros
+from numbers import Real
 
 class Pulse:
     def __init__(
         self,
+        Omega: float = 1,
         cache_length: int = 1000
     ):
         """
@@ -17,6 +19,7 @@ class Pulse:
         Args:
             cache_length (int): The maximum length of the cache.
         """
+        self.Omega = Omega
         self._cache = OrderedDict()
         self._cache_length = cache_length
         
@@ -63,6 +66,15 @@ class Pulse:
             float: The calculated pulse value.
         """
         return 0.0
+    
+    def set_Omega(self, Omega: float):
+        """
+        Set the carrier frequency of the pulse.
+
+        Args:
+            Omega (float): The carrier frequency.
+        """
+        self.Omega = Omega
     
 class MultiPulse(Pulse):
     def __init__(
@@ -124,7 +136,9 @@ class MultiPulse(Pulse):
             float: The calculated pulse value.
         """
         return sum(p(time) for p in self.pulses)
-        
+    
+def get_carrier_frequency(pulse: Pulse) -> float:
+    return pulse.Omega        
 
 # %% the temporary test code
 if __name__ == "__main__":

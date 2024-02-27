@@ -16,13 +16,14 @@ def rkgill4(
     dt: type_time = 1.0,
     nstep: int = 1,
 ) -> Tuple[type_time, State]:
-    k1 = dt * derivative(t, y, **deriv_options)
-    k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
-    k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * (1.0 - np.sqrt(2.0)) * k1 + 0.5 * (1.0 + np.sqrt(2.0)) * k2, **deriv_options)
-    k4 = dt * derivative(t + 1.0 * dt, y - 0.5 * np.sqrt(2.0) * k2 + (1.0 + 0.5 * np.sqrt(2.0)) * k3, **deriv_options)
+    for _ in range(nstep):
+        k1 = dt * derivative(t, y, **deriv_options)
+        k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
+        k3 = dt * derivative(t + 0.5 * dt, y + (0.5 * (1.0 - np.sqrt(2.0))) * k1 + (0.5 * (1.0 + np.sqrt(2.0))) * k2, **deriv_options)
+        k4 = dt * derivative(t + 1.0 * dt, y + (-0.5 * np.sqrt(2.0)) * k2 + (1.0 + 0.5 * np.sqrt(2.0)) * k3, **deriv_options)
 
-    t += dt
-    y += 1.0 / 6.0 * (k1 + (2.0 - np.sqrt(2.0)) * k2 + (2.0 + np.sqrt(2.0)) * k3 + k4)
+        t += dt
+        y += 1.0 / 6.0 * (k1 + (2.0 - np.sqrt(2.0)) * k2 + (2.0 + np.sqrt(2.0)) * k3 + k4)
 
     return (t, y)
 
@@ -34,13 +35,14 @@ def rk4(
     dt: type_time = 1.0,
     nstep: int = 1,
 ) -> Tuple[type_time, State]:
-    k1 = dt * derivative(t, y, **deriv_options)
-    k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
-    k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * k2, **deriv_options)
-    k4 = dt * derivative(t + 1.0 * dt, y + k3, **deriv_options)
+    for _ in range(nstep):
+        k1 = dt * derivative(t, y, **deriv_options)
+        k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
+        k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * k2, **deriv_options)
+        k4 = dt * derivative(t + 1.0 * dt, y + k3, **deriv_options)
 
-    t += dt
-    y += 1.0 / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        t += dt
+        y += 1.0 / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
     return (t, y)
 
 # %% The test code
