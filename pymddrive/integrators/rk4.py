@@ -61,11 +61,13 @@ def _debug_test():
                 
         return 0.01*out
         #return out
-    t = 0.0 
     rho = np.array([[0.5, 0], [0, 0.5]])
     n_particle = 100
-    s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
-    
+    # s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
+    R = np.random.normal(0, 1, n_particle)
+    P = np.random.normal(0, 1, n_particle)
+    rho = None
+    s = State.from_variables(R=R, P=P, rho=rho)
     
     N = 100000
     time = np.zeros(N)
@@ -74,9 +76,10 @@ def _debug_test():
     
     def benchmark(N: int):
         t = 0.0 
-        rho = np.array([[0.5, 0], [0, 0.5]])
         n_particle = 100
-        s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
+        R = np.random.normal(0, 1, n_particle)
+        P = np.random.normal(0, 1, n_particle)
+        s = State.from_variables(R=R, P=P, rho=None)
         import timeit
         start = timeit.default_timer() 
         for i in range(N):
@@ -121,4 +124,5 @@ def _debug_test():
 # %% The test code
 if __name__ == "__main__":
     _debug_test()
+    
 # %%

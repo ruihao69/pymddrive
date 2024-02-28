@@ -93,8 +93,10 @@ def _debug_test():
         kp[:] = -r
         return 0.01*out
     n_particle = 100
-    s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
-    
+    # s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
+    R = np.random.normal(0, 1, n_particle)
+    P = np.random.normal(0, 1, n_particle)
+    s = State.from_variables(R=R, P=P, rho=None)
     
     N = 100000
     time = np.zeros(N)
@@ -103,7 +105,9 @@ def _debug_test():
     def benchmark(N: int):
         t = 0.0 
         n_particle = 100
-        s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
+        R = np.random.normal(0, 1, n_particle)
+        P = np.random.normal(0, 1, n_particle)
+        s = State.from_variables(R=R, P=P, rho=None)
         rk45 = RungeKutta45(
             derivative=derivative,
             t0=t,

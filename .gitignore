@@ -170,3 +170,4 @@ nohup.out
 # temporary
 tmp/
 tmp*
+data_*

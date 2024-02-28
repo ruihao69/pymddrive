@@ -52,8 +52,9 @@ def estimate_scatter_dt(deriv: callable, r_bounds: tuple, p0: float, model: Nona
     else:
         t_list = np.zeros(nsample)
     _dt = 99999999999
+    rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
     for i in range(nsample):
-        s0 = State(float(r_list[i]), float(p0), np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128))
+        s0 = State.from_variables(R=r_list[i], P=p0, rho=rho0)
         _dt = min(_dt, evaluate_initial_dt(deriv, t_list[i], s0, order=4, atol=1e-8, rtol=1e-6,))
     return _dt
  
@@ -154,7 +155,7 @@ def run_nonadiabatic_dynamics(
         if istep % dyn.save_every == 0:
             properties = dyn.calculate_properties(t, s, dyn.model, dyn.mass)
             output['time'] = np.append(output['time'], t)
-            output['states'] = np.append(output['states'], s.data) if len(output['states']) > 0 else s.data
+            output['states'] = np.append(output['states'], s.data) if len(output['states']) > 0 else np.array([s.data])
             output['KE'] = np.append(output['KE'], properties['KE'])
             output['PE'] = np.append(output['PE'], properties['PE'])
             if istep % check_stop_every == 0:
@@ -184,7 +185,7 @@ def _debug_test():
     # initial conditions
     t0 = 0.0; r0 = -10.0; p0 = 30.0
     rho0 = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
-    s0 = State(r=r0, p=p0, rho=rho0)
+    s0 = State.from_variables(R=r0, P=p0, rho=rho0)
     
     # prepare the dynamics object
     dyn = NonadiabaticDynamics( 

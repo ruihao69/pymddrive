@@ -43,6 +43,7 @@ def _eval_Ehrenfest_meanF(evals, d, rho, F):
     """ https://juser.fz-juelich.de/record/152530/files/FZJ-2014-02134.pdf """
     meanF_term1 = expected_value(rho, F)           # population-weighted average force
     meanF_term2 = second_term_meanF(rho, evals, d) # nonadiabatic changes of the adiabatic state occupations
+    # meanF_term2 = 0.0
     return meanF_term1 + meanF_term2
     
 
@@ -169,18 +170,95 @@ def calculate_properties_state(t: Real, s: State, model: NonadiabaticHamiltonian
     return meanF, KE, PE
     
 # %% the testing/debugging code
-def _test_debug():
+
+def _run_dynamics(algorithm):
     from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
+    
+    # get a convenient model for testing 
+    model = get_tullyone(pulse_type=TullyOnePulseTypes.NO_PULSE)
+    mass = 2000.0 
+    
+    t0 = 0.0
+    R0 = -5.0; P0 = 30.0; rho0 = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
+    s0 = State.from_variables(R=R0, P=P0, rho=rho0)
+    
+    r0, p0, rho0 = s0.get_variables()
+    output = {
+        'time': [],
+        'states': [],
+        'KE': [],
+        'PE': [],
+    }
+    t, s = t0, s0
+    cache = None
+    
+    def stop_condition(t, s, states):
+        r, _, _ = s.get_variables()
+        return (r>5.0) or (r<-5.0)
+    
+    if algorithm == "rk4":
+        stepper = step_rk
+    elif algorithm == "vv":
+        stepper = step_vv_rk
+    else:
+        stepper = step_vv_rk_gpaw
+         
+    for ns in range(int(1e6)):
+        if ns % 100 == 0:
+            properties = calculate_properties(t, s, model, mass)
+            output['time'] = np.append(output['time'], t)
+            output['states'] = np.append(output['states'], s.data) if len(output['states']) > 0 else np.array([s.data])
+            output['KE'] = np.append(output['KE'], properties['KE'])
+            output['PE'] = np.append(output['PE'], properties['PE'])
+            if stop_condition(t, s, output['states']):
+                break
+        t, s, cache = stepper(t, s, cache, 0.03, model, mass)
+    return output["time"], output["states"], output["KE"], output["PE"]
+
+def _plot_debug(t_out, s_out, KE_out, PE_out, label: str, fig=None, ):
+    import matplotlib.pyplot as plt
+    if fig is None:
+        fig, axs = plt.subplots(3, 2, figsize=(5*2, 3*3))
+        print(axs.shape)
+        axs_dynamics = axs[:, 0]
+        axs_energy = axs[:, 1]
+    else:
+        axs = np.array(fig.get_axes()).reshape(3, 2)
+        axs_dynamics = axs[:, 0]
+        axs_energy = axs[:, 1]
+        
+    axs_dynamics[0].plot(t_out, s_out['R'], label=f"{label}: R")
+    axs_dynamics[1].plot(t_out, s_out['P'], label=f"{label}: P")
+    axs_dynamics[2].plot(t_out, s_out['rho'][:, 0, 0].real, label=f"{label}: rho00")
+    axs_dynamics[2].plot(t_out, s_out['rho'][:, 1, 1].real, label=f"{label}: rho11")
+    for ax in axs_dynamics:
+        ax.legend()
+        ax.set_xlabel("Time")
+    
+    axs_energy[0].plot(t_out, KE_out, label=f"{label}: KE")
+    axs_energy[1].plot(t_out, PE_out, label=f"{label}: PE")
+    axs_energy[2].plot(t_out, [ke + pe for (ke, pe) in zip(KE_out, PE_out)], label=f"{label} E")
+    for ax in axs_energy:
+        ax.legend()
+        ax.set_xlabel("Time") 
+        
+    return fig
+
+def _test_debug():
     import time
     start = time.perf_counter()
-    t_out, s_out, meanF_out, KE_out_rk, PE_out_rk = run_rk4()
+    t_out, s_out, KE_out_rk, PE_out_rk = _run_dynamics("rk4")
+    fig = _plot_debug(t_out, s_out, KE_out_rk, PE_out_rk, "RK4")
     print(f"The simulation time for dynamics with rk4 is {time.perf_counter()-start}")
     start = time.perf_counter()
-    t_out, s_out, meanF_out, KE_out_vv, PE_out_vv = run_vv(gpaw=False)
+    t_out, s_out, KE_out_vv, PE_out_vv = _run_dynamics("vv")
+    fig = _plot_debug(t_out, s_out, KE_out_vv, PE_out_vv, "VV", fig)
     print(f"The simulation time for dynamics with simple vv-rk4 is {time.perf_counter()-start}")
     start = time.perf_counter()
-    t_out, s_out, meanF_out, KE_out_vv_GPAW, PE_out_vv_GPAW = run_vv(gpaw=True)
+    t_out, s_out, KE_out_vv_GPAW, PE_out_vv_GPAW = _run_dynamics("vv_gpaw")
+    fig = _plot_debug(t_out, s_out, KE_out_vv_GPAW, PE_out_vv_GPAW, "VV GPAW", fig)
     print(f"The simulation time for dynamics with vv-rk4-GPAW is {time.perf_counter()-start}")
+    fig.tight_layout()
 
     
 
@@ -188,123 +266,4 @@ def _test_debug():
 if __name__ == "__main__":
     _test_debug()
        
-
 # %%
-if __name__ == "__main__":
-    from pymddrive.models.tullyone import TullyOne
-    import matplotlib.pyplot as plt
-    from pymddrive.integrators.rk4 import rk4
-
-    plt.plot(t_out, KE_out_rk, label="KE RK")
-    plt.plot(t_out, KE_out_vv, label="KE VV")
-    plt.plot(t_out, KE_out_vv_GPAW, label="KE VV GPAW")
-    plt.legend()
-    plt.show()
-
-    plt.plot(t_out, PE_out_rk, label="PE RK")
-    plt.plot(t_out, PE_out_vv, label="PE VV")
-    plt.plot(t_out, PE_out_vv_GPAW, label="PE VV GPAW")
-    plt.legend()
-    plt.show()
-
-    plt.plot(t_out, [pe + ke for (pe, ke) in zip(PE_out_rk, KE_out_rk)], label="E RK")
-    plt.plot(t_out, [pe + ke for (pe, ke) in zip(PE_out_vv, KE_out_vv)], label="E VV")
-    plt.plot(t_out, [pe + ke for (pe, ke) in zip(PE_out_vv_GPAW, KE_out_vv_GPAW)], label="E VV GPAW")
-    plt.legend()
-    plt.show()
-
-    plt.plot(t_out, s_out['rho'][:, 0, 0].real, label="rho00")
-    plt.plot(t_out, s_out['rho'][:, 1, 1].real, label="rho11")
-    # plt.plot(t_out, s_out['rho'][:, 0, 0].real + s_out['rho'][:, 1, 1].real, label="rho11")
-    plt.legend()
-    plt.show()
-# %%
-def run_rk4():
-    mass = 2000.0 
-    model = TullyOne()
-    
-    t0 = 0.0
-    s0 = State(
-        r=-5.0,
-        p=30.0,
-        rho=np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
-    )
-    r0, p0, rho0 = s0.get_variables()
-
-    t, s = t0, s0
-    dt = 0.03
-    deriv_options = {
-        "model": model,
-        "mass": mass
-    } 
-    t_out = []
-    s_out = []
-    meanF_out = []
-    KE_out = [] 
-    PE_out = []
-    ns = 0
-    c = None
-    while t < 700.0:
-        if ns % 100 == 0:
-            meanF, KE, PE = calculate_properties_state(t, s, model, mass)
-            t_out.append(t)
-            s_out.append(s.data.copy())
-            meanF_out.append(meanF)
-            KE_out.append(KE)
-            PE_out.append(PE)
-        t, s, c = step_rk(t, s, c, dt, model, mass)
-        ns += 1
-    s_out = np.array(s_out) 
-    return t_out, s_out, meanF_out, KE_out, PE_out
-
-def run_vv(gpaw=False):
-    mass = 2000.0 
-    model = TullyOne()
-    
-    t0 = 0.0
-    s0 = State(
-        r=-5.0,
-        p=30.0,
-        rho=np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
-    )
-    r0, p0, rho0 = s0.get_variables()
-
-    t, s = t0, s0
-    dt = 0.03
-    deriv_options = {
-        "model": model,
-        "mass": mass
-    } 
-    t_out = []
-    s_out = []
-    meanF_out = []
-    KE_out = [] 
-    PE_out = []
-    ns = 0
-    
-    meanF, evals, _, d, F = compute_ehrenfest_meanF(t, r0, rho0, model)  
-    c = EhrenfestCache(meanF, evals)
-    
-    stepper = step_vv_rk_gpaw if gpaw else step_vv_rk
-    
-    while t < 700.0:
-        if ns % 100 == 0:
-            meanF, KE, PE = calculate_properties_state(t, s, model, mass)
-            t_out.append(t)
-            s_out.append(s.data.copy())
-            meanF_out.append(meanF)
-            KE_out.append(KE)
-            PE_out.append(PE)
-        if c.meanF is not None:
-            meanF = c.meanF 
-        else:
-            r, _, rho = s.get_variables()
-            meanF, evals, _, d, F = compute_ehrenfest_meanF(t, r, rho, model)
-        # t, s, c = step_vv_rk(
-        t, s, c = stepper(
-            t, s, c, dt, model, mass, 
-        )
-        ns += 1
-        
-    s_out = np.array(s_out) 
-    return t_out, s_out, meanF_out, KE_out, PE_out

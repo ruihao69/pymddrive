@@ -2,7 +2,6 @@
 """ This module conatains general utility functions for the Runge-Kutta type integrators. """
 
 import numpy as np
-from numpy.lib import recfunctions as rfn
 
 from collections import namedtuple
 from typing import Callable, Union, Tuple
@@ -33,6 +32,28 @@ tsit5_tableau = RungeKuttaCoefficients(
         [0.001780011052226, 0.000816434459657, -0.007880878010262, 0.144711007173263, -0.582357165452555, 0.458082105929187, 1.0/66.0]
     )
 )
+
+def _evaluate_y1(
+    y0: State, 
+    k: list,
+    beta_i: np.ndarray,
+    i: int,
+    h: float
+) -> State:
+    yi = y0 + h * k[0] * beta_i[0]
+    for j in range(1, i):
+        yi += h * k[j] * beta_i[j]
+    return yi
+
+def _evaluate_y1_err(
+    k: list,
+    bb: np.ndarray,
+    h: float
+) -> State:
+    y1_err = k[0] * bb[0] * h
+    for i in range(1, len(k)):
+        y1_err += k[i] * bb[i] * h
+    return y1_err
 
 def runge_kutta_step(
     derivative: Callable[[float, State], State],
@@ -67,14 +88,12 @@ def runge_kutta_step(
             k = [derivative(ti, yi)]  
         else:
             ti = t0 + alpha_i * h
-            # Somhow the order matters
-            # In particular, I need to put scalars after the structured data
-            yi = y0 + sum((k[j] * h * beta_i[j]) for j in range(i)) 
+            yi = _evaluate_y1(y0, k, beta_i, i, h)
             k.append(derivative(ti, yi))
     
     y1 = yi
     f1 = k[-1]
-    y1_err = sum((k[i] * tableau.bb[i] * h) for i in range(len(k)))
+    y1_err = _evaluate_y1_err(k, tableau.bb, h)
     
     
     return (y1, f1, y1_err, k)
@@ -123,7 +142,8 @@ def evaluate_initial_dt(
         h0 = 0.01 * max(d0, d1)
         
     _y1 = _y0 + h0 * _f0 
-    f1 = derivative(t0 + h0, State(data=rfn.unstructured_to_structured(_y1, y0.data.dtype)))
+    y1 = State.from_unstructured(flat_data=_y1, dtype=y0.data.dtype, stype=y0.stype, copy=True)
+    f1 = derivative(t0 + h0, y1)
     _f1 = f1.flatten(copy=True)
     
     d2 = np.linalg.norm((_f1 - _f0) / scale) / h0

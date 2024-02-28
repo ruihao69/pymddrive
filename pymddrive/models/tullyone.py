@@ -51,7 +51,7 @@ class TullyOne(NonadiabaticHamiltonianBase):
         return C * np.exp(-D * r**2)
     
     @staticmethod
-    def V11dR(
+    def dV11dR(
         r: Union[Real, ArrayLike],
         A: Real,
         B: Real,
@@ -59,7 +59,7 @@ class TullyOne(NonadiabaticHamiltonianBase):
         return A * B * np.exp(-np.abs(r) * B) 
     
     @staticmethod
-    def V12dR(
+    def dV12dR(
         r: Union[Real, ArrayLike],
         C: Real,
         D: Real,
@@ -75,8 +75,8 @@ class TullyOne(NonadiabaticHamiltonianBase):
         return _construct_2D_H(r, V11, V12, -V11)
     
     def dHdR(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
-        dV11dR = self.V11dR(r, self.A, self.B)
-        dV12dR = self.V12dR(r, self.C, self.D)
+        dV11dR = self.dV11dR(r, self.A, self.B)
+        dV12dR = self.dV12dR(r, self.C, self.D)
         return np.array([[dV11dR, dV12dR], [dV12dR, -dV11dR]])
     
     def __call__(self, 
@@ -110,6 +110,7 @@ class TullyOneTD_type1(TD_NonadiabaticHamiltonianBase):
     def H0(self, r: Union[Real, ArrayLike]) -> ArrayLike:
         V11 = TullyOne.V11(r, self.A, self.B)
         V12 = TullyOne.V12(r, self.C, self.D)
+        # print(f"{V12=}", flush=True)
         return _construct_2D_H(r, V11, V12, -V11)
     
     def H1(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
@@ -117,8 +118,9 @@ class TullyOneTD_type1(TD_NonadiabaticHamiltonianBase):
         return _construct_2D_H(r, np.zeros_like(r), V12, np.zeros_like(r))
     
     def dH0dR(self, r: Union[Real, ArrayLike]) -> ArrayLike:
-        dV11dR = TullyOne.V11dR(r, self.A, self.B)
-        dV12dR = TullyOne.V12dR(r, self.C, self.D)  
+        dV11dR = TullyOne.dV11dR(r, self.A, self.B)
+        dV12dR = TullyOne.dV12dR(r, self.C, self.D)  
+        # print(f"{dV12dR=}", flush=True)
         return np.array([[dV11dR, dV12dR], [dV12dR, -dV11dR]])
     
     def dH1dR(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
@@ -162,12 +164,12 @@ class TullyOneTD_type2(TD_NonadiabaticHamiltonianBase):
         return _construct_2D_H(r, np.zeros_like(r), V12, np.zeros_like(r))
     
     def dH0dR(self, r: Union[Real, ArrayLike]) -> ArrayLike:
-        dV11dR = TullyOne.V11dR(r, self.A, self.B)
-        # dV12dR = TullyOne.V12dR(r, self.C, self.D)  
+        dV11dR = TullyOne.dV11dR(r, self.A, self.B)
+        # dV12dR = TullyOne.dV12dR(r, self.C, self.D)  
         return np.array([[dV11dR, np.zeros_like(dV11dR)], [np.zeros_like(dV11dR), -dV11dR]])
     
     def dH1dR(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
-        dV12dR = TullyOne.V12dR(r, self.C, self.D) * self.pulse(t)
+        dV12dR = TullyOne.dV12dR(r, self.C, self.D) * self.pulse(t)
         return np.array([[np.zeros_like(dV12dR), dV12dR], [dV12dR, np.zeros_like(dV12dR)]])
     
     def __call__(self, 
@@ -211,8 +213,8 @@ class TullyOneFloquet_type1(FloquetHamiltonian):
         return _construct_2D_H(r, np.zeros_like(r), V12, np.zeros_like(r))
     
     def dH0dR(self, r: Union[Real, ArrayLike]) -> ArrayLike:
-        dV11dR = TullyOne.V11dR(r, self.A, self.B)
-        dV12dR = TullyOne.V12dR(r, self.C, self.D)
+        dV11dR = TullyOne.dV11dR(r, self.A, self.B)
+        dV12dR = TullyOne.dV12dR(r, self.C, self.D)
         return np.array([[dV11dR, dV12dR], [dV12dR, -dV11dR]])
     
     def dH1dR(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
@@ -260,12 +262,12 @@ class TullyOneFloquet_type2(FloquetHamiltonian):
         return _construct_2D_H(r, np.zeros_like(r), V12, np.zeros_like(r))
     
     def dH0dR(self, r: Union[Real, ArrayLike]) -> ArrayLike:
-        dV11dR = TullyOne.V11dR(r, self.A, self.B)
+        dV11dR = TullyOne.dV11dR(r, self.A, self.B)
         # dV12dR = TullyOne.V12dR(r, self.C, self.D)
         return np.array([[dV11dR, np.zeros_like(dV11dR)], [np.zeros_like(dV11dR), -dV11dR]])
     
     def dH1dR(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
-        dV12dR = TullyOne.V12dR(r, self.C, self.D) * self.pulse(t)
+        dV12dR = TullyOne.dV12dR(r, self.C, self.D) * self.pulse(t)
         return np.array([[np.zeros_like(dV12dR), dV12dR], [dV12dR, np.zeros_like(dV12dR)]])
     
     def __call__(self, 
@@ -292,13 +294,14 @@ def _construct_2D_H(
             raise ValueError(f"The input array 'r' must be either a number or a 1D array. 'r' input here has dimension of {r.ndim}.")
     else:
         raise NotImplemented
-   
+@unique 
 class TullyOnePulseTypes(Enum): 
     NO_PULSE = "NoPulse"
     PULSE_TYPE1 = "PulseType1"
     PULSE_TYPE2 = "PulseType2"
     PULSE_TYPE3 = "PulseType3"
-    
+
+@unique 
 class TD_Methods(Enum):
     BRUTE_FORCE = "BruteForce"
     FLOQUET = "Floquet"
@@ -340,9 +343,9 @@ def get_tullyone(
     elif pulse_type == TullyOnePulseTypes.PULSE_TYPE3:
         pulse = MorletReal(A=C/2, t0=t0, tau=tau, Omega=Omega, phi=0)
         if td_method == TD_Methods.BRUTE_FORCE:
-            return TullyOneTD_type2(A=A, B=B, C=C/2, D=D, pulse=pulse)
+            return TullyOneTD_type1(A=A, B=B, C=C/2, D=D, pulse=pulse)
         elif td_method == TD_Methods.FLOQUET:
-            return TullyOneFloquet_type2(A=A, B=B, C=C/2, D=D, pulse=pulse)
+            return TullyOneFloquet_type1(A=A, B=B, C=C/2, D=D, pulse=pulse)
         else:
             raise ValueError(f"Invalid TD method: {td_method}")
     else:

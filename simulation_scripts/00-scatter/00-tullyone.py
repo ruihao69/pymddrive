@@ -1,7 +1,7 @@
 # %%
 import os 
 import numpy as np
-from pymddrive.models.tully import TullyOne
+from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
 from pymddrive.integrators.state import State
 from pymddrive.dynamics.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics
 
@@ -16,11 +16,11 @@ def break_condition(t, s, states):
 
 def run_tullyone(r0: float, p0: float, mass: float=2000, solver='Ehrenfest', method='vv_rk4'):
     # intialize the model
-    model = TullyOne()
+    model = get_tullyone(pulse_type=TullyOnePulseTypes.NO_PULSE)
     
     # initialize the states
     rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
-    s0 = State(r0, p0, rho0)
+    s0 = State.from_variables(R=r0, P=p0, rho=rho0)
     
     dyn = NonadiabaticDynamics(
         model=model,
@@ -29,7 +29,8 @@ def run_tullyone(r0: float, p0: float, mass: float=2000, solver='Ehrenfest', met
         mass=mass,
         solver=solver,
         method=method,
-        r_bounds=(-10, 10)
+        r_bounds=(-10, 10),
+        save_every=100
     )
     
     return run_nonadiabatic_dynamics(dyn, stop_condition, break_condition) 
@@ -57,9 +58,11 @@ def main(sim_signature: str, n_samples: int, p_bounds: tuple=(0.5, 35.0)):
 # %%
 if __name__ == "__main__": 
     sim_signature = "data_tullyone"
-    nsamples = 48
-    p_bounds = (0.5, 35)
-    
+    # nsamples = 48
+    # p_bounds = (0.5, 35)
+    nsamples = 8
+    p_bounds = (30, 35)
+     
     main(sim_signature, nsamples, p_bounds)
     
     p0_list, sr_list = load_data_for_plotting(os.path.join(sim_signature, 'scatter.dat'))
