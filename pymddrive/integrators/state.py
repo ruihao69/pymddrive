@@ -124,9 +124,9 @@ class State(CompositeData):
     
 def zeros_like(state: State) -> State:
     return State(r=None, p=None, rho=None, data=np.zeros(1, dtype=state.data.dtype)[0])
-        
-# %% The teporary test code
-if __name__ == "__main__":
+
+# %% The temporary testing/debuging code
+def _debug_test():
     r = 3
     p = 3.5
     rho = np.array([[1, 0], [0, 0]])
@@ -156,6 +156,9 @@ if __name__ == "__main__":
     print(p.shape)
     print(rho.shape)
     
-    
+        
+# %% The __main__ code
+if __name__ == "__main__": 
+    _debug_test() 
 
 # %%

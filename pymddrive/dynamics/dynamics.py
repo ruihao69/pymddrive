@@ -11,12 +11,12 @@ from typing import (
 from numbers import Real
 from numpy.typing import ArrayLike
 
-from pymddrive.models.scatter import NonadiabaticHamiltonian
+# from pymddrive.models.scatter import NonadiabaticHamiltonianBase
+from pymddrive.models.nonadiabatic_hamiltonian import NonadiabaticHamiltonianBase
 from pymddrive.integrators.state import State
 from pymddrive.integrators.rungekutta import evaluate_initial_dt
 
 from pymddrive.dynamics import ehrenfest 
-# import ehrenfest
 
 from functools import partial
 
@@ -45,7 +45,7 @@ def _process_mass(
             return mass
     raise ValueError("The mass should be a float, int, list, tuple or numpy.ndarray.") 
 
-def estimate_scatter_dt(deriv: callable, r_bounds: tuple, p0: float, model: NonadiabaticHamiltonian, mass: Real=2000, nsample: Real=30, t_bounds: Tuple[Real]=None) -> float:
+def estimate_scatter_dt(deriv: callable, r_bounds: tuple, p0: float, model: NonadiabaticHamiltonianBase, mass: Real=2000, nsample: Real=30, t_bounds: Tuple[Real]=None) -> float:
     r_list = np.linspace(*r_bounds, nsample)
     if t_bounds is not None:
         t_list = np.random.uniform(*t_bounds, nsample)
@@ -61,7 +61,7 @@ def estimate_scatter_dt(deriv: callable, r_bounds: tuple, p0: float, model: Nona
 class Dynamics:
     def __init__(
         self,
-        model: Union[NonadiabaticHamiltonian, None] = None,
+        model: Union[NonadiabaticHamiltonianBase, None] = None,
         t0: Real = 0.0,
         s0: Union[State, None] = None,
         mass: Union[Real, None, ArrayLike] = None,
@@ -81,7 +81,7 @@ class Dynamics:
 class NonadiabaticDynamics(Dynamics):
     def __init__(
         self,
-        model: Union[NonadiabaticHamiltonian, None] = None,
+        model: Union[NonadiabaticHamiltonianBase, None] = None,
         t0: Real= 0.0,
         s0: Union[State, None] = None,
         mass: Union[Real, None, ArrayLike] = None,
@@ -168,33 +168,32 @@ def run_nonadiabatic_dynamics(
     output['states'] = np.array(output['states'])
         
     return output
-        
+
 # %% The temporary test code
-if __name__ == "__main__":
-    from pymddrive.models.tully import TullyOne
-    
+def _debug_test():
     import time
+    from pymddrive.models.tullyone import TullyOnePulseTypes, TD_Methods, get_tullyone
+    import matplotlib.pyplot as plt
     
-    model = TullyOne()
+    # get a convenient model for testing
+    model = get_tullyone(
+        pulse_type=TullyOnePulseTypes.NO_PULSE, 
+    )
     mass = 2000.0
     
-    t0 = 0.0    
-    s0 = State(
-        r=-10.0,
-        p=30.0,
-        rho=np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
+    # initial conditions
+    t0 = 0.0; r0 = -10.0; p0 = 30.0
+    rho0 = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
+    s0 = State(r=r0, p=p0, rho=rho0)
+    
+    # prepare the dynamics object
+    dyn = NonadiabaticDynamics( 
+        model=model,
+        t0=t0, s0=s0, mass=mass,
+        solver='Ehrenfest', method='vv_rk4',
+        r_bounds=(-10.0, 10.0)
     )
     
-    dyn = NonadiabaticDynamics(
-        model=model,
-        t0=t0,
-        s0=s0,
-        mass=mass,
-        solver='Ehrenfest',
-        # method='rk4',
-        method='vv_rk4',
-        r_bounds=(-10.0, 10.0),
-    )
     def stop_condition(t, s, states):
         r, _, _ = s.get_variables()
         return (r>10.0) or (r<-10.0)
@@ -209,23 +208,35 @@ if __name__ == "__main__":
             return n_re_crossings
         return (count_re_crossings(r) > 10)
     
-    start = time.time() 
+    start = time.perf_counter() 
     output = run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
-    end = time.time()
-    print(f"The time for the simulation is {end-start} s.")
+    print(f"The time for the simulation is {time.perf_counter()-start} s.")
+    
+    t = output['time']
+    r = output['states']['R']
+    p = output['states']['P']
+    rho = output['states']['rho']
+    
+    plt.plot(t, r)  
+    plt.xlabel('Time')
+    plt.ylabel('R')
+    plt.title('Position') 
+    plt.show()
+    plt.plot(t, p)
+    plt.xlabel('Time')
+    plt.ylabel('P')
+    plt.title('Momentum')
+    plt.show()
+    
+    plt.plot(t, rho[:, 0, 0].real, label='rho00')
+    plt.plot(t, rho[:, 1, 1].real, label='rho11')
+    plt.xlabel('Time')
+    plt.ylabel('Population')
+    plt.show()
+     
+    
+# %% the __main__ code
+if __name__ == "__main__":
+    _debug_test()
     
 # %%
-# import matplotlib.pyplot as plt
-# 
-# t = output['time']
-# r = output['states']['R']
-# p = output['states']['P']
-# rho = output['states']['rho']
-# 
-# plt.plot(t, r)  
-# plt.show()
-# plt.plot(t, p)
-# plt.show()
-# plt.plot(t, rho[:, 0, 0].real, label='rho00')
-# plt.plot(t, rho[:, 1, 1].real, label='rho11')
-# plt.show()

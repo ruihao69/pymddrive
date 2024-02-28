@@ -2,8 +2,6 @@
 import warnings
 warnings.warn("The RK45(Tsit5) integrator has not been fully tested yet.")
 
-import dataclasses
-
 import numpy as np
 
 from typing import Callable, Union, Any
@@ -77,9 +75,8 @@ class RungeKutta45:
         return t_next, y_next
         
 
-    
 # %% The temporary test code
-if __name__ == "__main__":
+def _debug_test():
     assert np.all(tsit5_tableau.a[0] == 0)
     assert tsit5_tableau.a[1][0] == 0.161
     assert tsit5_tableau.c[2] - tsit5_tableau.a[2, 1] == tsit5_tableau.a[2][0]
@@ -94,61 +91,35 @@ if __name__ == "__main__":
         # print(r.shape)
         kr[:] = p
         kp[:] = -r
-                
         return 0.01*out
-        #return out
-    t = 0.0 
-    rho = np.array([[0.5, 0], [0, 0.5]])
     n_particle = 100
     s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
-    # t = 0.0 
-    # rho = np.array([[0.5, 0], [0, 0.5]])
-    # s = State(r=-10.0, p=2.5, rho=None)
-    # print(s.dtype)
-    # print(s.data.shape)
-    # print(s.data['R'].shape)
-    # print(s.data['P'].shape)
-    # print(s.data['rho'].shape)
     
     
     N = 100000
     time = np.zeros(N)
     out = np.zeros(N, dtype=s.data.dtype)
-    # r_out = np.zeros(N)
-    # p_out = np.zeros(N)
-    # rho_out = np.zeros((N, 2, 2))
     
     def benchmark(N: int):
         t = 0.0 
-        tf = N * 1.0
-        rho = np.array([[0.5, 0], [0, 0.5]])
         n_particle = 100
         s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
         rk45 = RungeKutta45(
             derivative=derivative,
             t0=t,
             y0=s,
-            atol=1e-7,
+            atol=1e-5,
             rtol=1e-5,
             first_step=None
         )
         import timeit
         start = timeit.default_timer() 
-        # for i in range(N):
         i = 0
-        # while t < tf:
         for _ in range(N):
-            # t, s = rk4(t, s, derivative)
             t, s = rk45._adaptive_step(t, s)
-            # print(s.data['R'].shape)
-            # out[i] = s.r
-            # t[i] = s.p
-            # rho_out[i] = s.rho[:]
             out[i] = s.data
-            # out[i] = s.state
             time[i] = t
             i += 1
-            # print("dt: ", rk45.h)
             
         time_elapsed = timeit.default_timer() - start
         print(f"The speed of the integrator: {N/time_elapsed} iteractions per second")
@@ -159,10 +130,10 @@ if __name__ == "__main__":
     
     r = out['R']
     p = out['P']
-    # print(r.shape)
     
     plt.plot(time, r[:, 0], label="r")
     plt.plot(time, p[:, 0], label="p")
+    plt.title("Time series")
     plt.legend()
     
     plt.show()
@@ -170,19 +141,24 @@ if __name__ == "__main__":
     plt.plot(r[:, 0], p[:, 0])
     plt.plot(r[:, 1], p[:, 1])
     plt.plot(r[:, -1], p[:, -1])
+    plt.xlabel("r")
+    plt.ylabel("p")
+    plt.title("Phase space")
+    plt.show()
     
-    print(r[:, 0])
-    print(r[:, 0].min(), r[:, 0].max())
-    print(time)
     E = r**2 + p**2
     print(E.shape)
 
-# %%
-E = np.nansum(r**2 + p**2, axis=-1)
-print(E)
-print(E.shape)
-plt.plot(time, E-E[0])
-plt.yscale('symlog')
+    E = np.nansum(r**2 + p**2, axis=-1)
+    plt.plot(time, E-E[0])
+    plt.yscale('symlog') 
+    plt.xlabel("time")
+    plt.ylabel("Energy")
+    plt.title("Energy conservation")
+
+# %% The __main__ code    
+if __name__ == "__main__":
+    _debug_test() 
 
 
 # %%

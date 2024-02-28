@@ -7,7 +7,7 @@ from numbers import Real
 from typing import Union, Tuple
 from numpy.typing import ArrayLike
 
-from pymddrive.models.scatter import NonadiabaticHamiltonian
+from pymddrive.models.nonadiabatic_hamiltonian import NonadiabaticHamiltonianBase
 from pymddrive.integrators.state import State, zeros_like
 
 from pymddrive.integrators.rk4 import rk4
@@ -46,7 +46,7 @@ def _eval_Ehrenfest_meanF(evals, d, rho, F):
     return meanF_term1 + meanF_term2
     
 
-def compute_ehrenfest_meanF(t: Real, R: ArrayLike, qm: ArrayLike, model: NonadiabaticHamiltonian) -> ArrayLike:
+def compute_ehrenfest_meanF(t: Real, R: ArrayLike, qm: ArrayLike, model: NonadiabaticHamiltonianBase) -> ArrayLike:
     evals, evecs, d, F = eval_nonadiabatic_hamiltonian(t, R, model)
     return _eval_Ehrenfest_meanF(evals, d, qm, F), evals, evecs, d, F
 
@@ -56,13 +56,13 @@ def _R_dot(P: ArrayLike, mass: Union[Real, np.ndarray]) -> np.ndarray:
 def _P_dot(F: ArrayLike) -> np.ndarray:
     return F
 
-def _rho_dot(t: Real, rho: ArrayLike, r: ArrayLike, v: ArrayLike, model: NonadiabaticHamiltonian) -> ArrayLike:
+def _rho_dot(t: Real, rho: ArrayLike, r: ArrayLike, v: ArrayLike, model: NonadiabaticHamiltonianBase) -> ArrayLike:
     evals, _, d, _ = eval_nonadiabatic_hamiltonian(t, r, model)
     vdotd = v_dot_d(v, d) # derivative coupling dot velocity
     # print(f"vdotd: {vdotd.shape}")
     return rhs_density_matrix(rho=rho, evals=evals, vdotd=vdotd)
 
-def _psi_dot(t: Real, psi: ArrayLike, r: ArrayLike, v: ArrayLike, model: NonadiabaticHamiltonian) -> ArrayLike:
+def _psi_dot(t: Real, psi: ArrayLike, r: ArrayLike, v: ArrayLike, model: NonadiabaticHamiltonianBase) -> ArrayLike:
     evals, _, d, _ = eval_nonadiabatic_hamiltonian(t, r, model)
     vdotd = v_dot_d(v, d) # derivative coupling dot velocity
     return rhs_wavefunction(c=psi, evals=evals, vdotd=vdotd)
@@ -70,7 +70,7 @@ def _psi_dot(t: Real, psi: ArrayLike, r: ArrayLike, v: ArrayLike, model: Nonadia
 def _deriv_ehrenfest_dm(
     t: Real,
     s: State,
-    model: NonadiabaticHamiltonian,
+    model: NonadiabaticHamiltonianBase,
     mass: Union[Real, np.ndarray]
 ) -> Tuple[Real, State, EhrenfestCache]:
     r, p, rho = s.get_variables()
@@ -150,7 +150,7 @@ def step_vv_rk_gpaw(t, s, cache, dt, model, mass):
     
     return t, s, EhrenfestCache(meanF=meanF, evals=evals)
 
-def calculate_properties(t: Real, s: State, model: NonadiabaticHamiltonian, mass: Union[Real, np.ndarray]):
+def calculate_properties(t: Real, s: State, model: NonadiabaticHamiltonianBase, mass: Union[Real, np.ndarray]):
     R, P, rho = s.get_variables()
     meanF, evals, _, d, F = compute_ehrenfest_meanF(t, R, rho, model)
     KE = 0.5 * np.sum(s.data['P']**2 / mass)
@@ -161,14 +161,64 @@ def calculate_properties(t: Real, s: State, model: NonadiabaticHamiltonian, mass
         "PE": PE
     }
 
-def calculate_properties_state(t: Real, s: State, model: NonadiabaticHamiltonian, mass: Union[Real, np.ndarray]):
+def calculate_properties_state(t: Real, s: State, model: NonadiabaticHamiltonianBase, mass: Union[Real, np.ndarray]):
     R, P, rho = s.get_variables()
     meanF, evals, _, d, F = compute_ehrenfest_meanF(t, R, rho, model) 
     KE = 0.5 * np.sum(s.data['P']**2 / mass)
     PE = expected_value(s.data['rho'], evals)
     return meanF, KE, PE
+    
+# %% the testing/debugging code
+def _test_debug():
+    from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
+    import time
+    start = time.perf_counter()
+    t_out, s_out, meanF_out, KE_out_rk, PE_out_rk = run_rk4()
+    print(f"The simulation time for dynamics with rk4 is {time.perf_counter()-start}")
+    start = time.perf_counter()
+    t_out, s_out, meanF_out, KE_out_vv, PE_out_vv = run_vv(gpaw=False)
+    print(f"The simulation time for dynamics with simple vv-rk4 is {time.perf_counter()-start}")
+    start = time.perf_counter()
+    t_out, s_out, meanF_out, KE_out_vv_GPAW, PE_out_vv_GPAW = run_vv(gpaw=True)
+    print(f"The simulation time for dynamics with vv-rk4-GPAW is {time.perf_counter()-start}")
 
+    
 
+# %% the __main__ code for testing the package
+if __name__ == "__main__":
+    _test_debug()
+       
+
+# %%
+if __name__ == "__main__":
+    from pymddrive.models.tullyone import TullyOne
+    import matplotlib.pyplot as plt
+    from pymddrive.integrators.rk4 import rk4
+
+    plt.plot(t_out, KE_out_rk, label="KE RK")
+    plt.plot(t_out, KE_out_vv, label="KE VV")
+    plt.plot(t_out, KE_out_vv_GPAW, label="KE VV GPAW")
+    plt.legend()
+    plt.show()
+
+    plt.plot(t_out, PE_out_rk, label="PE RK")
+    plt.plot(t_out, PE_out_vv, label="PE VV")
+    plt.plot(t_out, PE_out_vv_GPAW, label="PE VV GPAW")
+    plt.legend()
+    plt.show()
+
+    plt.plot(t_out, [pe + ke for (pe, ke) in zip(PE_out_rk, KE_out_rk)], label="E RK")
+    plt.plot(t_out, [pe + ke for (pe, ke) in zip(PE_out_vv, KE_out_vv)], label="E VV")
+    plt.plot(t_out, [pe + ke for (pe, ke) in zip(PE_out_vv_GPAW, KE_out_vv_GPAW)], label="E VV GPAW")
+    plt.legend()
+    plt.show()
+
+    plt.plot(t_out, s_out['rho'][:, 0, 0].real, label="rho00")
+    plt.plot(t_out, s_out['rho'][:, 1, 1].real, label="rho11")
+    # plt.plot(t_out, s_out['rho'][:, 0, 0].real + s_out['rho'][:, 1, 1].real, label="rho11")
+    plt.legend()
+    plt.show()
+# %%
 def run_rk4():
     mass = 2000.0 
     model = TullyOne()
@@ -258,52 +308,3 @@ def run_vv(gpaw=False):
         
     s_out = np.array(s_out) 
     return t_out, s_out, meanF_out, KE_out, PE_out
-    
-    
-
-# %%
-if __name__ == "__main__":
-    from scipy.integrate import ode, complex_ode
-    from pymddrive.models.tully import TullyOne
-    import time
-    start = time.perf_counter()
-    t_out, s_out, meanF_out, KE_out_rk, PE_out_rk = run_rk4()
-    print(f"The simulation time for dynamics with rk4 is {time.perf_counter()-start}")
-    start = time.perf_counter()
-    t_out, s_out, meanF_out, KE_out_vv, PE_out_vv = run_vv(gpaw=False)
-    print(f"The simulation time for dynamics with simple vv-rk4 is {time.perf_counter()-start}")
-    start = time.perf_counter()
-    t_out, s_out, meanF_out, KE_out_vv_GPAW, PE_out_vv_GPAW = run_vv(gpaw=True)
-    print(f"The simulation time for dynamics with vv-rk4-GPAW is {time.perf_counter()-start}")
-   
-
-# %%
-if __name__ == "__main__":
-    from pymddrive.models.tully import TullyOne
-    import matplotlib.pyplot as plt
-    from pymddrive.integrators.rk4 import rk4
-
-    plt.plot(t_out, KE_out_rk, label="KE RK")
-    plt.plot(t_out, KE_out_vv, label="KE VV")
-    plt.plot(t_out, KE_out_vv_GPAW, label="KE VV GPAW")
-    plt.legend()
-    plt.show()
-
-    plt.plot(t_out, PE_out_rk, label="PE RK")
-    plt.plot(t_out, PE_out_vv, label="PE VV")
-    plt.plot(t_out, PE_out_vv_GPAW, label="PE VV GPAW")
-    plt.legend()
-    plt.show()
-
-    plt.plot(t_out, [pe + ke for (pe, ke) in zip(PE_out_rk, KE_out_rk)], label="E RK")
-    plt.plot(t_out, [pe + ke for (pe, ke) in zip(PE_out_vv, KE_out_vv)], label="E VV")
-    plt.plot(t_out, [pe + ke for (pe, ke) in zip(PE_out_vv_GPAW, KE_out_vv_GPAW)], label="E VV GPAW")
-    plt.legend()
-    plt.show()
-
-    plt.plot(t_out, s_out['rho'][:, 0, 0].real, label="rho00")
-    plt.plot(t_out, s_out['rho'][:, 1, 1].real, label="rho11")
-    # plt.plot(t_out, s_out['rho'][:, 0, 0].real + s_out['rho'][:, 1, 1].real, label="rho11")
-    plt.legend()
-    plt.show()
-# %%

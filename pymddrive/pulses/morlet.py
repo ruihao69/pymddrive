@@ -79,8 +79,8 @@ class MorletReal(Pulse):
     ):
         return A * np.cos(Omega * (time - t0) + phi) * np.exp(-0.5 * (time - t0)**2 / tau**2)
     
-# %% the temperary test code
-if __name__ == "__main__":
+# %% the temperary testting/debugging code
+def _debug_test():
     import numpy as np
     import matplotlib.pyplot as plt
     import scienceplots
@@ -114,6 +114,9 @@ if __name__ == "__main__":
     ax.plot(t, sig, lw=.5)
     ax.set_xlabel("Time")
     ax.set_ylabel("Multi Pulse Signal")
-    
+
+# %% the __main__ test code
+if __name__ == "__main__":
+    _debug_test() 
 
 # %%

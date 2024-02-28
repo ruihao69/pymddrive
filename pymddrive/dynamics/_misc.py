@@ -3,9 +3,9 @@ from numba import jit
 from typing import Union, Tuple
 from numbers import Real
 from numpy.typing import ArrayLike  
-from pymddrive.models.scatter import NonadiabaticHamiltonian
+from pymddrive.models.nonadiabatic_hamiltonian import NonadiabaticHamiltonianBase
 
-def eval_nonadiabatic_hamiltonian(t: Real, R: ArrayLike, model: NonadiabaticHamiltonian) -> Tuple:
+def eval_nonadiabatic_hamiltonian(t: Real, R: ArrayLike, model: NonadiabaticHamiltonianBase) -> Tuple:
     if R.shape[0] == 1:
         _, evals, evecs, d, F = model(t, R[0])
         d = d[np.newaxis, :, :]

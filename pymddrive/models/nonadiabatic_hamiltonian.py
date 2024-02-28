@@ -14,7 +14,7 @@ from pymddrive.pulses.pulses import Pulse, get_carrier_frequency
 from pymddrive.models.floquet import get_HF, FloquetType, _dim_to_dimF
 
 
-class NonadiabaticHamiltonian(ABC):
+class NonadiabaticHamiltonianBase(ABC):
     def __init__(
         self,
         dim: int,
@@ -29,7 +29,7 @@ class NonadiabaticHamiltonian(ABC):
     def dHdR(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
         pass
     
-class TD_NonadiabaticHamiltonian(ABC):
+class TD_NonadiabaticHamiltonianBase(NonadiabaticHamiltonianBase):
     def __init__(
         self,
         dim: int,
@@ -38,7 +38,7 @@ class TD_NonadiabaticHamiltonian(ABC):
         """ Time-dependent nonadiabatic Hamiltonian. """
         """ The time dependence is defined by a 'Pulse' object. """
         """ The pulse consists of a carrier frequency <Omega> and an envelope <E(t)>. """
-        self.dim = dim
+        super().__init__(dim)
         self.pulse = pulse
         
     def H(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
@@ -63,7 +63,7 @@ class TD_NonadiabaticHamiltonian(ABC):
     def dH1dR(self, t: float, r: Union[float, ArrayLike], pulse: Pulse) -> ArrayLike:
         pass
     
-class FloquetHamiltonian(TD_NonadiabaticHamiltonian):
+class FloquetHamiltonian(TD_NonadiabaticHamiltonianBase):
     def __init__(
         self,
         dim: int,

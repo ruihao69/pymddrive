@@ -9,7 +9,7 @@ from numbers import Real
 from numpy.typing import ArrayLike
 
 from pymddrive.models.nonadiabatic_hamiltonian import (
-    NonadiabaticHamiltonian, TD_NonadiabaticHamiltonian, FloquetHamiltonian
+    NonadiabaticHamiltonianBase, TD_NonadiabaticHamiltonianBase, FloquetHamiltonian
 )
 from pymddrive.models.nonadiabatic_hamiltonian import (
     diagonalize_hamiltonian, evaluate_nonadiabatic_couplings
@@ -19,7 +19,7 @@ from pymddrive.pulses.pulses import Pulse
 from pymddrive.pulses.morlet import MorletReal
 from pymddrive.models.floquet import FloquetType
 
-class TullyOne(NonadiabaticHamiltonian):
+class TullyOne(NonadiabaticHamiltonianBase):
     def __init__(
         self,
         A: Real = 0.01,
@@ -88,7 +88,7 @@ class TullyOne(NonadiabaticHamiltonian):
         d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         return H, evals, evecs, d, F
     
-class TullyOneTD_type1(TD_NonadiabaticHamiltonian):
+class TullyOneTD_type1(TD_NonadiabaticHamiltonianBase):
     def __init__(
         self,
         A: Real = 0.01,
@@ -133,7 +133,7 @@ class TullyOneTD_type1(TD_NonadiabaticHamiltonian):
         d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         return H, evals, evecs, d, F
     
-class TullyOneTD_type2(TD_NonadiabaticHamiltonian):
+class TullyOneTD_type2(TD_NonadiabaticHamiltonianBase):
     def __init__(
         self,
         A: Real = 0.01,

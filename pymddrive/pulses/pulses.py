@@ -79,9 +79,8 @@ class UnitPulse(Pulse):
         super().__init__(Omega, cache_length)
         self.A = A
         
-    @staticmethod
-    def _pulse_func(t: float) -> float:
-        return 1.0
+    def _pulse_func(self, t: float) -> float:
+        return self.A
 
 class CosinePulse(Pulse):
     def __init__(
@@ -174,8 +173,8 @@ class MultiPulse(Pulse):
 def get_carrier_frequency(pulse: Pulse) -> float:
     return pulse.Omega        
 
-# %% the temporary test code
-if __name__ == "__main__":
+# %% the temporary testing/debugging code
+def _debug_test():
     import numpy as np
     import matplotlib.pyplot as plt
     
@@ -197,6 +196,10 @@ if __name__ == "__main__":
     multi_pulse = MultiPulse(pulse1, pulse2)
     for tt in t:
         multi_pulse(tt)
+
+# %% the __main__ code
+if __name__ == "__main__":
+    _debug_test() 
         
     
 # %%

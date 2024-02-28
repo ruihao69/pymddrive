@@ -2,6 +2,8 @@
 import numpy as np
 from numpy.lib import recfunctions as rfn
 
+from numbers import Number, Real, Complex
+
 from typing import Union, Any
 from numpy.typing import ArrayLike
 
@@ -54,7 +56,7 @@ class CompositeData:
     def __add__(self, other) -> "CompositeData":
         if isinstance(other, CompositeData):
             self.lazy_op = LazyEvaluation("add", other, _class=self.__class__)
-        elif isinstance(other, (int, float)):
+        elif isinstance(other, Number):
             self.lazy_op = LazyEvaluation("add_s", other, _class=self.__class__)
         else:
             raise TypeError("Unsupported operand type(s) for +: 'CompositeData' and '{}'".format(type(other)))
@@ -64,8 +66,14 @@ class CompositeData:
         return self.__add__(other)
 
     def __mul__(self, scalar) -> "CompositeData":
-        self.lazy_op = LazyEvaluation("mul", scalar, _class=self.__class__)
+        if isinstance(scalar, Number):
+            self.lazy_op = LazyEvaluation("mul", scalar, _class=self.__class__)
+        else:
+            raise TypeError("Unsupported operand type(s) for *: 'CompositeData' and '{}'".format(type(scalar)))
         return self.evaluate()
+    
+    def __lmul__(self, scalar) -> "CompositeData":
+        return self.__mul__(scalar)
 
     def __rmul__(self, scalar) -> "CompositeData":
         return self.__mul__(scalar)
@@ -112,9 +120,9 @@ class CompositeData:
         
     def flatten(self, copy=True):
         return rfn.structured_to_unstructured(self.data, copy=copy)
-
-# %% Example usage:
-if __name__ == "__main__":
+    
+# %% The debugging/testing code
+def _debug_test():
     cdtype = [("A", np.float64, (3,)), ("B", np.complex128, (2, 2))]
 
     data1 = np.array([(1.0, np.array([[1+2j, 3+4j], [5+6j, 7+8j]]))], dtype=cdtype)
@@ -144,6 +152,13 @@ if __name__ == "__main__":
     # not implemented
     # composite3 - composite1
     print(composite3.data['A'].shape)
+    iter_sum = composite3 + 0.1 * sum(0.1 * cc for cc in [composite1, composite2]) 
+    print(f"{iter_sum=}")
+    print(f"{iter_sum.data=}")
+
+# %% the __main__ code
+if __name__ == "__main__": 
+    _debug_test()
      
     
 # %%

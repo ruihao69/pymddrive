@@ -58,16 +58,23 @@ def runge_kutta_step(
     Reference:
         - github.com/autonomousvision/occupancy_flow.git
     """
-    k = []
- 
+    k = None 
+    
     for i, (alpha_i, beta_i) in enumerate(zip(tableau.c, tableau.a)): 
-        ti = t0 + alpha_i * h
-        yi = y0 + h * sum(beta_i[j] * k[j] for j in range(i))
-        k += [derivative(ti, yi)]
+        if k is None:
+            ti = t0
+            yi = y0
+            k = [derivative(ti, yi)]  
+        else:
+            ti = t0 + alpha_i * h
+            # Somhow the order matters
+            # In particular, I need to put scalars after the structured data
+            yi = y0 + sum((k[j] * h * beta_i[j]) for j in range(i)) 
+            k.append(derivative(ti, yi))
     
     y1 = yi
     f1 = k[-1]
-    y1_err = h * sum(tableau.bb[i] * k[i] for i in range(len(k)))
+    y1_err = sum((k[i] * tableau.bb[i] * h) for i in range(len(k)))
     
     
     return (y1, f1, y1_err, k)
