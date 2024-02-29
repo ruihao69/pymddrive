@@ -6,9 +6,11 @@ import scipy.sparse as sp
 from numba import jit   
 
 from abc import ABC, abstractmethod
+from enum import Enum, unique
 
 from typing import Tuple, Union
 from numpy.typing import ArrayLike
+from numbers import Real
 
 from pymddrive.pulses.pulses import Pulse, get_carrier_frequency
 from pymddrive.models.floquet import get_HF, FloquetType, _dim_to_dimF
@@ -19,8 +21,19 @@ class NonadiabaticHamiltonianBase(ABC):
         self,
         dim: int,
     ) -> None:
-        self.dim = dim
+        self.dim: int = dim
+        self.evec_last: Union[ArrayLike, None] = None
         
+    def __call__(self, t: float, r: Union[float, ArrayLike]) -> Tuple[ArrayLike, ArrayLike]:
+        H = self.H(t, r)
+        # print(self.evec_last)
+        evals, evecs = diagonalize_hamiltonian_history(H, self.evec_last)
+        # evals, evecs = diagonalize_hamiltonian(H, enforce_gauge=False)
+        self.evec_last = evecs
+        dHdR = self.dHdR(t, r)
+        dHdR, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
+        return H, evals, evecs, dHdR, F   
+     
     @abstractmethod
     def H(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
         pass
@@ -62,39 +75,81 @@ class TD_NonadiabaticHamiltonianBase(NonadiabaticHamiltonianBase):
     @abstractmethod 
     def dH1dR(self, t: float, r: Union[float, ArrayLike], pulse: Pulse) -> ArrayLike:
         pass
+
+@unique
+class FloquetablePulses(Enum):
+    MORLET = "Morlet"
+    MORLET_REAL = "MorletReal"
+    COSINE = "CosinePulse"
+    SINE = "SinePulse"
+    EXPONENTIAL = "ExponentialPulse"
+
+@unique 
+class ValidQuasiFloqeuetPulses(Enum):
+    GAUSSIAN = "Gaussian"
+    UNIT = "UnitPulse"
     
-class FloquetHamiltonian(TD_NonadiabaticHamiltonianBase):
+def get_floquet_type_from_pulsetype(pulsetype: FloquetablePulses) -> FloquetType:
+    if pulsetype == FloquetablePulses.MORLET_REAL:
+        return FloquetType.COSINE
+    elif pulsetype == FloquetablePulses.MORLET:
+        return FloquetType.EXPONENTIAL
+    elif pulsetype == FloquetablePulses.COSINE:
+        return FloquetType.COSINE
+    elif pulsetype == FloquetablePulses.SINE:
+        return FloquetType.SINE
+    elif pulsetype == FloquetablePulses.EXPONENTIAL:
+        return FloquetType.EXPONENTIAL
+    else:
+        raise NotImplementedError(f"The quasi-floquet model for pulse type {pulsetype} is not implemented yet.")
+    
+def check_original_pulse(pulse: Pulse) -> FloquetType:
+    try:
+        pulse_type = FloquetablePulses(pulse.__class__.__name__)
+    except ValueError:
+        raise ValueError(f"The pulse {pulse.__class__.__name__} is not a Floquet-able pulse.")
+    return get_floquet_type_from_pulsetype(pulse_type)
+
+def check_validity_of_floquet_pulse(pulse: Pulse) -> None:
+    try:
+        ValidQuasiFloqeuetPulses(pulse.__class__.__name__)
+    except ValueError:
+        raise ValueError(f"The pulse {pulse.__class__.__name__} is not a valid quasi-Floquet pulse.")
+    
+    
+class QuasiFloquetHamiltonian(TD_NonadiabaticHamiltonianBase):
     def __init__(
         self,
         dim: int,
-        pulse: Pulse,
+        orig_pulse: Pulse,
+        floq_pulse: Pulse,
         NF: int,
         Omega: Union[float, None]=None,
-        floquet_type: FloquetType=FloquetType.COSINE,
+        floquet_type: Union[FloquetType, None]=None,
     ) -> None:
         """ Quasi-Floquet Hamiltonian for a time-dependent Hamiltonian """
         """ whose time dependence is definded by a 'Pulse' object. """
         if Omega is None:
-            self.Omega = get_carrier_frequency(pulse)
+            self.Omega = get_carrier_frequency(orig_pulse)
         else:
-            assert Omega == get_carrier_frequency(pulse)
+            assert Omega == get_carrier_frequency(orig_pulse)
             self.Omega = Omega
+        assert self.Omega is not None 
+        
+        print(f"Omega: {self.Omega}")
+        
+        if floquet_type is None:
+            self.floquet_type = check_original_pulse(orig_pulse)
+        else:
+            assert floquet_type == check_original_pulse(orig_pulse)
+            self.floquet_type = floquet_type
             
-        super().__init__(dim, pulse)
+        check_validity_of_floquet_pulse(floq_pulse)
+            
+        
+        super().__init__(dim, floq_pulse)
         self.NF = NF
         self.floquet_type = floquet_type
-        
-        if floquet_type == FloquetType.COSINE:
-            # for cosine type floquet hamiltonian, setting the carrier frequency to zero
-            # will effectively negate the fast oscillating carriers within the envolope of a pulse
-            self.pulse.set_Omega(0.0)
-        elif floquet_type == FloquetType.SINE:
-            # for sine type floquet hamiltonian, setting the carrier frequency to pi/2
-            # will effectively negate the fast oscillating carriers within the envolope of a pulse
-            self.pulse.set_Omega(np.pi / 2)
-        else:
-            raise NotImplementedError(f"The floquet type {floquet_type} is not implemented.")
-        
         
     def H(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
         return get_HF(self.H0(r), self.H1(t, r), self.Omega, self.NF, floquet_type=self.floquet_type) 
@@ -105,30 +160,59 @@ class FloquetHamiltonian(TD_NonadiabaticHamiltonianBase):
     def get_floquet_space_dim(self) -> int:
         return _dim_to_dimF(self.dim, self.NF)
     
+    def set_NF(self, NF: int) -> None:
+        if isinstance(NF, int) and NF > 0:
+            self.NF = NF
+        else:
+            raise ValueError(f"The number of Floquet replicas must be a positive integer, but {NF} is given.")
+    
+    def __call__(self, 
+        t: Real, r: Union[Real, ArrayLike],
+    ) -> Tuple[sp.csr_matrix, ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
+        HF: sp.csr_matrix  = self.H(t, r)
+        # evals, evecs = diagonalize_hamiltonian(HF, enforce_gauge=False) 
+        evals, evecs = diagonalize_hamiltonian_history(HF, self.evec_last)
+        self.evec_last = evecs
+        dHdR: sp.csr_matrix = self.dHdR(t, r)
+        d, F = evaluate_nonadiabatic_couplings(dHdR.toarray(), evals, evecs)
+        return HF, evals, evecs, d, F 
 
 # Methods
-
-def _enforce_gauge(evecs: ArrayLike) -> ArrayLike:
-    if np.iscomplexobj(evecs):
-        negate_phase = np.exp(-1j * np.angle(evecs.diagonal()))
-        evecs *= negate_phase
-    else:
-        sign = np.sign(evecs.diagonal())
-        evecs *= sign
-    return evecs
 
 def _is_real_symmetric(hamiltonian: ArrayLike) -> bool:
     return np.allclose(hamiltonian, hamiltonian.T) and np.iscomplexobj(hamiltonian)
 
-def diagonalize_hamiltonian(hamiltonian: ArrayLike, enforce_gauge: bool=True) -> Tuple[ArrayLike, ArrayLike]:
+def matrix_col_dot(A: np.ndarray, B: np.ndarray):
+    """ Compute the dot product of two matrices along the columns
+    """
+    return np.einsum('ij,ij->j', A, B)
+
+def _enforce_gauge_from_last(evecs: ArrayLike, evecs_last: ArrayLike) -> ArrayLike:
+    """Remove the gauge ambiguity by enforcing the continuity of the eigenvectors.
+    Also known as the state-following, or the state tracking algorithm.
+
+    Args:
+        evecs (ArrayLike): the current eigenvectors
+        evecs_last (ArrayLike): the previous eigenvectors
+
+    Returns:
+        ArrayLike: the gauge-consistent eigenvectors
+        
+    Reference:
+        `mudslide` by Shane Parker. see the following link for original implementation:
+        <https://github.com/smparker/mudslide>
+    """
+    signs = np.sign(matrix_col_dot(evecs, evecs_last.conjugate()))
+    evecs *= signs
+    return evecs
+
+def diagonalize_hamiltonian_history(hamiltonian: ArrayLike, evec_last: Union[None, ArrayLike]=None) -> Tuple[ArrayLike, ArrayLike]:
     if isinstance(hamiltonian, sp.spmatrix):
         evals, evecs = LA.eigh(hamiltonian.toarray())
     else:
         evals, evecs = LA.eigh(hamiltonian)
-    if enforce_gauge:
-        evecs = _enforce_gauge(evecs) 
-    else:
-        pass
+    if evec_last is not None:
+        evecs = _enforce_gauge_from_last(evecs, evec_last)
                 
     return evals, evecs
 

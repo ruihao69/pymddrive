@@ -3,12 +3,14 @@
 This module defines the Pulse and MultiPulse classes for handling pulse signals.
 """
 import numpy as np
+from typing import Union
+from numbers import Real
 from collections import OrderedDict
 
 class Pulse:
     def __init__(
         self,
-        Omega: float = 1,
+        Omega: Union[float, None] = None,
         cache_length: int = 30
     ):
         """
@@ -72,11 +74,14 @@ class Pulse:
         Args:
             Omega (float): The carrier frequency.
         """
-        self.Omega = Omega
+        if isinstance(Omega, Real):
+            self.Omega = Omega
+        else:
+            raise ValueError(f"After the pulse has been initialized, you can only set the carrier frequency with a real number, not {Omega}")
 
 class UnitPulse(Pulse):
-    def __init__(self, A: float=1.0, Omega: float = 1, cache_length: int = 1000):
-        super().__init__(Omega, cache_length)
+    def __init__(self, A: float=1.0, cache_length: int = 1000):
+        super().__init__(None, cache_length)
         self.A = A
         
     def _pulse_func(self, t: float) -> float:

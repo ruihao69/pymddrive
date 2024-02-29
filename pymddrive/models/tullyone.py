@@ -1,22 +1,18 @@
 # %% Use tully one to test the nonadiabatic hamiltonian abc class
 import numpy as np
-import scipy.sparse as sp
 
 from enum import Enum, unique
 
-from typing import Tuple, Union
+from typing import Union
 from numbers import Real
 from numpy.typing import ArrayLike
 
 from pymddrive.models.nonadiabatic_hamiltonian import (
-    NonadiabaticHamiltonianBase, TD_NonadiabaticHamiltonianBase, FloquetHamiltonian
-)
-from pymddrive.models.nonadiabatic_hamiltonian import (
-    diagonalize_hamiltonian, evaluate_nonadiabatic_couplings
+    NonadiabaticHamiltonianBase, TD_NonadiabaticHamiltonianBase, QuasiFloquetHamiltonian
 )
 
 from pymddrive.pulses.pulses import Pulse
-from pymddrive.pulses.morlet import MorletReal
+from pymddrive.pulses.morlet import MorletReal, Gaussian
 from pymddrive.models.floquet import FloquetType
 
 class TullyOne(NonadiabaticHamiltonianBase):
@@ -79,14 +75,6 @@ class TullyOne(NonadiabaticHamiltonianBase):
         dV12dR = self.dV12dR(r, self.C, self.D)
         return np.array([[dV11dR, dV12dR], [dV12dR, -dV11dR]])
     
-    def __call__(self, 
-        t: Real, r: Union[Real, ArrayLike],
-    ) -> Tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
-        H = self.H(t, r)
-        evals, evecs = diagonalize_hamiltonian(H) 
-        dHdR = self.dHdR(t, r)
-        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
-        return H, evals, evecs, d, F
     
 class TullyOneTD_type1(TD_NonadiabaticHamiltonianBase):
     def __init__(
@@ -110,7 +98,6 @@ class TullyOneTD_type1(TD_NonadiabaticHamiltonianBase):
     def H0(self, r: Union[Real, ArrayLike]) -> ArrayLike:
         V11 = TullyOne.V11(r, self.A, self.B)
         V12 = TullyOne.V12(r, self.C, self.D)
-        # print(f"{V12=}", flush=True)
         return _construct_2D_H(r, V11, V12, -V11)
     
     def H1(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
@@ -120,20 +107,11 @@ class TullyOneTD_type1(TD_NonadiabaticHamiltonianBase):
     def dH0dR(self, r: Union[Real, ArrayLike]) -> ArrayLike:
         dV11dR = TullyOne.dV11dR(r, self.A, self.B)
         dV12dR = TullyOne.dV12dR(r, self.C, self.D)  
-        # print(f"{dV12dR=}", flush=True)
         return np.array([[dV11dR, dV12dR], [dV12dR, -dV11dR]])
     
     def dH1dR(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
         return np.zeros((2, 2)) if isinstance(r, Real) else np.zeros((2, 2, len(r)))
     
-    def __call__(self, 
-        t: Real, r: Union[Real, ArrayLike],
-    ) -> Tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
-        H = self.H(t, r)
-        evals, evecs = diagonalize_hamiltonian(H) 
-        dHdR = self.dHdR(t, r)
-        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
-        return H, evals, evecs, d, F
     
 class TullyOneTD_type2(TD_NonadiabaticHamiltonianBase):
     def __init__(
@@ -171,29 +149,22 @@ class TullyOneTD_type2(TD_NonadiabaticHamiltonianBase):
     def dH1dR(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
         dV12dR = TullyOne.dV12dR(r, self.C, self.D) * self.pulse(t)
         return np.array([[np.zeros_like(dV12dR), dV12dR], [dV12dR, np.zeros_like(dV12dR)]])
+
     
-    def __call__(self, 
-        t: Real, r: Union[Real, ArrayLike],
-    ) -> Tuple[ArrayLike, ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
-        H = self.H(t, r)
-        evals, evecs = diagonalize_hamiltonian(H) 
-        dHdR = self.dHdR(t, r)
-        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
-        return H, evals, evecs, d, F
-    
-class TullyOneFloquet_type1(FloquetHamiltonian):
+class TullyOneFloquet_type1(QuasiFloquetHamiltonian):
     def __init__(
         self, 
         A: Real = 0.01,
         B: Real = 1.6,
         C: Real = 0.005,
         D: Real = 1.0,
-        pulse: Pulse = Pulse(),
+        orig_pulse: Pulse = Pulse(),
+        floq_pulse: Pulse = Pulse(),
         NF: int = 5,
         Omega: Union[float, None] = None,
         floquet_type: FloquetType = FloquetType.COSINE
     ) -> None:
-        super().__init__(dim=2, pulse=pulse, NF=NF, Omega=Omega, floquet_type=floquet_type)
+        super().__init__(dim=2, NF=NF, orig_pulse=orig_pulse, floq_pulse=floq_pulse, Omega=Omega, floquet_type=floquet_type)
         
         self.A = A
         self.B = B
@@ -220,29 +191,20 @@ class TullyOneFloquet_type1(FloquetHamiltonian):
     def dH1dR(self, t: Real, r: Union[Real, ArrayLike]) -> ArrayLike:
         return np.zeros((2, 2)) if isinstance(r, Real) else np.zeros((2, 2, len(r)))
     
-    def __call__(self, 
-        t: Real, r: Union[Real, ArrayLike],
-    ) -> Tuple[sp.csr_matrix, ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
-        HF: sp.csr_matrix  = self.H(t, r)
-        evals, evecs = diagonalize_hamiltonian(HF) 
-        dHdR: sp.csr_matrix = self.dHdR(t, r)
-        d, F = evaluate_nonadiabatic_couplings(dHdR.toarray(), evals, evecs)
-        return HF, evals, evecs, d, F 
- 
-    
-class TullyOneFloquet_type2(FloquetHamiltonian):
+class TullyOneFloquet_type2(QuasiFloquetHamiltonian):
     def __init__(
         self, 
         A: Real = 0.01,
         B: Real = 1.6,
         C: Real = 0.005,
         D: Real = 1.0,
-        pulse: Pulse = Pulse(),
+        orig_pulse: Pulse = Pulse(),
+        floq_pulse: Pulse = Pulse(),
         NF: int = 5,
         Omega: Union[float, None] = None,
         floquet_type: FloquetType = FloquetType.COSINE
     ) -> None:
-        super().__init__(dim=2, pulse=pulse, NF=NF, Omega=Omega, floquet_type=floquet_type)
+        super().__init__(dim=2, NF=NF, orig_pulse=orig_pulse, floq_pulse=floq_pulse, Omega=Omega, floquet_type=floquet_type)
         
         self.A = A
         self.B = B
@@ -270,14 +232,6 @@ class TullyOneFloquet_type2(FloquetHamiltonian):
         dV12dR = TullyOne.dV12dR(r, self.C, self.D) * self.pulse(t)
         return np.array([[np.zeros_like(dV12dR), dV12dR], [dV12dR, np.zeros_like(dV12dR)]])
     
-    def __call__(self, 
-        t: Real, r: Union[Real, ArrayLike],
-    ) -> Tuple[sp.csr_matrix, ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
-        HF: sp.csr_matrix  = self.H(t, r)
-        evals, evecs = diagonalize_hamiltonian(HF) 
-        dHdR: sp.csr_matrix = self.dHdR(t, r)
-        d, F = evaluate_nonadiabatic_couplings(dHdR.toarray(), evals, evecs)
-        return HF, evals, evecs, d, F
 
 def _construct_2D_H(
     r: Union[Real, ArrayLike],
@@ -312,6 +266,7 @@ def get_tullyone(
     tau: Union[Real, None] = None, # pulse parameters
     pulse_type: TullyOnePulseTypes = TullyOnePulseTypes.NO_PULSE,
     td_method: TD_Methods = TD_Methods.BRUTE_FORCE,
+    NF: Union[int, None] = None
 ):
     if pulse_type == TullyOnePulseTypes.NO_PULSE:
         if td_method == TD_Methods.BRUTE_FORCE:
@@ -321,31 +276,37 @@ def get_tullyone(
     else:
         if (t0 is None) or (Omega is None) or (tau is None):
             raise ValueError(f"You need to provide the pulse parameters t0, Omega, and tau for Time-dependent problems.")
+        
+    if td_method == TD_Methods.FLOQUET and NF is None:
+        raise ValueError(f"You need to provide the number of Floquet replicas NF for Floquet models.")
     
     if pulse_type == TullyOnePulseTypes.PULSE_TYPE1:
-        pulse = MorletReal(A=C, t0=t0, tau=tau, Omega=Omega, phi=0)
+        orig_pulse = MorletReal(A=C, t0=t0, tau=tau, Omega=Omega, phi=0)
         if td_method == TD_Methods.BRUTE_FORCE:
-            return TullyOneTD_type1(A=A, B=B, C=0, D=0, pulse=pulse)
+            return TullyOneTD_type1(A=A, B=B, C=0, D=0, pulse=orig_pulse)
         elif td_method == TD_Methods.FLOQUET:
-            return TullyOneFloquet_type1(A=A, B=B, C=0, D=0, pulse=pulse)
+            floq_pulse = Gaussian.from_quasi_floquet_morlet_real(orig_pulse)
+            return TullyOneFloquet_type1(A=A, B=B, C=0, D=0, orig_pulse=orig_pulse, floq_pulse=floq_pulse, NF=NF)
         else:
             raise ValueError(f"Invalid TD method: {td_method}")
         
     elif pulse_type == TullyOnePulseTypes.PULSE_TYPE2:
-        pulse = MorletReal(A=1.0, t0=t0, tau=tau, Omega=Omega, phi=0)
+        orig_pulse = MorletReal(A=1.0, t0=t0, tau=tau, Omega=Omega, phi=0)
         if td_method == TD_Methods.BRUTE_FORCE:
-            return TullyOneTD_type2(A=A, B=B, C=C, D=D, pulse=pulse)
+            return TullyOneTD_type2(A=A, B=B, C=C, D=D, pulse=orig_pulse)
         elif td_method == TD_Methods.FLOQUET:
-            return TullyOneFloquet_type2(A=A, B=B, C=C, D=D, pulse=pulse)
+            floq_pulse = Gaussian.from_quasi_floquet_morlet_real(orig_pulse)
+            return TullyOneFloquet_type2(A=A, B=B, C=C, D=D, orig_pulse=orig_pulse, floq_pulse=floq_pulse, NF=NF)
         else:
             raise ValueError(f"Invalid TD method: {td_method}")
         
     elif pulse_type == TullyOnePulseTypes.PULSE_TYPE3:
-        pulse = MorletReal(A=C/2, t0=t0, tau=tau, Omega=Omega, phi=0)
+        orig_pulse = MorletReal(A=C/2, t0=t0, tau=tau, Omega=Omega, phi=0)
         if td_method == TD_Methods.BRUTE_FORCE:
-            return TullyOneTD_type1(A=A, B=B, C=C/2, D=D, pulse=pulse)
+            return TullyOneTD_type1(A=A, B=B, C=C/2, D=D, pulse=orig_pulse)
         elif td_method == TD_Methods.FLOQUET:
-            return TullyOneFloquet_type1(A=A, B=B, C=C/2, D=D, pulse=pulse)
+            floq_pulse = Gaussian.from_quasi_floquet_morlet_real(orig_pulse)
+            return TullyOneFloquet_type1(A=A, B=B, C=C/2, D=D, orig_pulse=orig_pulse, floq_pulse=floq_pulse, NF=NF)
         else:
             raise ValueError(f"Invalid TD method: {td_method}")
     else:
@@ -446,15 +407,18 @@ def _test_main():
     plt.legend()
     plt.show() 
     
-    cp = CosinePulse(A=0.01, Omega=0.03) 
-    tullyoneFloquet1 = TullyOneFloquet_type1(pulse=cp, NF=1)
+    cp = CosinePulse(A=0.005, Omega=0.003) 
+    up = UnitPulse(A=0.005)
+    tullyoneFloquet1 = TullyOneFloquet_type1(orig_pulse=cp, floq_pulse=up, NF=1)
     dimF = tullyoneFloquet1.get_floquet_space_dim()
     E_out = np.zeros((len(r), dimF))
     F_out = np.zeros((len(r), dimF))
+    d_out = np.zeros((len(r), dimF, dimF))
     for ii, rr in enumerate(r):
         _, evals, _, d, F = tullyoneFloquet1(t, rr)
         E_out[ii, :] = evals
         F_out[ii, :] = F
+        d_out[ii, :, :] = d
         
     for ii in range(dimF): 
         plt.plot(r, E_out[:, ii], label=f"E{ii}")
@@ -466,20 +430,18 @@ def _test_main():
     plt.legend()
     plt.show()
     
-    tol=1e-6 
-    d_sparse = sp.csr_matrix(d[np.where(d > tol)]) 
-    print(f"Number of non-zero elements in d: {d_sparse.nnz}")
-    print(f"d: {d_sparse}")
-    
-    cp = CosinePulse(A=1.0, Omega=0.03) 
-    tullyoneFloquet2 = TullyOneFloquet_type2(pulse=cp, NF=1)
+    cp = CosinePulse(A=1.0, Omega=0.003) 
+    up = UnitPulse(A=1.0)
+    tullyoneFloquet2 = TullyOneFloquet_type2(orig_pulse=cp, floq_pulse=up, NF=1)
     dimF = tullyoneFloquet2.get_floquet_space_dim()
     E_out = np.zeros((len(r), dimF))
     F_out = np.zeros((len(r), dimF))
+    d_out = np.zeros((len(r), dimF, dimF))
     for ii, rr in enumerate(r):
         _, evals, _, d, F = tullyoneFloquet2(t, rr)
         E_out[ii, :] = evals
         F_out[ii, :] = F
+        d_out[ii, :, :] = d
         
     for ii in range(dimF): 
         plt.plot(r, E_out[:, ii], label=f"E{ii}")
@@ -491,14 +453,26 @@ def _test_main():
     plt.legend()
     plt.show()
     
-    tol=1e-6 
-    d_sparse = sp.csr_matrix(d[np.where(d > tol)]) 
-    
-    print(f"Number of non-zero elements in d: {d_sparse.nnz}")
-    print(f"d: {d_sparse}")
-    
+    return r, d_out
+
+def _test_d_out(r, d_out):
+    import matplotlib.pyplot as plt
+    print(f"{d_out.shape=}")
+    dim_F = d_out.shape[1]
+    fig = plt.figure(figsize=(4, 3), dpi=200)
+    ax = fig.add_subplot(111)
+    j = 5
+    for i in range(dim_F):
+        ax.plot(r, d_out[:, i, j], lw=.5, label=f"d_{i}{j}")
+    ax.set_xlabel("R")
+    ax.set_ylabel("Nonadiabatic Couplings")
+    ax.legend(ncol=3, bbox_to_anchor=(0, 1.3), loc='upper left')   
+    plt.show()
+        
     
 # %% Test the TullyOne class
 if __name__ == "__main__":
-    _test_main()
+    r, d_out = _test_main()
+    _test_d_out(r, d_out)
+
 # %%
