@@ -26,6 +26,7 @@ def get_HF_cos(
     V: ArrayLike, # The time-dependent part of the Hamiltonian (times cosine function),
     Omega: float, # The frequency of the driving field,
     NF: int, # The number of floquet levels to consider,
+    is_gradient: bool = False,
     to_csr: bool = True
 ) -> sp.bsr_matrix:
     """ Suppose the Hamiltonian is given by H(t) = H0 + V(t) * cos(Omega * t). """
@@ -37,6 +38,7 @@ def get_HF_cos(
         return sp.bsr_matrix(H0, dtype=dtype)
     
     offsets = _get_Floquet_offset(NF, Omega)
+    offsets = np.zeros_like(offsets) if is_gradient else offsets
     V_upper = V
     V_lower = V.transpose().conj() if dtype == np.complex128 else V.transpose()
     # V_upper = V_lower = V
@@ -59,11 +61,12 @@ def get_HF(
     V: ArrayLike, # The time-dependent part of the Hamiltonian (times cosine function),
     Omega: float, # The frequency of the driving field,
     NF: int, # The number of floquet levels to consider,
+    is_gradient: bool = False,
     to_csr: bool = True,
     floquet_type: FloquetType = FloquetType.COSINE
 ) -> sp.bsr_matrix:
     if floquet_type == FloquetType.COSINE:
-        return get_HF_cos(H0, V, Omega, NF, to_csr=to_csr)
+        return get_HF_cos(H0, V, Omega, NF, is_gradient=is_gradient, to_csr=to_csr)
     elif floquet_type == FloquetType.SINE:
         raise NotImplementedError("The sine type of Floquet Hamiltonian is not implemented yet.")
     elif floquet_type == FloquetType.EXPONENTIAL:
@@ -74,8 +77,6 @@ def get_HF(
 # %%
 if __name__ == "__main__":
     import numpy as np
-    import scipy.linalg as LA
-    from scipy.sparse import block_diag
     
     def benchmark_A_mul_B(A, B, n=1000):
         import time
@@ -120,7 +121,6 @@ if __name__ == "__main__":
     
     
     print("The timescale for converting BSR to CSR: ", benchmark_bsr_to_csr(HF, n=10000))
-    
     
     
     

@@ -98,6 +98,24 @@ def runge_kutta_step(
     
     return (y1, f1, y1_err, k)
 
+def state_to_vectors(s: State)->Tuple[np.ndarray]:
+    R, P, rho = s.get_variables() 
+    vec_cl = np.concatenate((R.reshape(-1), P.reshape(-1)))
+    vec_qm = rho.reshape(-1)   
+    return vec_cl, vec_qm
+
+def vectors_to_states(s: State, vec_cl: np.ndarray, vec_qm: np.ndarray) -> State:
+    _R, _P, _rho = s.get_variables()
+    
+    rho = vec_qm.reshape(_rho.shape)
+    R, P = vec_cl.reshape(2, vec_cl.shape[0]//2)
+    R = R.reshape(_R.shape)
+    P = P.reshape(_P.shape)
+    return State.from_variables(R, P, rho)
+
+def rms_norm(array):
+    return np.sqrt(np.mean(np.square(array)))
+
 def evaluate_initial_dt(
     derivative: Callable[[float, State], State],
     t0: float,

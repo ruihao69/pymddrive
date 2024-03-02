@@ -313,6 +313,7 @@ def get_tullyone(
         raise ValueError(f"Invalid pulse type: {pulse_type}")
         
 def _test_main():
+    from pymddrive.models.nonadiabatic_hamiltonian import evaluate_hamiltonian, evaluate_nonadiabatic_couplings
     from pymddrive.pulses.pulses import Pulse, UnitPulse, CosinePulse
     
     tullyone = TullyOne()
@@ -324,7 +325,8 @@ def _test_main():
     d12 = np.zeros_like(r)
     t = 0
     for ii, rr in enumerate(r):
-        _, evals, _, d, F = tullyone(t, rr)
+        _, dHdR, evals, evecs = evaluate_hamiltonian(t, rr, hamiltonian=tullyone)
+        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         E0[ii], E1[ii] = evals
         F0[ii], F1[ii] = F
         d12[ii] = d[0, 1]
@@ -359,7 +361,8 @@ def _test_main():
     d12 = np.zeros_like(r)
     t = 0
     for ii, rr in enumerate(r):
-        _, evals, _, d, F = tullyoneTD1(t, rr)
+        _, dHdR, evals, evecs = evaluate_hamiltonian(t, rr, hamiltonian=tullyoneTD1)
+        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         E0[ii], E1[ii] = evals
         F0[ii], F1[ii] = F
         d12[ii] = d[0, 1]
@@ -388,7 +391,9 @@ def _test_main():
     d12 = np.zeros_like(r)
     t = 0
     for ii, rr in enumerate(r):
-        _, evals, _, d, F = tullyoneTD2(t, rr)
+        # _, evals, _, d, F = tullyoneTD2(t, rr)
+        _, dHdR, evals, evecs = evaluate_hamiltonian(t, rr, hamiltonian=tullyoneTD2)
+        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         E0[ii], E1[ii] = evals
         F0[ii], F1[ii] = F
         d12[ii] = d[0, 1]
@@ -415,7 +420,9 @@ def _test_main():
     F_out = np.zeros((len(r), dimF))
     d_out = np.zeros((len(r), dimF, dimF))
     for ii, rr in enumerate(r):
-        _, evals, _, d, F = tullyoneFloquet1(t, rr)
+        # _, evals, _, d, F = tullyoneFloquet1(t, rr)
+        _, dHdR, evals, evecs = evaluate_hamiltonian(t, rr, hamiltonian=tullyoneFloquet1)
+        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         E_out[ii, :] = evals
         F_out[ii, :] = F
         d_out[ii, :, :] = d
@@ -438,7 +445,9 @@ def _test_main():
     F_out = np.zeros((len(r), dimF))
     d_out = np.zeros((len(r), dimF, dimF))
     for ii, rr in enumerate(r):
-        _, evals, _, d, F = tullyoneFloquet2(t, rr)
+        # _, evals, _, d, F = tullyoneFloquet2(t, rr)
+        _, dHdR, evals, evecs = evaluate_hamiltonian(t, rr, hamiltonian=tullyoneFloquet2)
+        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         E_out[ii, :] = evals
         F_out[ii, :] = F
         d_out[ii, :, :] = d
@@ -455,9 +464,68 @@ def _test_main():
     
     return r, d_out
 
+def _test_tullypulsed_floquet():
+    import matplotlib.pyplot as plt
+    from pymddrive.models.nonadiabatic_hamiltonian import evaluate_hamiltonian, evaluate_nonadiabatic_couplings
+    model = get_tullyone(
+        t0=0, Omega=0.1, tau=100,
+        pulse_type=TullyOnePulseTypes.PULSE_TYPE1, 
+        td_method=TD_Methods.FLOQUET,
+        NF=1
+    )
+    dimF = model.get_floquet_space_dim()
+    E_out = np.zeros((len(r), dimF))
+    F_out = np.zeros((len(r), dimF))
+    d_out = np.zeros((len(r), dimF, dimF), dtype=complex)
+    t = 0.0
+    for ii, rr in enumerate(r):
+        _, dHdR, evals, evecs = evaluate_hamiltonian(t, rr, hamiltonian=model)
+        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
+        # print(f"{d.dtype=}")
+        E_out[ii, :] = evals
+        F_out[ii, :] = F
+        d_out[ii, :, :] = d
+        
+    for ii in range(dimF): 
+        plt.plot(r, E_out[:, ii], label=f"E{ii}")
+        
+    plt.ylim(-3e-2, 3e-2)
+    plt.legend()
+    plt.show()
+    
+    for ii in range(dimF): 
+        plt.plot(r, F_out[:, ii], label=f"F{ii}")
+    plt.legend()
+    plt.show()
+    
+    fig = plt.figure(figsize=(4, 3), dpi=200)
+    ax = fig.add_subplot(111)
+    j = 5
+    for i in range(dimF):
+        ax.plot(r, d_out[:, i, j].real, lw=.5, label=f"d_{i}{j} real")
+        # ax.plot(r, d_out[:, j, i].real, lw=.5, label=f"d_{j}{i} real")
+        # ax.plot(r, d_out[:, i, j]+d_out[:, j, i], lw=.5, label=f"d_{j}{i} + d_{i}{j}")
+        
+    ax.set_xlabel("R")
+    ax.set_ylabel("Nonadiabatic Couplings")
+    ax.legend(ncol=3, bbox_to_anchor=(0, 1.3), loc='upper left')   
+    plt.show()
+    
+    # fig = plt.figure(figsize=(4, 3), dpi=200)
+    # ax = fig.add_subplot(111)
+    # j = 5
+    # for i in range(dimF):
+    #     ax.plot(r, d_out[:, i, j].imag, lw=.5, label=f"d_{i}{j} imag")
+    # ax.set_xlabel("R")
+    # ax.set_ylabel("Nonadiabatic Couplings")
+    # ax.legend(ncol=3, bbox_to_anchor=(0, 1.3), loc='upper left')   
+    # plt.show()
+    
+    
+
 def _test_d_out(r, d_out):
     import matplotlib.pyplot as plt
-    print(f"{d_out.shape=}")
+    # print(f"{d_out.shape=}")
     dim_F = d_out.shape[1]
     fig = plt.figure(figsize=(4, 3), dpi=200)
     ax = fig.add_subplot(111)
@@ -474,5 +542,6 @@ def _test_d_out(r, d_out):
 if __name__ == "__main__":
     r, d_out = _test_main()
     _test_d_out(r, d_out)
+    _test_tullypulsed_floquet()
 
 # %%

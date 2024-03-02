@@ -7,6 +7,7 @@ import numpy as np
 
 from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
 from pymddrive.integrators.state import State
+from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
 from pymddrive.dynamics.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics 
 
 from tullyone_utils import *
@@ -26,8 +27,10 @@ def run_tullyone_pulsed(
     tau: float, 
     pulse_type: TullyOnePulseTypes,
     mass: float = 2000, 
-    solver: str ='Ehrenfest', 
-    method: str ='vv_rk4'
+    qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
+    basis_rep: BasisRepresentation = BasisRepresentation.Adiabatic,
+    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
+    integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
 ):
     A = 0.01
     B = 1.6
@@ -40,11 +43,11 @@ def run_tullyone_pulsed(
     print(f"Time elapsed for estimating the delay time is {time.perf_counter()-start:.5f} seconds.", flush=True)
     
     # initialize the model and states
-    model = get_tullyone(
+    hamiltonian = get_tullyone(
         t0=_delay, Omega=Omega, tau=tau,
         pulse_type=pulse_type, td_method=TD_Methods.BRUTE_FORCE
     )
-    pulse = model.pulse
+    pulse = hamiltonian.pulse
     
     rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
     s0 = State.from_variables(R=r0, P=p0, rho=rho0)
@@ -53,15 +56,18 @@ def run_tullyone_pulsed(
     t_bounds = (pulse.t0 - pulse.tau, pulse.t0 + pulse.tau)
     
     dyn = NonadiabaticDynamics(
-        model=model,
+        hamiltonian=hamiltonian,
         t0=0.0,
         s0=s0,
         mass=mass,
+        basis_rep=basis_rep,
+        qm_rep=qm_rep,
         solver=solver,
-        method=method,
-        r_bounds=(-10, 10),
-        t_bounds=t_bounds
+        numerical_integrator=integrator,
+        dt=0.03,
+        save_every=30
     )
+    
     output = run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
     
     return output, pulse
@@ -69,23 +75,24 @@ def run_tullyone_pulsed(
 
 def estimate_delay_time(A, B, C, D, p0, mass: float=2000.0):
     # model = TullyOne(A, B, C, D)
-    model = get_tullyone(
+    hamiltonian = get_tullyone(
         A=A, B=B, C=C, D=D,
         pulse_type=TullyOnePulseTypes.NO_PULSE
     )
     rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
-    s0 = State.from_variables(R=-5.0, P=p0, rho=rho0)
+    s0 = State.from_variables(R=-10.0, P=p0, rho=rho0)
     dyn = NonadiabaticDynamics(
-        model=model,
-        t0=5.0/(p0/mass),
+        hamiltonian=hamiltonian,
+        t0=0.0,
         s0=s0,
-        mass=2000,
-        solver='Ehrenfest',
-        method='vv_rk4',
-        r_bounds=(-10, 10),
+        mass=mass,
+        basis_rep=BasisRepresentation.Diabatic,
+        qm_rep=QunatumRepresentation.DensityMatrix,
+        solver=NonadiabaticDynamicsMethods.EHRENFEST,
+        numerical_integrator=NumericalIntegrators.ZVODE,
+        dt=1,
         save_every=100
     )
-    dyn.dt = dyn.dt * 3.0
     def stop_condition(t, s, states):
         r, p, _ = s.get_variables()
         return (r>0.0) or (p<0.0)
@@ -122,14 +129,15 @@ def main(
 # %% 
 if __name__ == "__main__":
     
-    desc = "The parser for TullyOne with Pulse One"
-    parser = argparse.ArgumentParser(description=desc)
-    parser.add_argument('--Omega', type=float, help='The Omega value')
-    parser.add_argument('--tau', type=float, help='The tau value')
-    parser.add_argument('--pulse_type', type=int, help='The Pulse Type (1, 2, or 3)')
-    args = parser.parse_args() 
+    # desc = "The parser for TullyOne with Pulse One"
+    # parser = argparse.ArgumentParser(description=desc)
+    # parser.add_argument('--Omega', type=float, help='The Omega value')
+    # parser.add_argument('--tau', type=float, help='The tau value')
+    # parser.add_argument('--pulse_type', type=int, help='The Pulse Type (1, 2, or 3)')
+    # args = parser.parse_args() 
     
-    Omega, tau, pulse_type= args.Omega, args.tau, args.pulse_type
+    # Omega, tau, pulse_type= args.Omega, args.tau, args.pulse_type
+    Omega, tau, pulse_type = 0.05, 100, 2
     
     if pulse_type == 1:
         pulse_type: TullyOnePulseTypes = TullyOnePulseTypes.PULSE_TYPE1
@@ -142,10 +150,10 @@ if __name__ == "__main__":
         sim_signature = f"data_tullyone_pulsethree-Omega-{Omega}-tau-{tau}"
     else:
         raise ValueError(f"The pulse_type must be 1, 2, or 3. But it is {pulse_type}.")
-    # nsamples = 48
-    # p_bounds = (0.5, 35)
-    nsamples = 8
-    p_bounds = (30, 35)
+    nsamples = 48
+    p_bounds = (0.5, 35)
+    # nsamples = 8
+    # p_bounds = (30, 35)
     main(sim_signature, nsamples, Omega, tau, pulse_type, p_bounds)
 
 # %%

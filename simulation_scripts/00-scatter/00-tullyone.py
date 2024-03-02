@@ -3,6 +3,7 @@ import os
 import numpy as np
 from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
 from pymddrive.integrators.state import State
+from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
 from pymddrive.dynamics.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics
 
 from tullyone_utils import *
@@ -14,23 +15,33 @@ def stop_condition(t, s, states):
 def break_condition(t, s, states):
     return False
 
-def run_tullyone(r0: float, p0: float, mass: float=2000, solver='Ehrenfest', method='vv_rk4'):
+def run_tullyone(
+    r0: float, 
+    p0: float, 
+    mass: float=2000, 
+    qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
+    basis_rep: BasisRepresentation = BasisRepresentation.Adiabatic,
+    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
+    integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+):
     # intialize the model
-    model = get_tullyone(pulse_type=TullyOnePulseTypes.NO_PULSE)
+    hamiltonian = get_tullyone(pulse_type=TullyOnePulseTypes.NO_PULSE)
     
     # initialize the states
     rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
     s0 = State.from_variables(R=r0, P=p0, rho=rho0)
     
     dyn = NonadiabaticDynamics(
-        model=model,
+        hamiltonian=hamiltonian,
         t0=0.0,
         s0=s0,
         mass=mass,
+        basis_rep=basis_rep,
+        qm_rep=qm_rep,
         solver=solver,
-        method=method,
-        r_bounds=(-10, 10),
-        save_every=100
+        numerical_integrator=integrator,
+        dt=0.03,
+        save_every=30
     )
     
     return run_nonadiabatic_dynamics(dyn, stop_condition, break_condition) 
@@ -58,11 +69,12 @@ def main(sim_signature: str, n_samples: int, p_bounds: tuple=(0.5, 35.0)):
 # %%
 if __name__ == "__main__": 
     sim_signature = "data_tullyone"
-    # nsamples = 48
-    # p_bounds = (0.5, 35)
-    nsamples = 8
-    p_bounds = (30, 35)
+    nsamples = 48
+    p_bounds = (0.5, 35)
      
+    # nsamples = 8
+    # p_bounds = (30, 35)
+    
     main(sim_signature, nsamples, p_bounds)
     
     p0_list, sr_list = load_data_for_plotting(os.path.join(sim_signature, 'scatter.dat'))

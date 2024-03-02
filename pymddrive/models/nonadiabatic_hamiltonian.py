@@ -22,17 +22,7 @@ class NonadiabaticHamiltonianBase(ABC):
         dim: int,
     ) -> None:
         self.dim: int = dim
-        self.evec_last: Union[ArrayLike, None] = None
-        
-    def __call__(self, t: float, r: Union[float, ArrayLike]) -> Tuple[ArrayLike, ArrayLike]:
-        H = self.H(t, r)
-        # print(self.evec_last)
-        evals, evecs = diagonalize_hamiltonian_history(H, self.evec_last)
-        # evals, evecs = diagonalize_hamiltonian(H, enforce_gauge=False)
-        self.evec_last = evecs
-        dHdR = self.dHdR(t, r)
-        dHdR, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
-        return H, evals, evecs, dHdR, F   
+        self.last_evecs: Union[ArrayLike, None] = None
      
     @abstractmethod
     def H(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
@@ -41,6 +31,9 @@ class NonadiabaticHamiltonianBase(ABC):
     @abstractmethod
     def dHdR(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
         pass
+    
+    def update_last_evecs(self, evecs: ArrayLike) -> None:
+        self.last_evecs = evecs
     
 class TD_NonadiabaticHamiltonianBase(NonadiabaticHamiltonianBase):
     def __init__(
@@ -136,8 +129,6 @@ class QuasiFloquetHamiltonian(TD_NonadiabaticHamiltonianBase):
             self.Omega = Omega
         assert self.Omega is not None 
         
-        print(f"Omega: {self.Omega}")
-        
         if floquet_type is None:
             self.floquet_type = check_original_pulse(orig_pulse)
         else:
@@ -155,7 +146,7 @@ class QuasiFloquetHamiltonian(TD_NonadiabaticHamiltonianBase):
         return get_HF(self.H0(r), self.H1(t, r), self.Omega, self.NF, floquet_type=self.floquet_type) 
     
     def dHdR(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
-        return get_HF(self.dH0dR(r), self.dH1dR(t, r), self.Omega, self.NF, floquet_type=self.floquet_type)
+        return get_HF(self.dH0dR(r), self.dH1dR(t, r), self.Omega, self.NF, floquet_type=self.floquet_type, is_gradient=True)
     
     def get_floquet_space_dim(self) -> int:
         return _dim_to_dimF(self.dim, self.NF)
@@ -166,17 +157,6 @@ class QuasiFloquetHamiltonian(TD_NonadiabaticHamiltonianBase):
         else:
             raise ValueError(f"The number of Floquet replicas must be a positive integer, but {NF} is given.")
     
-    def __call__(self, 
-        t: Real, r: Union[Real, ArrayLike],
-    ) -> Tuple[sp.csr_matrix, ArrayLike, ArrayLike, ArrayLike, ArrayLike]:
-        HF: sp.csr_matrix  = self.H(t, r)
-        # evals, evecs = diagonalize_hamiltonian(HF, enforce_gauge=False) 
-        evals, evecs = diagonalize_hamiltonian_history(HF, self.evec_last)
-        self.evec_last = evecs
-        dHdR: sp.csr_matrix = self.dHdR(t, r)
-        d, F = evaluate_nonadiabatic_couplings(dHdR.toarray(), evals, evecs)
-        return HF, evals, evecs, d, F 
-
 # Methods
 
 def _is_real_symmetric(hamiltonian: ArrayLike) -> bool:
@@ -254,12 +234,22 @@ def adiaobatic_to_diabatic(
     else:
         return np.dot(U, np.dot(O, U.conj().T))
     
+def evaluate_hamiltonian(
+    t: float, R: Union[float, ArrayLike], hamiltonian: NonadiabaticHamiltonianBase, 
+) -> Tuple[ArrayLike]:
+    H = hamiltonian.H(t, R)
+    dHdR = hamiltonian.dHdR(t, R)
+    evals, evecs = diagonalize_hamiltonian_history(H, hamiltonian.last_evecs) 
+    hamiltonian.update_last_evecs(evecs)
+    return H, dHdR, evals, evecs 
+    
 def evaluate_nonadiabatic_couplings(
     dHdR: ArrayLike,
     evals: ArrayLike,
     evecs: ArrayLike, 
     out_d: Union[ArrayLike, None]=None,
 ) -> Tuple[ArrayLike, ArrayLike]:
+    dHdR = dHdR.todense() if sp.issparse(dHdR) else dHdR
     if dHdR.ndim == 2:
         return _evaluate_nonadiabatic_couplings_scalar(dHdR, evals, evecs, out_d)
     elif dHdR.ndim == 3:
@@ -279,7 +269,7 @@ def _evaluate_nonadiabatic_couplings_scalar(
         diabatic_to_adiabatic(dHdR, evecs, out=out_d)
     else:
         out_d = diabatic_to_adiabatic(dHdR, evecs)
-    F = -np.diagonal(out_d)
+    F = -np.diagonal(out_d).real
     out_d = _post_process_d_scalar(out_d, evals)
     return out_d, F
     
