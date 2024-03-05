@@ -1,8 +1,12 @@
-import os
 import numpy as np
 import matplotlib.pyplot as plt
+
+from pymddrive.models.tullyone import TullyOnePulseTypes
+
+import os
 from dataclasses import dataclass
 from typing import List, Union, Generator
+
 
 __all__ = [
     'ScatterResult',
@@ -21,7 +25,8 @@ __all__ = [
     'plot_scatter_result',
     'load_data_for_plotting',
     'accumulate_output',
-    'post_process_output'
+    'post_process_output',
+    'get_tully_one_p0_list',
 ]
 
 @dataclass(frozen=True)
@@ -73,6 +78,26 @@ def FWHM_to_sigma(FWHM: float) -> float:
 
 def sigma_to_FWHM(sigma: float) -> float:
     return sigma * (2.0 * np.sqrt(2.0 * np.log(2)))
+
+def sample_sigmoid(x_left: float, x_right: float, n: int) -> np.ndarray:
+    x_center = (x_left + x_right) / 2
+    p0_seg1 = np.sort(x_center + x_left - linspace_log10(x_left, x_center, n // 2))
+    dp = p0_seg1[-1] - p0_seg1[-2]
+    p0_seg2 = x_center - x_left + dp + np.sort(linspace_log10(x_left, x_center, n - n // 2))
+    return np.concatenate((p0_seg1, p0_seg2))
+    
+def get_tully_one_p0_list(nsamples: int, pulse_type: TullyOnePulseTypes=TullyOnePulseTypes.NO_PULSE) -> np.ndarray:
+    if pulse_type == TullyOnePulseTypes.NO_PULSE or pulse_type == TullyOnePulseTypes.PULSE_TYPE3:
+        p0_bounds_0 = (0.5, 12.0); n_bounds_0 = nsamples // 2
+        p0_bounds_1 = (13, 35); n_bounds_1 = nsamples - n_bounds_0
+    elif pulse_type == TullyOnePulseTypes.PULSE_TYPE1 or pulse_type == TullyOnePulseTypes.PULSE_TYPE2:
+        p0_bounds_0 = (0.5, 19); n_bounds_0 = nsamples // 3 * 2
+        p0_bounds_1 = (20, 35); n_bounds_1 = nsamples - n_bounds_0
+
+    p0_segment_0 = sample_sigmoid(*p0_bounds_0, n_bounds_0)
+    p0_segment_1 = np.linspace(*p0_bounds_1, n_bounds_1)
+    return np.concatenate((p0_segment_0, p0_segment_1))
+
 
 def save_data(p0_list: List, output_dict: dict, sr_list: List, filename: str):
     assert len(p0_list) == len(sr_list)

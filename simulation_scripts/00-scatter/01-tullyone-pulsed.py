@@ -1,16 +1,16 @@
 # %% 
-import os
-import time
-import argparse
-
 import numpy as np
 
 from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
 from pymddrive.integrators.state import State
 from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
-from pymddrive.dynamics.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics 
+from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics 
 
 from tullyone_utils import *
+
+import os
+import time
+import argparse
 
 def stop_condition(t, s, states):
     r, _, _ = s.get_variables()
@@ -106,7 +106,6 @@ def main(
     Omega: float, 
     tau: float, 
     pt: TullyOnePulseTypes, 
-    p_bounds: tuple=(0.5, 35.0)
 ):
     from pararun import ParaRunScatter
     if not os.path.exists(sim_signature):
@@ -114,7 +113,7 @@ def main(
         
     r0 = -10.0
     _r0_list = np.array([r0]*n_samples)
-    _p0_list = linspace_log10(*p_bounds, n_samples)
+    _p0_list = get_tully_one_p0_list(n_samples, pulse_type=pt)  
     _Omega_list = np.array([Omega]*n_samples)
     _tau_list = np.array([tau]*n_samples)
     _pulse_type_list = np.array([pt]*n_samples) 
@@ -150,10 +149,7 @@ if __name__ == "__main__":
         sim_signature = f"data_tullyone_pulsethree-Omega-{Omega}-tau-{tau}"
     else:
         raise ValueError(f"The pulse_type must be 1, 2, or 3. But it is {pulse_type}.")
-    nsamples = 48
-    p_bounds = (0.5, 35)
-    # nsamples = 8
-    # p_bounds = (30, 35)
-    main(sim_signature, nsamples, Omega, tau, pulse_type, p_bounds)
+    nsamples = 8
+    main(sim_signature, nsamples, Omega, tau, pulse_type,)
 
 # %%

@@ -4,7 +4,7 @@ import numpy as np
 from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
 from pymddrive.integrators.state import State
 from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
-from pymddrive.dynamics.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics
+from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics
 
 from tullyone_utils import *
 
@@ -46,7 +46,7 @@ def run_tullyone(
     
     return run_nonadiabatic_dynamics(dyn, stop_condition, break_condition) 
 
-def main(sim_signature: str, n_samples: int, p_bounds: tuple=(0.5, 35.0)):
+def main(sim_signature: str, n_samples: int):
     import os
     from pararun import ParaRunScatter, get_ncpus
     
@@ -56,7 +56,7 @@ def main(sim_signature: str, n_samples: int, p_bounds: tuple=(0.5, 35.0)):
         
     r0 = -10.0
     _r0_list = np.array([r0]*n_samples)
-    _p0_list = linspace_log10(*p_bounds, n_samples)
+    _p0_list = get_tully_one_p0_list(n_samples, pulse_type=TullyOnePulseTypes.NO_PULSE)
     
     runner = ParaRunScatter(n_jobs=ncpus, r0=_r0_list, p0=_p0_list)
     
@@ -68,18 +68,10 @@ def main(sim_signature: str, n_samples: int, p_bounds: tuple=(0.5, 35.0)):
 
 # %%
 if __name__ == "__main__": 
+    from pymddrive.models.tullyone import TullyOnePulseTypes
     sim_signature = "data_tullyone"
-    nsamples = 48
-    p_bounds = (0.5, 35)
-     
-    # nsamples = 8
-    # p_bounds = (30, 35)
+    nsamples = 10
     
-    main(sim_signature, nsamples, p_bounds)
-    
+    main(sim_signature, nsamples)
     p0_list, sr_list = load_data_for_plotting(os.path.join(sim_signature, 'scatter.dat'))
-
-    print(p0_list)
-    print(sr_list)
-   
 # %%
