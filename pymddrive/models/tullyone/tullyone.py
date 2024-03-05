@@ -2,13 +2,13 @@
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pymddrive.models.nonadiabatic_hamiltonian import NonadiabaticHamiltonianBase
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
 
 from typing import Union
 from numbers import Real
 
 
-class TullyOne(NonadiabaticHamiltonianBase):
+class TullyOne(HamiltonianBase):
     def __init__(
         self,
         A: Real = 0.01,

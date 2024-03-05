@@ -1,29 +1,19 @@
 # %% 
 import numpy as np
+from numpy.typing import ArrayLike
 from numba import jit
-from dataclasses import dataclass
-from collections import namedtuple  
+
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, diabatic_to_adiabatic
+from pymddrive.integrators.state import State, zeros_like
+from pymddrive.integrators.rk4 import rk4
+from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NumericalIntegrators
+from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian, HamiltonianRetureType
+from pymddrive.dynamics.math_utils import commutator, rhs_density_matrix, v_dot_d, expected_value
 
 from numbers import Real
-from typing import Union, Tuple, Callable
-from numpy.typing import ArrayLike
+from typing import Union, Callable
+from collections import namedtuple  
 
-from pymddrive.models.nonadiabatic_hamiltonian import NonadiabaticHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diabatic_to_adiabatic, adiaobatic_to_diabatic
-from pymddrive.integrators.state import State, zeros_like
-
-from pymddrive.integrators.rk4 import rk4
-
-from pymddrive.dynamics._misc import (
-    eval_nonadiabatic_hamiltonian,
-    HamiltonianRetureType,
-    commutator,
-    rhs_density_matrix,
-    rhs_wavefunction,
-    v_dot_d,
-    expected_value
-)
-
-from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NumericalIntegrators
 
 EhrenfestCache = namedtuple('EhrenfestCache', 'meanF, evals, evecs')
 EhrenfestProperties = namedtuple('EhrenfestProperties', 'KE, PE, populations, meanF')
@@ -33,9 +23,9 @@ def choose_ehrenfest_stepper(
 ) -> Callable:
     if numerical_integrator == NumericalIntegrators.RK4:
         return step_rk
-    elif numerical_integrator == NumericalIntegrators.VV_RK4:
+    elif numerical_integrator == NumericalIntegrators.VVRK4:
         return step_vv_rk
-    elif numerical_integrator == NumericalIntegrators.VV_RK4_GPAW:
+    elif numerical_integrator == NumericalIntegrators.VVRK4_GPAW:
         return step_vv_rk_gpaw
     else:
         raise NotImplementedError(f"Numerical integrator {numerical_integrator} is not implemented for Ehrenfest dynamics.")
@@ -46,7 +36,6 @@ def choose_ehrenfest_deriv(
     if quantum_representation == QunatumRepresentation.DensityMatrix:
         return _deriv_ehrenfest_dm
     elif quantum_representation == QunatumRepresentation.Wavefunction:
-        # return _deriv_ehrenfest_wf
         raise NotImplementedError(f"Quantum representation Wavefunction is not implemented for Ehrenfest dynamics.")
     else:
         raise NotImplementedError(f"Quantum representation {quantum_representation} is not implemented for Ehrenfest dynamics.")
@@ -75,7 +64,7 @@ def _rho_dot_diab(rho, H) -> ArrayLike:
 def _deriv_ehrenfest_dm(
     t: Real,
     s: State,
-    hamiltonian: NonadiabaticHamiltonianBase,
+    hamiltonian: HamiltonianBase,
     mass: Union[Real, np.ndarray],
     basis_rep: BasisRepresentation,
 ) -> State:
@@ -152,7 +141,7 @@ def step_vv_rk_gpaw(t, s, cache, dt, hamiltonian, mass, basis_rep):
     rk4_options = {'R': R, 'v': v, "hamiltonian": hamiltonian, "basis_rep": basis_rep} 
     _, rho[:] = rk4(t, rho, _rho_dot, rk4_options, dt=dt)
    
-    meanF = _compute_ehrenfest_meanF(rho, hami_return.dHdR, hami_return.evals, hami_return.d, hami_return.F, basis_rep)
+    meanF = _compute_ehrenfest_meanF(rho, hami_return.dHdR, hami_return.evals, hami_return.evecs, hami_return.d, hami_return.F, basis_rep)
     
     # the second half nuclear step
     R += 0.5 * dt * P / mass + 0.25 * dt**2 * meanF / mass
@@ -165,7 +154,7 @@ def step_vv_rk_gpaw(t, s, cache, dt, hamiltonian, mass, basis_rep):
     
     return t, s, EhrenfestCache(meanF=meanF, evals=hami_return.evals, evecs=hami_return.evecs)
 
-def calculate_properties(t: Real, s: State, hamiltonian: NonadiabaticHamiltonianBase, mass: Union[Real, np.ndarray], basis_rep: BasisRepresentation):
+def calculate_properties(t: Real, s: State, hamiltonian: HamiltonianBase, mass: Union[Real, np.ndarray], basis_rep: BasisRepresentation):
     R, _, rho = s.get_variables()
     meanF, hami_return = compute_ehrenfest_meanF(t, R, rho, hamiltonian, basis_rep)
     KE = 0.5 * np.sum(s.data['P']**2 / mass)
@@ -181,14 +170,16 @@ def calculate_properties(t: Real, s: State, hamiltonian: NonadiabaticHamiltonian
 
 def compute_ehrenfest_meanF(
     t: Real, R: ArrayLike, qm: ArrayLike, 
-    hamiltonian: NonadiabaticHamiltonianBase, basis_rep: BasisRepresentation
+    hamiltonian: HamiltonianBase, basis_rep: BasisRepresentation
 ) -> ArrayLike:
     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
-    meanF = _compute_ehrenfest_meanF(qm, hami_return.dHdR, hami_return.evals, hami_return.d, hami_return.F, basis_rep)
+    meanF = _compute_ehrenfest_meanF(qm, hami_return.dHdR, hami_return.evals, hami_return.evecs, hami_return.d, hami_return.F, basis_rep)
     return meanF, hami_return
     
-def _compute_ehrenfest_meanF(qm, dHdR, evals, d, F, basis_rep: BasisRepresentation) -> ArrayLike:
+def _compute_ehrenfest_meanF(qm, dHdR, evals, evecs, d, F, basis_rep: BasisRepresentation) -> ArrayLike:
     if basis_rep == BasisRepresentation.Adiabatic:
+        # qm_diab = adiaobatic_to_diabatic(qm, evecs)
+        # return -1 * expected_value(qm_diab, dHdR)
         return _eval_Ehrenfest_meanF(evals, d, qm, F)
     elif basis_rep == BasisRepresentation.Diabatic:
         return -1 * expected_value(qm, dHdR)
@@ -205,7 +196,6 @@ def _second_term_meanF(rho: ArrayLike, evals: ArrayLike, d: ArrayLike, meanF: Un
 
 def second_term_meanF(rho: ArrayLike, evals: ArrayLike, d: ArrayLike, meanF: Union[Real, ArrayLike, None]=None) -> ArrayLike:
     if meanF is None:
-        # meanF = np.zeros(d.shape[0], dtype=np.complex128)
         meanF = np.zeros(d.shape[0], dtype=np.float64)
         
     return _second_term_meanF(rho, evals, d, meanF)
@@ -213,8 +203,8 @@ def second_term_meanF(rho: ArrayLike, evals: ArrayLike, d: ArrayLike, meanF: Uni
 def _eval_Ehrenfest_meanF(evals, d, rho, F):
     """ Nonadiabatic Dynamics: Mean-Field and Surface Hopping. Nikos L. Doltsinis. """
     """ https://juser.fz-juelich.de/record/152530/files/FZJ-2014-02134.pdf """
-    meanF_term1 = expected_value(rho, F, is_diagonal=True)    # population-weighted average force
-    meanF_term2 = second_term_meanF(rho, evals, d)  # nonadiabatic changes of the adiabatic state occupations
+    meanF_term1 = expected_value(rho, F, is_diagonal=True) # population-weighted average force
+    meanF_term2 = second_term_meanF(rho, evals, d)         # nonadiabatic changes of the adiabatic state occupations
     return meanF_term1 + meanF_term2
     
 # %% the testing/debugging code
@@ -327,6 +317,4 @@ def _test_debug():
 if __name__ == "__main__":
     _test_debug()
        
-# %%
-
 # %%

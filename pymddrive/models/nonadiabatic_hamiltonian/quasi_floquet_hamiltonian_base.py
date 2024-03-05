@@ -1,6 +1,6 @@
 from numpy.typing import ArrayLike
 
-from .hamiltonian_base import HamiltonianBase
+from .td_hamiltonian_base import TD_HamiltonianBase
 from pymddrive.pulses import PulseBase as Pulse
 from pymddrive.pulses import get_carrier_frequency
 from pymddrive.models.floquet import get_HF, FloquetType, _dim_to_dimF
@@ -49,7 +49,7 @@ def check_validity_of_floquet_pulse(pulse: Pulse) -> None:
         raise ValueError(f"The pulse {pulse.__class__.__name__} is not a valid quasi-Floquet pulse.")
 
 
-class QuasiFloquetHamiltonianBase(HamiltonianBase):
+class QuasiFloquetHamiltonianBase(TD_HamiltonianBase):
     def __init__(
         self,
         dim: int,
@@ -77,9 +77,11 @@ class QuasiFloquetHamiltonianBase(HamiltonianBase):
         check_validity_of_floquet_pulse(floq_pulse)
             
         
-        super().__init__(dim)
+        super().__init__(dim, floq_pulse)
         self.NF = NF
         self.floquet_type = floquet_type
+        self.orig_pulse = orig_pulse
+        self.floq_pulse = floq_pulse
         
     def H(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
         return get_HF(self.H0(r), self.H1(t, r), self.Omega, self.NF, floquet_type=self.floquet_type) 

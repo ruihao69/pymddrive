@@ -120,7 +120,7 @@ def _evaluate_tullyone_floquet_hamiltonian(t, r, model):
         F_out[ii, :] = F
     return E_out, F_out
 
-def _plot_tullyone_hamiltonian(r, E, F):
+def _plot_tullyone_hamiltonian(r, E, F, center_focus=True):
     import matplotlib.pyplot as plt
     import scienceplots
     plt.style.use('science')
@@ -129,21 +129,29 @@ def _plot_tullyone_hamiltonian(r, E, F):
     gs = fig.add_gridspec(1, 2)
     axs = gs.subplots().flatten()
     
+    _c = E.shape[1]//2
+    center_indices = [_c-1, _c]
+    
     # plot the eigen energies 
     ax = axs[0]
     for ii in range(E.shape[1]):
+        if center_focus and (ii not in center_indices):
+            continue
         ax.plot(r, E[:, ii], label=f"E{ii}")
-    ax.legend() 
     ax.set_xlabel("R")
     ax.set_ylabel("Eigen Energies")
     
     # plot the adiabatic forces
     ax = axs[1]
     for ii in range(F.shape[1]):
+        if center_focus and (ii not in center_indices):
+            continue
         ax.plot(r, F[:, ii], label=f"F{ii}")
-    ax.legend()
     ax.set_xlabel("R")
     ax.set_ylabel("Adiabatic Forces")
+    for ax in axs.flatten():
+        ax.legend()
+        ax.set_xlim(-5, 5)
     
     fig.tight_layout()
     plt.show()

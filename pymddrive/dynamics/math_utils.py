@@ -1,45 +1,8 @@
-# %%
 import numpy as np
-from numba import jit   
+from numpy.typing import ArrayLike
+from numba import jit
 
-from collections import namedtuple
-
-from typing import Union, Tuple
-from numbers import Real
-from numpy.typing import ArrayLike  
-
-from pymddrive.models.nonadiabatic_hamiltonian import NonadiabaticHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings
-from pymddrive.dynamics.options import (
-    BasisRepresentation, QunatumRepresentation, 
-    NonadiabaticDynamicsMethods, NumericalIntegrators
-)
-
-HamiltonianRetureType = namedtuple('HamiltonianRetureType', 'H, dHdR, evals, evecs, d, F')
-
-def eval_nonadiabatic_hamiltonian(
-    t: float, R: ArrayLike, hamiltonian: NonadiabaticHamiltonianBase, 
-    basis_rep: BasisRepresentation=BasisRepresentation.Adiabatic,
-    eval_deriv_cp: bool=False,
-) -> HamiltonianRetureType: 
-    flag_reshape = False
-    if R.shape[0] == 1:
-        H, dHdR, evals, evecs = evaluate_hamiltonian(t, R[0], hamiltonian)
-        flag_reshape = True
-    else:
-        H, dHdR, evals, evecs = evaluate_hamiltonian(t, R, hamiltonian)
-        
-    if basis_rep == BasisRepresentation.Adiabatic or eval_deriv_cp:
-        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
-    else:
-        d, F = None, None
-        
-    if flag_reshape:
-        dHdR = dHdR[:, :, np.newaxis]
-        d = d[np.newaxis, :, :] if d is not None else None
-        # d = d[np.newaxis, :, :] if d is not None
-        F = F[:, np.newaxis] if F is not None else None
-        
-    return HamiltonianRetureType(H=H, dHdR=dHdR, evals=evals, evecs=evecs, d=d, F=F)
+from typing import Union
 
 def rhs_density_matrix(rho: ArrayLike, evals: ArrayLike, vdotd: ArrayLike, k_rho:Union[ArrayLike, None]=None):
     if k_rho is None:
@@ -119,4 +82,3 @@ def _rhs_wavefunction(
         for ll in range(c.shape[0]):
             k_c[kk] += -c[ll] * vdotd[kk, ll] 
     return k_c
-# %%

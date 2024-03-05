@@ -1,10 +1,9 @@
 # %% The package: pymddrive.integrators.rk4
 import numpy as np
-from typing import Any, Callable, Tuple, Union
-from dataclasses import field
 
-# from pymddrive.integrators.rungekutta import 
 from pymddrive.integrators.state import State, zeros_like
+
+from typing import Callable, Tuple, Union
 
 # Type short hand
 type_time = float

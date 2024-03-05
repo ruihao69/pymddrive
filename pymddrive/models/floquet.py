@@ -1,10 +1,13 @@
 # %%
 import numpy as np
+import scipy.linalg as LA
 import scipy.sparse as sp
+from numpy.typing import ArrayLike
 
 from enum import Enum, unique
+from typing import List
 
-from numpy.typing import ArrayLike
+
 
 @unique
 class FloquetType(Enum):
@@ -15,8 +18,8 @@ class FloquetType(Enum):
 def _dim_to_dimF(dim: int, NF: int) -> int:
     return dim * (2 * NF + 1)
 
-def _get_Floquet_offset(NF: int, Omega: float) -> int:
-    return np.arange(-NF, NF + 1) * Omega
+def _get_Floquet_offset(dim_sys: int, NF: int, Omega: float) -> List:
+    return [np.identity(dim_sys) * ii * Omega for ii in range(-NF, NF+1)]
 
 def _evaluate_sparsity(H: sp.spmatrix) -> float:
     return H.nnz / H.shape[0]**2
@@ -37,11 +40,12 @@ def get_HF_cos(
     if NF == 0:
         return sp.bsr_matrix(H0, dtype=dtype)
     
-    offsets = _get_Floquet_offset(NF, Omega)
+    offsets = _get_Floquet_offset(dim, NF, Omega)
     offsets = np.zeros_like(offsets) if is_gradient else offsets
     V_upper = V
-    V_lower = V.transpose().conj() if dtype == np.complex128 else V.transpose()
-    # V_upper = V_lower = V
+    V_lower = V.transpose().conj()
+    # V_upper = V.transpose().conj()
+    # V_lower = V 
     
     
     data_first_row = (H0 + offsets[0], V_upper)
@@ -54,6 +58,7 @@ def get_HF_cos(
     indices = np.concatenate([(0, 1), *(i+np.arange(0, 3) for i in range(2*NF-1)), (2*NF-1, 2*NF)])
     
     HF = sp.bsr_matrix((data, indices, indptr), shape=(dimF, dimF), dtype=dtype) 
+    # print(f"{LA.ishermitian(HF.toarray())=}")
     return HF.tocsr() if to_csr else HF
 
 def get_HF(
@@ -104,13 +109,17 @@ if __name__ == "__main__":
         return (end - start) / n
      
     H = np.array([[1, 2], [2, 4]])
-    V = np.array([[0., 1], [1, 0.0]])
+    V = np.array([[0, 0.3], [0.3, 0]])
+    # V = np.array([[0., 1+1.j], [1+1.j, 0.0]])
+    # V = np.zeros_like(H)
     
     
-    Omega = 1
-    NF = 5
+    Omega = 0.1
+    NF = 2
     
-    HF = get_HF_cos(H, V, Omega, NF)
+    HF = get_HF_cos(H, V, Omega, NF, is_gradient=False)
+    
+    print(f"{HF.toarray()}=")
     
     print("Benchmark for BSR matrix multiplication:") 
     benchmark_dense_mul_sparse(HF, n=10000) 
@@ -118,11 +127,7 @@ if __name__ == "__main__":
     
     print("Benchmark for CSR matrix multiplication:") 
     benchmark_dense_mul_sparse(HF.tocsr(), n=10000) 
-    
-    
+   
     print("The timescale for converting BSR to CSR: ", benchmark_bsr_to_csr(HF, n=10000))
-    
-    
-    
 
 # %%

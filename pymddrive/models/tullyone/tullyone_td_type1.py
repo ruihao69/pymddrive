@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pymddrive.models.nonadiabatic_hamiltonian import TD_NonadiabaticHamiltonianBase
+from pymddrive.models.nonadiabatic_hamiltonian import TD_HamiltonianBase
 from pymddrive.pulses import PulseBase as Pulse
 from pymddrive.pulses import ZeroPulse
 from pymddrive.models.tullyone.tullyone import TullyOne, _construct_2D_H
@@ -10,7 +10,7 @@ from typing import Union
 from numbers import Real
 
 
-class TullyOneTD_type1(TD_NonadiabaticHamiltonianBase):
+class TullyOneTD_type1(TD_HamiltonianBase):
     def __init__(
         self,
         A: Real = 0.01,

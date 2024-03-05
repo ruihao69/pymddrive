@@ -32,8 +32,8 @@ def _enforce_gauge_from_last(evecs: ArrayLike, evecs_last: ArrayLike) -> ArrayLi
 def diagonalize_hamiltonian_history(hamiltonian: ArrayLike, evec_last: Union[None, ArrayLike]=None) -> Tuple[ArrayLike, ArrayLike]:
     evals, evecs = LA.eigh(hamiltonian.toarray()) if sp.isspmatrix(hamiltonian) else LA.eigh(hamiltonian)
     
-    if evec_last is not None:
-        evecs = _enforce_gauge_from_last(evecs, evec_last)
+    # if evec_last is not None:
+    #     evecs = _enforce_gauge_from_last(evecs, evec_last)
                 
     return evals, evecs
 
