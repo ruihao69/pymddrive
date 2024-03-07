@@ -3,7 +3,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from numba import jit
 
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, diabatic_to_adiabatic
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, diabatic_to_adiabatic, adiabatic_to_diabatic
 from pymddrive.integrators.state import State, zeros_like
 from pymddrive.integrators.rk4 import rk4
 from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NumericalIntegrators
@@ -16,7 +16,7 @@ from collections import namedtuple
 
 
 EhrenfestCache = namedtuple('EhrenfestCache', 'meanF, evals, evecs')
-EhrenfestProperties = namedtuple('EhrenfestProperties', 'KE, PE, populations, meanF')
+EhrenfestProperties = namedtuple('EhrenfestProperties', 'KE, PE, populations, meanF, dij')
 
 def choose_ehrenfest_stepper(
     numerical_integrator: NumericalIntegrators
@@ -50,7 +50,7 @@ def _rho_dot(t, rho, R, v, hamiltonian, basis_rep) -> ArrayLike:
     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
     if basis_rep == BasisRepresentation.Adiabatic:
         return _rho_dot_adiab(rho, hami_return.evals, v, hami_return.d)
-    else:
+    elif basis_rep == BasisRepresentation.Diabatic:
         return _rho_dot_diab(rho, hami_return.H)
 
 def _rho_dot_adiab(
@@ -80,13 +80,14 @@ def _deriv_ehrenfest_dm(
     meanF, hami_return = compute_ehrenfest_meanF(t, R, rho, hamiltonian, basis_rep)
     kP[:] = _P_dot(meanF)
     
+    
     # integrate the density matrix
     if basis_rep == BasisRepresentation.Adiabatic:
         k_rho[:] = _rho_dot_adiab(rho, hami_return.evals, v, hami_return.d)
     else:
         k_rho[:] = _rho_dot_diab(rho, hami_return.H)
     
-    return out
+    return out 
 
 def step_rk(t, s, cache, dt, hamiltonian, mass, basis_rep):
     deriv_options = {
@@ -95,6 +96,10 @@ def step_rk(t, s, cache, dt, hamiltonian, mass, basis_rep):
         "basis_rep": basis_rep
     }
     t, s = rk4(t, s, _deriv_ehrenfest_dm, deriv_options, dt)
+    R, _, _ = s.get_variables()
+    hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
+    hamiltonian.update_last_evecs(hami_return.evecs)
+    hamiltonian.update_last_deriv_couplings(hami_return.d)
     return t, s, EhrenfestCache(meanF=None, evals=None, evecs=None)
 
 def step_vv_rk(t, s, cache, dt, hamiltonian, mass, basis_rep):
@@ -164,7 +169,7 @@ def calculate_properties(t: Real, s: State, hamiltonian: HamiltonianBase, mass: 
     elif basis_rep == BasisRepresentation.Diabatic:
         PE = expected_value(s.data['rho'], hami_return.H)
         pop = diabatic_to_adiabatic(rho, hami_return.evecs).diagonal().real
-    return EhrenfestProperties(KE=KE, PE=PE, populations=pop, meanF=meanF)
+    return EhrenfestProperties(KE=KE, PE=PE, populations=pop, meanF=meanF, dij=hami_return.d)
 
 # Helper functions
 
@@ -178,7 +183,7 @@ def compute_ehrenfest_meanF(
     
 def _compute_ehrenfest_meanF(qm, dHdR, evals, evecs, d, F, basis_rep: BasisRepresentation) -> ArrayLike:
     if basis_rep == BasisRepresentation.Adiabatic:
-        # qm_diab = adiaobatic_to_diabatic(qm, evecs)
+        # qm_diab = adiabatic_to_diabatic(qm, evecs)
         # return -1 * expected_value(qm_diab, dHdR)
         return _eval_Ehrenfest_meanF(evals, d, qm, F)
     elif basis_rep == BasisRepresentation.Diabatic:

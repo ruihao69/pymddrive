@@ -9,7 +9,7 @@ from pymddrive.dynamics.options import (
     BasisRepresentation, QunatumRepresentation,
     NonadiabaticDynamicsMethods, NumericalIntegrators
 )
-from pymddrive.dynamics.misc_utils import estimate_scatter_dt
+from pymddrive.dynamics.misc_utils import estimate_scatter_dt, assert_valid_real_positive_value, eval_nonadiabatic_hamiltonian
 
 import warnings
 from typing import Union, Tuple, Any, Type, Callable
@@ -30,7 +30,7 @@ class NonadiabaticDynamics(Dynamics):
         numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
         r_bounds: Union[Tuple[Real], None] = None,
         t_bounds: Union[Tuple[Real], None] = None,
-        max_step: float = None,
+        max_step: float = None, min_step: float = None,
     ) -> None:
         super().__init__(
             hamiltonian, t0, s0, mass, dt, atol, rtol, safety, save_every, numerical_integrator
@@ -56,37 +56,40 @@ class NonadiabaticDynamics(Dynamics):
         else:
             print(f"Using the zvode solver, where {self.dt=} is used for dense output.", flush=True)
                 
-        self.step = self.get_stepper(solver, numerical_integrator, max_step)
+        self.step = self.get_stepper(solver, numerical_integrator, max_step, min_step)
         
     def get_stepper(
         self, 
         method: NonadiabaticDynamicsMethods,
         numerical_integrator: NumericalIntegrators,
-        max_step: float
+        max_step: float,
+        min_step: float,
     ) -> Callable[[float, State, Any], Tuple[float, State, Any]]:
         if method == NonadiabaticDynamicsMethods.EHRENFEST:
             if numerical_integrator != NumericalIntegrators.ZVODE:
                 raw_stepper = ehrenfest.choose_ehrenfest_stepper(numerical_integrator)
                 return partial(raw_stepper, dt=self.dt, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=self.basis_rep)
             else:
-                if max_step is None:
-                    self.ode_solver = ode(self.deriv).set_integrator(
-                        'zvode',
-                        method='bdf',
-                        atol=self.atol,
-                        rtol=self.rtol,
-                    )
-                elif isinstance(max_step, Real):
-                    self.ode_solver = ode(self.deriv).set_integrator(
-                        'zvode',
-                        method='bdf',
-                        atol=self.atol,
-                        rtol=self.rtol,
-                        max_step=max_step
-                    )
-                else:
-                    raise ValueError(f"Invalid value for {max_step=}.")
+                ode_integrator_options = {
+                    'name': 'zvode',
+                    'method': 'bdf',
+                    'atol': self.atol, 
+                    'rtol': self.rtol,
+                }
+                if max_step is not None:
+                    assert_valid_real_positive_value(max_step)
+                    ode_integrator_options['max_step'] = max_step
+                if min_step is not None:
+                    assert_valid_real_positive_value(min_step)
+                    if max_step is not None and max_step < min_step:
+                        raise ValueError(f"The {max_step=} is smaller than the {min_step=}.")
+                    else:
+                        ode_integrator_options['min_step'] = min_step
+                # def solout(t, y) -> None:
+                #     post_step_callback(t, y, self.hamiltonian, self.stype, self.dtype, self.basis_rep)
+                self.ode_solver = ode(self.deriv).set_integrator(**ode_integrator_options)
                 self.ode_solver.set_initial_value(self.s0.flatten(), self.t0)
+                # self.ode_solver.set_solout(solout)
                 return self._step_zvode 
         elif method == NonadiabaticDynamicsMethods.FSSH:
             raise NotImplemented("FSSH is not implemented at this time.")
@@ -135,3 +138,10 @@ class NonadiabaticDynamics(Dynamics):
             raise NotImplemented("FSSH is not implemented at this time.")
         else:
             raise NotImplemented(f"Unrecogonized nonadiabatic {method=}. Not implemented in pymddrive.")
+        
+# def post_step_callback(t, y, hamiltonian, stype, dtype, basis_rep) -> None:
+#     s = State.from_unstructured(y, dtype=dtype, stype=stype)
+#     R, _, _ = s.get_variables()
+#     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
+#     hamiltonian.update_last_evecs(hami_return.evecs)
+#     hamiltonian.update_last_deriv_couplings(hami_return.d)

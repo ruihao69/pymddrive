@@ -29,6 +29,7 @@ def run_nonadiabatic_dynamics(
             properties_dict = _append_properties(properties_dict, properties)
             time_array = np.append(time_array, t)
             traj_array = np.array([s.data]) if traj_array is None else np.append(traj_array, s.data)
+            # print(f"{s.data['R']=}")
             if istep % check_stop_every == 0:
                 if stop_condition(t, s, traj_array):
                     break
@@ -79,7 +80,7 @@ def _debug_test():
         basis_rep=BasisRepresentation.Diabatic,
         solver=NonadiabaticDynamicsMethods.EHRENFEST,
         numerical_integrator=NumericalIntegrators.RK4,
-        r_bounds=(-10.0, 10.0)
+        r_bounds=(-10.0, 10.0),
     )
     
     def stop_condition(t, s, states):
