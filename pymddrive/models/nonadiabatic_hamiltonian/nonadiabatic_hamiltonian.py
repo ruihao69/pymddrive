@@ -4,32 +4,38 @@ from numba import jit
 import scipy.sparse as sp
 
 from .hamiltonian_base import HamiltonianBase
-from .math_utils import diagonalize_hamiltonian_history, diabatic_to_adiabatic, matrix_col_dot
+from .math_utils import diagonalize_hamiltonian_history, diabatic_to_adiabatic
 
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 
 def evaluate_hamiltonian(
-    t: float, R: Union[float, ArrayLike], hamiltonian: HamiltonianBase, 
+    t: float, R: Union[float, ArrayLike], hamiltonian: HamiltonianBase, enable_evec_following: bool=True
 ) -> Tuple[ArrayLike]:
     H = hamiltonian.H(t, R)
     dHdR = hamiltonian.dHdR(t, R)
-    evals, evecs = diagonalize_hamiltonian_history(H, hamiltonian.last_evecs) 
-    hamiltonian.update_last_evecs(evecs)
+    if enable_evec_following:
+        evals, evecs = diagonalize_hamiltonian_history(H, hamiltonian.last_evecs) 
+        # hamiltonian.update_last_evecs(evecs)
+    else:
+        evals, evecs = diagonalize_hamiltonian_history(H, None)
     return H, dHdR, evals, evecs
 
 def evaluate_nonadiabatic_couplings(
     dHdR: ArrayLike,
     evals: ArrayLike,
     evecs: ArrayLike, 
-    out_d: Union[ArrayLike, None]=None,
+    out_d: Optional[ArrayLike]=None,
 ) -> Tuple[ArrayLike, ArrayLike]:
     dHdR = dHdR.todense() if sp.issparse(dHdR) else dHdR
     if dHdR.ndim == 2:
-        return _evaluate_nonadiabatic_couplings_scalar(dHdR, evals, evecs, out_d)
+        d, F = _evaluate_nonadiabatic_couplings_scalar(dHdR, evals, evecs, out_d)
+        # return _evaluate_nonadiabatic_couplings_scalar(dHdR, evals, evecs, out_d)
     elif dHdR.ndim == 3:
-        return _evaluate_nonadiabatic_couplings_vector(dHdR, evals, evecs, out_d)
+        # return _evaluate_nonadiabatic_couplings_vector(dHdR, evals, evecs, out_d)
+        d, F = _evaluate_nonadiabatic_couplings_vector(dHdR, evals, evecs, out_d)
     else:
         raise ValueError(f"The number of dimensions of dHdR must be 2 or 3, but the input dHdR has {dHdR.ndim} dimensions.")
+    return d, F
 
 def _evaluate_nonadiabatic_couplings_scalar(
     dHdR: ArrayLike, 
