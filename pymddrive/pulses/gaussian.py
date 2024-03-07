@@ -68,8 +68,8 @@ def _debug_test_from_quasi_floquet_morlet_real():
     
     import numpy as np
     import matplotlib.pyplot as plt
-    # import scienceplots
-    # plt.style.use('science')
+    import scienceplots
+    plt.style.use('science')
     
     t = np.linspace(-0, 12, 3000)
     fig = plt.figure(figsize=(3, 2), dpi=200)

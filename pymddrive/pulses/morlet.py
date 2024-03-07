@@ -2,51 +2,47 @@
 import numpy as np
 
 from numbers import Real, Complex
-from typing import TypeAlias
+from typing import Union    
 
 from pymddrive.pulses.pulse_base import PulseBase
 
-AnyNumber : TypeAlias = int | float | complex   
-RealNumber : TypeAlias = int | float
 
 class Morlet(PulseBase):
     def __init__(
         self,
-        A: AnyNumber = 1,
-        t0: RealNumber = 0,
-        tau: RealNumber = 1,
-        Omega: RealNumber = 1,
-        phi: RealNumber = 0,
+        A: Union[complex, float] = 1.0,
+        t0: float = 0.0,
+        tau: float = 1.0,
+        Omega: float = 1,
+        phi: float = 0.0,
         cache_length: int = 40
-    ):
+    ) -> None:
         super().__init__(Omega=Omega, cache_length=cache_length)
         
         if not isinstance(self.Omega, Real):
             raise ValueError(f"For Morlet, the carrier frequency {self.Omega=} should be a real number, not {type(self.Omega)}.")
 
-        self.A = A
-        self.t0 = t0
-        self.tau = tau
-        self.phi = phi
+        self.A : Union[complex, float] = A
+        self.t0 : float = t0
+        self.tau : float = tau
+        self.phi : float = phi
 
     def __repr__(self) -> str:
         return f"Morlet(A={self.A}, t0={self.t0}, tau={self.tau}, Omega={self.Omega}, phi={self.phi})"
 
-    def __call__(self, time: float):
-        return super().__call__(time)
-
-    def _pulse_func(self, time: float) -> Complex:
+    def _pulse_func(self, time: float) -> Union[complex, float]:
+        self.Omega: float
         return Morlet.morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
 
     @staticmethod
     def morlet_pulse(
-        A: AnyNumber,
-        t0: RealNumber,
-        tau: RealNumber,
-        Omega: RealNumber,
-        phi: RealNumber,
-        time: RealNumber
-    ) -> Complex:
+        A: Union[float, complex],
+        t0: float,
+        tau: float,
+        Omega: float,
+        phi: float,
+        time: float 
+    ) -> complex:
         return A * np.exp(-1j * (Omega * (time - t0) + phi)) * np.exp(-0.5 * (time - t0)**2 / tau**2)
 
 

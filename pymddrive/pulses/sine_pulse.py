@@ -23,4 +23,5 @@ class SinePulse(PulseBase):
             raise ValueError(f"For SinePulse, the carrier frequency {self.Omega=} should be a real number, not {type(self.Omega)}.")
     
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
+        self.Omega: RealNumber
         return self.A * np.sin(self.Omega * time)

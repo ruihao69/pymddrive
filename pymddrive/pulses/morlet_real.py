@@ -18,6 +18,8 @@ class MorletReal(PulseBase):
         self.t0 = t0
         self.tau = tau
         self.phi = phi
+        if not isinstance(self.Omega, float):
+            raise ValueError(f"For MorletReal, the carrier frequency {self.Omega=} should be a real number, not {type(self.Omega)}.")
 
     def __repr__(self) -> str:
         return f"MorletReal(A={self.A}, t0={self.t0}, tau={self.tau}, Omega={self.Omega}, phi={self.phi})"
@@ -25,7 +27,8 @@ class MorletReal(PulseBase):
     def __call__(self, time: float):
         return super().__call__(time)
 
-    def _pulse_func(self, time: float):
+    def _pulse_func(self, time: float) -> float:
+        self.Omega: float
         return MorletReal.real_morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
 
     @staticmethod
