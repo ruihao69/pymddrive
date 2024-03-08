@@ -16,7 +16,11 @@ from collections import namedtuple
 
 
 EhrenfestCache = namedtuple('EhrenfestCache', 'meanF, evals, evecs')
-EhrenfestProperties = namedtuple('EhrenfestProperties', 'KE, PE, populations, meanF, dij')
+# for debugging
+# EhrenfestProperties = namedtuple('EhrenfestProperties', 'KE, PE, populations, meanF, dij') 
+EhrenfestProperties = namedtuple('EhrenfestProperties', 'KE, PE, diab_populations, adiab_populations, meanF, dij')
+# for production
+# EhrenfestProperties = namedtuple('EhrenfestProperties', 'KE, PE, diab_populations, adiab_populations')
 
 def choose_ehrenfest_stepper(
     numerical_integrator: NumericalIntegrators
@@ -159,17 +163,22 @@ def step_vv_rk_gpaw(t, s, cache, dt, hamiltonian, mass, basis_rep):
     
     return t, s, EhrenfestCache(meanF=meanF, evals=hami_return.evals, evecs=hami_return.evecs)
 
-def calculate_properties(t: Real, s: State, hamiltonian: HamiltonianBase, mass: Union[Real, np.ndarray], basis_rep: BasisRepresentation):
+def calculate_properties(t: Real, s: State, cache: EhrenfestCache, hamiltonian: HamiltonianBase, mass: Union[Real, np.ndarray], basis_rep: BasisRepresentation):
     R, _, rho = s.get_variables()
     meanF, hami_return = compute_ehrenfest_meanF(t, R, rho, hamiltonian, basis_rep)
     KE = 0.5 * np.sum(s.data['P']**2 / mass)
     if basis_rep == BasisRepresentation.Adiabatic:
         PE = expected_value(s.data['rho'], hami_return.evals)
-        pop = rho.diagonal().real.copy()
+        pop_adiab = rho.diagonal().real.copy()
+        pop_diab = adiabatic_to_diabatic(rho, hami_return.evecs).diagonal().real
     elif basis_rep == BasisRepresentation.Diabatic:
         PE = expected_value(s.data['rho'], hami_return.H)
-        pop = diabatic_to_adiabatic(rho, hami_return.evecs).diagonal().real
-    return EhrenfestProperties(KE=KE, PE=PE, populations=pop, meanF=meanF, dij=hami_return.d)
+        pop_adiab = diabatic_to_adiabatic(rho, hami_return.evecs).diagonal().real
+        pop_diab = rho.diagonal().real.copy()
+    # debugging output
+    return EhrenfestProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab, meanF=meanF, dij=hami_return.d)
+    # production output
+    # return EhrenfestProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab)
 
 # Helper functions
 
@@ -211,6 +220,11 @@ def _eval_Ehrenfest_meanF(evals, d, rho, F):
     meanF_term1 = expected_value(rho, F, is_diagonal=True) # population-weighted average force
     meanF_term2 = second_term_meanF(rho, evals, d)         # nonadiabatic changes of the adiabatic state occupations
     return meanF_term1 + meanF_term2
+
+def initialize_cache(t: Real, s: State, hamiltonian: HamiltonianBase, basis_rep: BasisRepresentation):
+    R, _, rho = s.get_variables()
+    meanF, hami_return = compute_ehrenfest_meanF(t, R, rho, hamiltonian, basis_rep)
+    return EhrenfestCache(meanF=meanF, evals=hami_return.evals, evecs=hami_return.evecs)
     
 # %% the testing/debugging code
 
@@ -231,7 +245,7 @@ def _run_dynamics(algorithm: str, basis_rep: BasisRepresentation):
     traj_out = None 
     properties_dict = {field: [] for field in EhrenfestProperties._fields}
     
-    def _append_properties(properties_dict: dict) -> dict:
+    def _append_properties(properties_dict: dict, properties: EhrenfestProperties) -> dict:
         for (field, value) in zip(EhrenfestProperties._fields, properties):
             properties_dict[field].append(value)
         return properties_dict
@@ -258,7 +272,7 @@ def _run_dynamics(algorithm: str, basis_rep: BasisRepresentation):
             properties = calculate_properties(t, s, model, mass, basis_rep)
             time_out = np.append(time_out, t)
             traj_out = np.array([s.data]) if traj_out is None else np.append(traj_out, s.data)
-            properties_dict = _append_properties(properties_dict)
+            properties_dict = _append_properties(properties_dict, properties)
             
             if stop_condition(t, s, traj_out):
                 break

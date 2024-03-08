@@ -3,9 +3,76 @@ import numpy as np
 
 from pymddrive.integrators.state import State
 from pymddrive.dynamics.nonadiabatic_dynamics import NonadiabaticDynamics
+from pymddrive.utils import get_ncpus   
 
 import warnings
-from typing import NamedTuple
+from typing import NamedTuple, Iterable, Generator, Dict
+
+from joblib import Parallel, delayed
+
+def reduce_ensemble_output(output: Generator[Dict, None, None]) -> Dict:
+    ntraj: int = 0
+    time_cached = None
+    output_reduced = {}
+    keys_cache = None
+    for output_ in output:
+        if time_cached is None:
+            time_cached = output_['time']
+        else:
+            if not np.allclose(time_cached, output_['time'], rtol=1e-5, atol=1e-5):
+                raise ValueError(f"Expect identical time arrays for all trajectories in the ensemble, but got {time_cached} and {output_['time']}.")
+        if keys_cache is None:
+            keys_cache = output_.keys()
+        else: 
+            # assert that the 'time' and 'states' are in the output_ dict
+            assert ('time' in output_) and ('states' in output_), f"A successful simulation should have 'time' and 'states' in the output_ dict. Got {output_.keys()}."
+            for key in keys_cache:
+                if key == 'time':
+                    pass
+                else:
+                    if key not in output_reduced:
+                        output_reduced[key] = output_[key] 
+                    elif output_reduced[key] is np.nan:
+                        pass
+                    else:
+                        try:
+                            if key == 'states':
+                                for field in output_reduced['states'].dtype.names:
+                                    output_reduced['states'][field] += output_['states'][field]
+                            else:
+                                output_reduced[key] += output_[key]
+                            
+                        except TypeError:
+                            if np.any(output_[key] == None):
+                                warnings.warn(f"Got None in the output for key {key}.")
+                                output_reduced[key] = np.nan
+                            else:
+                                raise ValueError(f"Expect the output_ to be a number or an array, but got {output_[key]}.")
+        ntraj += 1
+    for key in output_reduced:
+        if key == 'states':
+            for field in output_reduced['states'].dtype.names:
+                output_reduced['states'][field] /= ntraj
+        else:
+            output_reduced[key] /= ntraj
+        
+    return {'time': time_cached, **output_reduced}
+            
+
+def run_nonadiabatic_dynamics_ensembles(
+    dyn: Iterable[NonadiabaticDynamics],
+    stop_condition: callable,
+    break_condition: callable,
+    max_iters: int=int(1e8),
+    save_traj: bool=True,
+):
+    ensemble_output = Parallel(n_jobs=get_ncpus(), return_as='generator', verbose=10)(
+        delayed(run_nonadiabatic_dynamics)(
+            dyn_, stop_condition, break_condition, max_iters, save_traj
+        ) for dyn_ in dyn
+    )
+    return reduce_ensemble_output(ensemble_output)
+
 
 def run_nonadiabatic_dynamics(
     dyn: NonadiabaticDynamics,
@@ -21,11 +88,12 @@ def run_nonadiabatic_dynamics(
     properties_dict = {field: [] for field in dyn.properties_type._fields}
     
     t, s = dyn.t0, dyn.s0
-    cache = None
+    # cache = None
+    cache = dyn.cache_initializer(t, s)
     
     for istep in range(max_iters):
         if istep % dyn.save_every == 0:
-            properties = dyn.calculate_properties(t, s)
+            properties = dyn.calculate_properties(t, s, cache)
             properties_dict = _append_properties(properties_dict, properties)
             time_array = np.append(time_array, t)
             traj_array = np.array([s.data]) if traj_array is None else np.append(traj_array, s.data)

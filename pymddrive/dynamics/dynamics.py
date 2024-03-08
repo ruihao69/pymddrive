@@ -42,6 +42,9 @@ class Dynamics(ABC):
         self.deriv: Callable[[float, State], State] = None
         # the properties calculator: takes the current time and state, returns the properties as a namedtuple
         self.calculate_properties: Callable[[float, State], NamedTuple] = None
+        # the cache calculator: takes the current time, state, and cache, returns the updated cache
+        # self.calculate_cache: Callable[[float, State, Any], Any] = None
+        self.cache_initializer: Callable[[float, State], Any] = None
         self.properties_type: Type = None 
         
         self.numerical_integrator: NumericalIntegrators = numerical_integrator
