@@ -171,3 +171,6 @@ nohup.out
 tmp/
 tmp*
 data_*
+
+# MACOS
+.DS_Store
