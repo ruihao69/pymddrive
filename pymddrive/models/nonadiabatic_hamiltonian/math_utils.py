@@ -2,6 +2,7 @@
 import numpy as np
 # import scipy.linalg as LA
 import numpy.linalg as LA
+from numba import jit
 import scipy.sparse as sp
 from numpy.typing import ArrayLike
 
@@ -41,6 +42,7 @@ def nac_phase_following(d_prev: ArrayLike, d_curr: ArrayLike) -> ArrayLike:
     Returns:
         ArrayLike: the phase-corrected NACs
     """
+    # print("nac_phase_following is called")
     dim_classical = d_curr.shape[0]
     dim_electrnic = d_curr.shape[1]
     d_corrected = np.zeros((dim_classical, dim_electrnic, dim_electrnic), dtype=d_curr.dtype)
@@ -53,7 +55,8 @@ def nac_phase_following(d_prev: ArrayLike, d_curr: ArrayLike) -> ArrayLike:
             """denotes the dimension of the classical variable; M denotes the dimension"""
             """of the quantum system."""
         )
-    return _nac_phase_following(d_prev, d_curr, d_corrected)
+    # return _nac_phase_following(d_prev, d_curr, d_corrected)
+    return adjust_nac_phase(d_prev, d_curr, d_corrected)
 
 def _nac_phase_following(d_prev: ArrayLike, d_curr: ArrayLike, d_corr: ArrayLike) -> ArrayLike:
     """The phase following algorithm for the non-adiabatic couplings (NAC) by
@@ -92,19 +95,61 @@ def _nac_phase_following(d_prev: ArrayLike, d_curr: ArrayLike, d_corr: ArrayLike
             prev_nac_norm = LA.norm(d_prev[:, jj, kk])
             curr_nac_norm = LA.norm(d_curr[:, jj, kk])
             # calculate the dot product of the NACs
-            nac_dot_product = np.dot(d_prev[:, jj, kk].conjugate(), d_curr[:, jj, kk])
+            nac_dot_product = np.dot(d_prev[:, jj, kk], d_curr[:, jj, kk])
             # if (prev_nac_norm == 0) or (curr_nac_norm == 0):
             if np.isclose(prev_nac_norm, 0, atol=ATOL, rtol=RTOL) or np.isclose(curr_nac_norm, 0, atol=ATOL, rtol=RTOL):
-                phase_factor = 1.0
+                # phase_factor = 1.0
+                cos_angle: float = 1.0
             else:
-                phase_factor = nac_dot_product / (prev_nac_norm * curr_nac_norm)
+                cos_angle: float = nac_dot_product / (prev_nac_norm * curr_nac_norm)
+                # phase_factor = nac_dot_product / (prev_nac_norm * curr_nac_norm)
             # correct the phase of the NACs at (jj, kk) electronic indices using the phase factor
-            d_corr[:, jj, kk] = d_curr[:, jj, kk] / phase_factor
+            # d_corr[:, jj, kk] = d_curr[:, jj, kk] / phase_factor
+            d_corr[:, jj, kk] = d_curr[:, jj, kk] * np.sign(cos_angle)
     return d_corr
+
+def adjust_nac_phase(d_prev: ArrayLike, d_curr: ArrayLike, d_corr: ArrayLike) -> ArrayLike:
+    # print(f"{d_prev.shape=}", f"{d_curr.shape=}") 
+    for ii in range(d_curr.shape[1]):
+        for jj in range(ii+1, d_curr.shape[2]):
+            ovlp: float = 0.0
+            snac_old: float = 0.0
+            snac: float = 0.0
+            
+            # snac_old = np.sqrt(np.sum(d_prev[:, ii, jj]**2))
+            # snac = np.sqrt(np.sum(d_curr[:, ii, jj]**2))
+            snac_old = LA.norm(d_prev[:, ii, jj])
+            snac = LA.norm(d_curr[:, ii, jj])
+            
+            if (np.sqrt(snac_old * snac) < 1e-8):
+                ovlp: float = 1.0
+            else:
+                dot_nac: float = 0.0
+                dot_nac = np.sum(d_prev[:, ii, jj].conjugate() * d_curr[:, ii, jj])
+                ovlp = dot_nac / (snac_old * snac)
+                
+            d_corr[:, ii, jj] = d_curr[:, ii, jj] / ovlp
+            d_corr[:, jj, ii] = d_curr[:, jj, ii] / ovlp
+    return d_corr
+                
+            
+    
 
 def diagonalize_hamiltonian_history(hamiltonian: ArrayLike, prev_evecs: Optional[ArrayLike]=None) -> Tuple[ArrayLike, ArrayLike]:
     evals, evecs = LA.eigh(hamiltonian.toarray()) if sp.isspmatrix(hamiltonian) else LA.eigh(hamiltonian)
-    evecs = align_phase(prev_evecs, evecs) if prev_evecs is not None else evecs
+    if prev_evecs is not None:
+        evecs = align_phase(prev_evecs, evecs) #if prev_evecs is not None else evecs
+    # else:
+    #     phases = np.diagonal(evecs.conjugate().T @ evecs)
+    #     phases = phases / np.abs(phases)
+    #     over_all_sign = np.sign(LA.det(evecs))
+    #     evecs = evecs * over_all_sign / phases
+    # else:
+        
+        # signs = np.sign(np.diagonal(evecs))
+        # print(f"{signs=}")
+        # evecs = evecs * signs
+            
     return evals, evecs
 
 def diagonalize_2d_real_symmetric(H: ArrayLike) -> Tuple[ArrayLike, ArrayLike]:
@@ -178,12 +223,15 @@ def _evaluate_tullyone_floquet_hamiltonian(t, r, model):
         # R = np.array([rr])
         H = model.H(t, rr)
         dHdR = model.dHdR(t, rr)
-        evals, evecs = diagonalize_hamiltonian_history(H, None)
+        evals, evecs = diagonalize_hamiltonian_history(H, model.last_evecs)
+        model.update_last_evecs(evecs)
+        # print(f"{np.linalg.det(evecs)=}")
         # evals, evecs = diagonalize_hamiltonian_history(H, model.last_evecs)
         # model.update_last_evecs(evecs)
         d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         d = d[np.newaxis, :, :]
         d = nac_phase_following(d_last, d) if d_last is not None else d
+        # d = adjust_nac_phase(d_last, d) if d_last is not None else d
         d_last = d
         # print(f"{d_last.dtype=}", f"{d.dtype=}")
         E_out[ii, :] = evals
@@ -282,6 +330,7 @@ def _test_enforce_gauge_main(pulse_type):
     r = np.linspace(-5, 5, 1000)
     # E, F, d= _evaluate_tullyone_hamiltonian(0, r, h_tullyone)
     t = t0
+    # E, F, d= _evaluate_tullyone_hamiltonian(0, r, h_tullyone)
     E, F, d = _evaluate_tullyone_floquet_hamiltonian(t, r, h_tullyone)
     _plot_tullyone_hamiltonian(r, E, F, d)
 
@@ -293,6 +342,7 @@ def _test_enforce_gauge_main(pulse_type):
 
     # from positive to negative
     r = np.flip(r)
+    # E, F, d= _evaluate_tullyone_hamiltonian(0, r, h_tullyone)
     E, F, d = _evaluate_tullyone_floquet_hamiltonian(t, r, h_tullyone)
     _plot_tullyone_hamiltonian(r, E, F, d)
 
@@ -300,5 +350,6 @@ def _test_enforce_gauge_main(pulse_type):
 # %%
 if __name__ == "__main__":
     from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
+    # _test_enforce_gauge_main(pulse_type=TullyOnePulseTypes.NO_PULSE)
     _test_enforce_gauge_main(pulse_type=TullyOnePulseTypes.PULSE_TYPE1)
 # %%

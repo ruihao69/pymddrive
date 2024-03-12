@@ -130,7 +130,7 @@ def _evaluate_tullyone_floquet_hamiltonian(t, r, model):
         d_out[ii, :, :] = d
     return E_out, F_out, d_out
 
-def _plot_tullyone_hamiltonian(r, E, F, center_focus=True):
+def _plot_tullyone_hamiltonian(r, E, F, center_focus=False):
     import matplotlib.pyplot as plt
     import scienceplots
     plt.style.use('science')

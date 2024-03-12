@@ -97,3 +97,6 @@ class QuasiFloquetHamiltonianBase(TD_HamiltonianBase):
             self.NF = NF
         else:
             raise ValueError(f"The number of Floquet replicas must be a positive integer, but {NF} is given.")
+        
+    def get_carrier_frequency(self) -> float:
+        return self.Omega
