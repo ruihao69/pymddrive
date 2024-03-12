@@ -3,12 +3,14 @@ import numpy as np
 from numpy.typing import ArrayLike
 from numba import jit
 
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, diabatic_to_adiabatic, adiabatic_to_diabatic
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase
+from pymddrive.models.nonadiabatic_hamiltonian import diabatic_to_adiabatic, adiabatic_to_diabatic
 from pymddrive.integrators.state import State, zeros_like
 from pymddrive.integrators.rk4 import rk4
 from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NumericalIntegrators
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian, HamiltonianRetureType
 from pymddrive.dynamics.math_utils import commutator, rhs_density_matrix, v_dot_d, expected_value
+from pymddrive.dynamics.floquet.ehrenfest import get_rho_and_populations
 
 from numbers import Real
 from typing import Union, Callable
@@ -60,7 +62,13 @@ def _rho_dot(t, rho, R, v, hamiltonian, basis_rep) -> ArrayLike:
 def _rho_dot_adiab(
     rho: ArrayLike, evals: ArrayLike, v: ArrayLike, d: ArrayLike
 ) -> ArrayLike:
-    return rhs_density_matrix(rho=rho, evals=evals, vdotd=v_dot_d(v,d))
+    vdotd = v_dot_d(v, d)
+    # if not np.allclose(vdotd + vdotd.T.conj(), 0):
+    #     print("The symmetry of vdotd is not preserved.")
+    # else:
+    #     print("The symmetry of vdotd is preserved.")
+    # print(vdotd.dtype)
+    return rhs_density_matrix(rho=rho, evals=evals, vdotd=vdotd)
 
 def _rho_dot_diab(rho, H) -> ArrayLike:
     return -1.j * commutator(H, rho)
@@ -166,16 +174,31 @@ def step_vv_rk_gpaw(t, s, cache, dt, hamiltonian, mass, basis_rep):
 def calculate_properties(t: Real, s: State, cache: EhrenfestCache, hamiltonian: HamiltonianBase, mass: Union[Real, np.ndarray], basis_rep: BasisRepresentation):
     R, _, rho = s.get_variables()
     meanF, hami_return = compute_ehrenfest_meanF(t, R, rho, hamiltonian, basis_rep)
+    hami_return: HamiltonianRetureType
     KE = 0.5 * np.sum(s.data['P']**2 / mass)
+    if isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
+        # print(np.sum(rho.diagonal().real))
+        NF: int = hamiltonian.NF
+        Omega: float = hamiltonian.get_carrier_frequency()
+        _, pop_adiab = get_rho_and_populations(t, rho, hami_return.H, hami_return.evecs, NF, Omega, F_basis=basis_rep, target_basis=BasisRepresentation.Adiabatic)
+        _, pop_diab = get_rho_and_populations(t, rho, hami_return.H, hami_return.evecs, NF, Omega, F_basis=basis_rep, target_basis=BasisRepresentation.Diabatic)
+    else:
+        if basis_rep == BasisRepresentation.Adiabatic:
+            # PE = expected_value(s.data['rho'], hami_return.evals)
+            pop_adiab = rho.diagonal().real.copy()
+            pop_diab = adiabatic_to_diabatic(rho, hami_return.evecs).diagonal().real
+        elif basis_rep == BasisRepresentation.Diabatic:
+            # PE = expected_value(s.data['rho'], hami_return.H)
+            pop_adiab = diabatic_to_adiabatic(rho, hami_return.evecs).diagonal().real
+            pop_diab = rho.diagonal().real.copy()
     if basis_rep == BasisRepresentation.Adiabatic:
-        PE = expected_value(s.data['rho'], hami_return.evals)
-        pop_adiab = rho.diagonal().real.copy()
-        pop_diab = adiabatic_to_diabatic(rho, hami_return.evecs).diagonal().real
+        PE = expected_value(rho, hami_return.evals)
     elif basis_rep == BasisRepresentation.Diabatic:
-        PE = expected_value(s.data['rho'], hami_return.H)
-        pop_adiab = diabatic_to_adiabatic(rho, hami_return.evecs).diagonal().real
-        pop_diab = rho.diagonal().real.copy()
+        PE = expected_value(rho, hami_return.H)
+    else:
+        raise NotImplemented
     # debugging output
+    PE = PE / (2.0 * hamiltonian.NF + 1.0) if isinstance(hamiltonian, QuasiFloquetHamiltonianBase) else PE
     return EhrenfestProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab, meanF=meanF, dij=hami_return.d)
     # production output
     # return EhrenfestProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab)
@@ -188,6 +211,9 @@ def compute_ehrenfest_meanF(
 ) -> ArrayLike:
     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
     meanF = _compute_ehrenfest_meanF(qm, hami_return.dHdR, hami_return.evals, hami_return.evecs, hami_return.d, hami_return.F, basis_rep)
+    if isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
+        NF: int = hamiltonian.NF
+        meanF = meanF / (2.0 * NF + 1.0)         
     return meanF, hami_return
     
 def _compute_ehrenfest_meanF(qm, dHdR, evals, evecs, d, F, basis_rep: BasisRepresentation) -> ArrayLike:

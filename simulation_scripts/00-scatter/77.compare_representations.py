@@ -161,7 +161,8 @@ def plot_all(res_diab, res_adiab, pulse_diab, pulse_adiab):
     plt.show()
     
     # compare the populations
-    pop_diab = res_diab['populations']; pop_adiab = res_adiab['populations']
+    # pop_diab = res_diab['adiab_populations']; pop_adiab = res_adiab['adiab_populations']
+    pop_diab = res_diab['diab_populations']; pop_adiab = res_adiab['diab_populations']
     fig = plt.figure(dpi=300)
     ax = fig.add_subplot(111)
     ax.plot(time_diab, pop_diab[:, 0], label="Diabatic 1")

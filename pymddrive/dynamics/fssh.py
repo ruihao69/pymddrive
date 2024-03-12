@@ -5,18 +5,19 @@ from numpy.typing import ArrayLike
 from numba import jit
 from scipy.integrate import ode
 
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, diabatic_to_adiabatic, adiabatic_to_diabatic
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase
 from pymddrive.integrators.state import State, zeros_like
 from pymddrive.integrators.rk4 import rk4
 from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NumericalIntegrators
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian, HamiltonianRetureType
 from pymddrive.dynamics.math_utils import rhs_density_matrix, v_dot_d
+from pymddrive.dynamics.floquet.fssh import get_rho_and_populations
 
 from typing import Tuple, List, Callable
 from collections import namedtuple 
 from dataclasses import dataclass, field
 
-FSSHCache = namedtuple('FSSHCache', 'active_surf, evals, evecs')
+FSSHCache = namedtuple('FSSHCache', 'active_surf, evals, evecs, H_diab, hamiltonian')
 FSSHProperties = namedtuple('FSSHProperties', 'KE, PE, diab_populations, adiab_populations')
 
 @dataclass(frozen=True, order=True, unsafe_hash=True)
@@ -103,14 +104,14 @@ def step_rk(
     t, s = rk4(t, s, _deriv_fssh_dm, deriv_options, dt)
     # The callback functions: Updating cache 
     R, P, rho = s.get_variables()
-    hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
+    hami_return: HamiltonianRetureType = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
     hamiltonian.update_last_evecs(hami_return.evecs)
     hamiltonian.update_last_deriv_couplings(hami_return.d)
     
     # the callback functions: surface hopping
     _, new_active_surf, P_rescaled = hopping(dt, rho, hami_return, P, mass, cache.active_surf)
     P[:] = P_rescaled
-    return t, s, FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs)
+    return t, s, FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
    
 def hopping(
     dt: float,
@@ -252,14 +253,20 @@ def momentum_rescale(
     
 def calculate_properties(t: float, s: State, cache: FSSHCache, mass: ArrayLike) -> FSSHProperties:
     R, P, rho = s.get_variables()
-    active_surf, evals, evecs = cache
+    active_surf, evals, evecs, H_diab, hamiltonian = cache
     KE = 0.5 * np.sum(P**2 / mass)
     PE = evals[active_surf.index]
-    # calculate the adiabatic populations
-    pop_adiab = np.zeros_like(evals)
-    pop_adiab[active_surf.index] = 1.0
-    # calculate the diabatic populations
-    pop_diab = calculate_adiabatic_populations(active_surf.index, evecs, rho)
+    if isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
+        NF: int = hamiltonian.NF
+        Omega: float = hamiltonian.get_carrier_frequency()
+        _, pop_adiab = get_rho_and_populations(t, active_surf, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Adiabatic)
+        _, pop_diab = get_rho_and_populations(t, active_surf, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Diabatic)
+    else:
+        # calculate the adiabatic populations
+        pop_adiab = np.zeros_like(evals)
+        pop_adiab[active_surf.index] = 1.0
+        # calculate the diabatic populations
+        pop_diab = calculate_adiabatic_populations(active_surf.index, evecs, rho)
     
     return FSSHProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab)
 
@@ -286,7 +293,7 @@ def initialize_active_surf(
 def initialize_cache(t: float, s: State, hamiltonian: HamiltonianBase, basis_rep: BasisRepresentation) -> FSSHCache:
     R, _, rho = s.get_variables()
     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
-    return FSSHCache(active_surf=initialize_active_surf(rho), evals=hami_return.evals, evecs=hami_return.evecs)
+    return FSSHCache(active_surf=initialize_active_surf(rho), evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
 
 # def calculate_cache(t: float, s: State, cache: FSSHCache, hamiltonian: HamiltonianBase, basis_rep: BasisRepresentation) -> FSSHCache:
 #     R, P, rho = s.get_variables()

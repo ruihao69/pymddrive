@@ -2,8 +2,10 @@
 import os
 import time
 import argparse
+from typing import Tuple
 
 import numpy as np
+from numpy.typing import ArrayLike
 import scipy.sparse as sp
 
 from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
@@ -11,7 +13,7 @@ from pymddrive.models.nonadiabatic_hamiltonian import diabatic_to_adiabatic
 from pymddrive.integrators.state import State
 
 from pymddrive.dynamics import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
-from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics
+from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics, run_nonadiabatic_dynamics_ensembles
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian
 
 from tullyone_utils import *
@@ -70,8 +72,8 @@ def run_tullyone_pulsed(
     qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
     basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
-    # integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-    integrator: NumericalIntegrators = NumericalIntegrators.RK4,
+    integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+    # integrator: NumericalIntegrators = NumericalIntegrators.RK4,
 ):
     A = 0.01
     B = 1.6
@@ -93,8 +95,8 @@ def run_tullyone_pulsed(
     rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
     s0 = State.from_variables(R=r0, P=p0, rho=rho0)
     T = 2 * np.pi / Omega 
-    max_step = 0.1 * T
-    min_step = None
+    # max_step = 0.1 * T
+    # min_step = None
     # initialize the integrator 
     dyn = NonadiabaticDynamics(
         hamiltonian=hamiltonian,
@@ -107,8 +109,6 @@ def run_tullyone_pulsed(
         numerical_integrator=integrator,
         dt=0.03,
         save_every=30,
-        max_step=max_step,
-        min_step=min_step 
     )
     
     output = run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
@@ -126,8 +126,8 @@ def run_tullyone_pulsed_floquet(
     qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
     basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
-    # integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-    integrator: NumericalIntegrators = NumericalIntegrators.RK4,
+    integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+    # integrator: NumericalIntegrators = NumericalIntegrators.RK4,
 ):
     A = 0.01
     B = 1.6
@@ -150,13 +150,14 @@ def run_tullyone_pulsed_floquet(
     
     pulse = hamiltonian.pulse
     if basis_rep == BasisRepresentation.Diabatic: 
-        rho0_floquet = get_floquet_rho0(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
-        # rho0_floquet = get_floquet_rho0_fully_sampled(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
+        # rho0_floquet = get_floquet_rho0(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
+        rho0_floquet = get_floquet_rho0_fully_sampled(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
         s0 = State.from_variables(R=r0, P=p0, rho=rho0_floquet)
     elif basis_rep == BasisRepresentation.Adiabatic:
-        rho0_flouqet_diabatic = get_floquet_rho0(np.array([[1, 0], [0, 0.0]], dtype=np.complex128), NF)
+        # rho0_flouqet_diabatic = get_floquet_rho0(np.array([[1, 0], [0, 0.0]], dtype=np.complex128), NF)
+        rho0_floquet_diabatic = get_floquet_rho0_fully_sampled(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
         hami_return = eval_nonadiabatic_hamiltonian(0.0, np.array([r0]), hamiltonian, basis_rep)
-        rho0_flouqet_adiabatic = diabatic_to_adiabatic(rho0_flouqet_diabatic, hami_return.evecs)
+        rho0_flouqet_adiabatic = diabatic_to_adiabatic(rho0_floquet_diabatic, hami_return.evecs)
         # rho0_floquet_diabatic = get_floquet_rho0_fully_sampled(np.array([[1, 0], [0, 0.0]], dtype=np.complex128), NF)
         # hami_return = eval_nonadiabatic_hamiltonian(0.0, np.array([r0]), hamiltonian, BasisRepresentation.Diabatic)
         # rho0_flouqet_adiabatic = diabatic_to_adiabatic(rho0_floquet_diabatic, hami_return.evecs)
@@ -205,6 +206,97 @@ def estimate_delay_time(A, B, C, D, p0, mass: float=2000.0):
     break_condition = lambda t, s, states: False
     res = run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
     return res['time'][-1]    
+
+def generate_ensembles(
+    initial_diabatic_states: int,
+    R0_samples: ArrayLike,
+    P0_samples: ArrayLike,
+    _delay: float,
+    Omega: float,
+    tau: float,
+    NF: int=1,
+    mass: float=2000,
+    pulse_type: TullyOnePulseTypes = TullyOnePulseTypes.PULSE_TYPE2,
+    qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
+    basis_rep: BasisRepresentation = BasisRepresentation.Adiabatic,
+    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.FSSH,
+    integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+) -> Tuple[NonadiabaticDynamics]:
+    # initialize the electronic states
+    assert (initial_diabatic_states >= 0) and (initial_diabatic_states < 2), f"Valid states should be between 0 and 1. Got {initial_diabatic_states}."
+    rho0_diabatic = np.zeros((2, 2), dtype=np.complex128)
+    rho0_diabatic[initial_diabatic_states, initial_diabatic_states] = 1.0
+    # rho0_diabatic_floquet = get_floquet_rho0(rho0_diabatic, NF)
+    rho0_diabatic_floquet = get_floquet_rho0_fully_sampled(rho0_diabatic, NF)   
+    
+    assert (n_samples := len(R0_samples)) == len(P0_samples), "The number of R0 and P0 samples should be the same."
+    ensemble = ()
+    for ii, (R0, P0) in enumerate(zip(R0_samples, P0_samples)):
+        hamiltonian = get_tullyone(
+            t0=_delay, Omega=Omega, tau=tau,
+            pulse_type=pulse_type, td_method=TD_Methods.FLOQUET, NF=NF 
+        ) 
+        if basis_rep == BasisRepresentation.Diabatic:
+            s0 = State.from_variables(R=R0, P=P0, rho=rho0_diabatic)
+        else:
+            hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
+            evecs = hami_return.evecs
+            ## print(f"{evecs.shape=}")
+            # rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
+            rho0_adiabatic = evecs.T.conj() @ rho0_diabatic_floquet @ evecs
+            s0 = State.from_variables(R=R0, P=P0, rho=rho0_adiabatic)
+        dyn = NonadiabaticDynamics(
+            hamiltonian=hamiltonian,
+            t0=0.0,
+            s0=s0,
+            mass=mass,
+            basis_rep=basis_rep,
+            qm_rep=qm_rep,
+            solver=solver,
+            numerical_integrator=integrator,
+            dt=0.1,
+            save_every=10,
+        )
+        ensemble += (dyn,)
+    return ensemble
+
+def run_tullyone_pulsed_ensemble( 
+    r0: float, 
+    p0: float, 
+    Omega: float, 
+    tau: float, 
+    pulse_type: TullyOnePulseTypes,
+    n_samples: int = 100,
+    NF: int = 1,
+    mass: float = 2000, 
+    qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
+    basis_rep: BasisRepresentation = BasisRepresentation.Adiabatic,
+    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.FSSH,
+    integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+):
+    A, B, C, D = 0.01, 1.6, 0.005, 1.0
+    R0_samples = np.array([r0]*n_samples)
+    P0_samples = np.array([p0]*n_samples)
+    _delay = estimate_delay_time(A, B, C, D, p0)
+    emsemble = generate_ensembles(
+        initial_diabatic_states=0,
+        R0_samples=R0_samples,
+        P0_samples=P0_samples,
+        _delay=_delay,
+        Omega=Omega,
+        tau=tau,
+        NF=NF,
+        mass=mass,
+        pulse_type=pulse_type,
+        qm_rep=qm_rep,
+        basis_rep=basis_rep,
+        solver=solver,
+        integrator=integrator,
+    )
+    pulse = emsemble[0].hamiltonian.pulse
+    
+    return run_nonadiabatic_dynamics_ensembles(emsemble, stop_condition, break_condition), pulse
+        
     
 def main(
     Omega: float, 
@@ -221,21 +313,24 @@ def main(
     print(f"Time elapsed for Ehrenfest Diabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
     print("====================================================", flush=True)
+    
     start = time.perf_counter()
     output_floq_diabatic, pulse_f_diabatic = run_tullyone_pulsed_floquet(r0, p0, Omega, tau, pulse_type=pulse_type, NF=NF, basis_rep=BasisRepresentation.Diabatic)
     print(f"Time elapsed for Floquet Ehrenfest Diabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
     print("====================================================", flush=True)
+    
     start = time.perf_counter()
     output_floq_adiabatic, pulse_f_adiabatic = run_tullyone_pulsed_floquet(r0, p0, Omega, tau, pulse_type=pulse_type, NF=NF, basis_rep=BasisRepresentation.Adiabatic)
     print(f"Time elapsed for Floquet Ehrenfest Adiabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
-    # output_floq_adiabatic = None
-    # pulse_f_adiabatic = None
-    # output_floq_adiabatic = output_floq_diabatic
-    # pulse_f_adiabatic = pulse_f_diabatic
     
+    # start = time.perf_counter()
+    # output_floq_fssh, pulse_floq_fssh = run_tullyone_pulsed_ensemble(r0, p0, Omega, tau, pulse_type=pulse_type, n_samples=10, NF=NF, basis_rep=BasisRepresentation.Adiabatic)
+    # print(f"Time elapsed for Floquet FSSH Adiabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
+    # print("====================================================", flush=True)
     
+    # return pulse_d, output_d, pulse_f_adiabatic, output_floq_adiabatic, pulse_f_diabatic, output_floq_diabatic, pulse_floq_fssh, output_floq_fssh
     return pulse_d, output_d, pulse_f_adiabatic, output_floq_adiabatic, pulse_f_diabatic, output_floq_diabatic
     
 
@@ -295,17 +390,28 @@ def plot_all(pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd):
     
     fig = plt.figure(dpi=300)
     ax = fig.add_subplot(111)
-    pop_fa_dim0 = sum(output_fa['populations'].T[:2*NF+1])
-    pop_fa_dim1 = sum(output_fa['populations'].T[2*NF+1:])
-    pop_fa = np.array([pop_fa_dim0, pop_fa_dim1]).T
-    pop_fd_dim0 = sum(output_fd['populations'].T[:2*NF+1])
-    pop_fd_dim1 = sum(output_fd['populations'].T[2*NF+1:])
-    pop_fd = np.array([pop_fd_dim0, pop_fd_dim1]).T
-    for i in range(output_d['populations'].shape[1]):
-        ax.plot(time_d, output_d['populations'][:, i], label='Ehrenfest Diabatic')
-        # ax.plot(time_fa, pop_fa[:, i], ls='--', label='Floquet Ehrenfest Adiabatic')
-        ax.plot(time_fd, pop_fd[:, i], ls='-.', label='Floquet Ehrenfest Diabatic')
+    # pop_fa_dim0 = sum(output_fa['adiab_populations'].T[:2*NF+1])
+    # pop_fa_dim1 = sum(output_fa['adiab_populations'].T[2*NF+1:])
+    # pop_fa = np.array([pop_fa_dim0, pop_fa_dim1]).T
+    # pop_fd_dim0 = sum(output_fd['adiab_populations'].T[:2*NF+1])
+    # pop_fd_dim1 = sum(output_fd['adiab_populations'].T[2*NF+1:])
+    # pop_fd = np.array([pop_fd_dim0, pop_fd_dim1]).T
+    time_list = [time_d, time_fa, time_fd]
+    labels = ['Ehrenfest Diabatic', 'Floquet Ehrenfest Adiabatic', 'Floquet Ehrenfest Diabatic']
+    ls_list = ['-', '--', '-.']
+    for ii, pops in enumerate((output_d['adiab_populations'], output_fa['adiab_populations'], output_fd['adiab_populations'])):  
+        for jj in range(pops.shape[1]):
+            ax.plot(time_list[ii], pops[:, jj], label=f"$P_{jj}$ from {labels[ii]}", ls=ls_list[ii])
+            
+    ax.set_xlim(400, 1000)
+    # for i in range(output_d['adiab_populations'].shape[1]):
+    #     ax.plot(time_d, output_d['adiab_populations'][:, i], label='Ehrenfest Diabatic')
+    #     ax.plot(time_fa, pop_fa[:, i], ls='--', label='Floquet Ehrenfest Adiabatic')
+    #     ax.plot(time_fd, pop_fd[:, i], ls='-.', label='Floquet Ehrenfest Diabatic')
     ax.legend()
+    ax.set_xlabel('Time (a.u.)')
+    ax.set_ylabel('Populations')
+    fig.savefig("populations-pulse2.pdf")
     plt.show()
     
     fig = plt.figure(dpi=300)
@@ -400,14 +506,16 @@ def test_floquet_HF_main(Omega: float, tau: float, pulse_type: TullyOnePulseType
 # %%Figure,  
 if __name__ == "__main__":
     Omega = 0.3; tau = 100
-    pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd = main(Omega, tau, NF=1, pulse_type=TullyOnePulseTypes.PULSE_TYPE2)
+    # pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd, pulse_fssh, output_fssh = main(Omega, tau, NF=1, pulse_type=TullyOnePulseTypes.PULSE_TYPE2)
+    pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd= main(Omega, tau, NF=1, pulse_type=TullyOnePulseTypes.PULSE_TYPE1)
     
 
 # %%
 if __name__ == "__main__":
     # plot_all(pulse_d, output_d, pulse_f, output_floquet)
-    # plot_all(pulse_d, output_d, pulse_a, output_a, pulse_f, output_floquet)
     plot_all(pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd)
+    # plot_all(pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd, pulse_fssh, output_fssh)
+
 
 # %%
 if __name__ == "__main__":
