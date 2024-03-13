@@ -7,6 +7,9 @@ from typing import Tuple
 import numpy as np
 from numpy.typing import ArrayLike
 import scipy.sparse as sp
+import matplotlib.pyplot as plt
+import scienceplots
+plt.style.use('science')
 
 from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
 from pymddrive.models.nonadiabatic_hamiltonian import diabatic_to_adiabatic
@@ -26,8 +29,8 @@ def get_floquet_rho0(rho0: np.ndarray, NF: int):
     rho0_floquet_bsr = sp.bsr_matrix((data, indicies, indptr), shape=(dimF, dimF), dtype=np.complex128)
     return rho0_floquet_bsr.toarray()
 
-def get_floquet_rho0_fully_sampled(rho0: np.ndarray, NF: int):
-    return sp.block_diag((rho0, ) * (2*NF+1)).toarray()
+# def get_floquet_rho0_fully_sampled(rho0: np.ndarray, NF: int):
+#     return sp.block_diag((rho0, ) * (2*NF+1)).toarray()
 
 def get_block_representation(matrix: np.ndarray, m: int, n: int) -> np.ndarray:
     """Block representation of a square matrix.
@@ -73,7 +76,6 @@ def run_tullyone_pulsed(
     basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
     integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-    # integrator: NumericalIntegrators = NumericalIntegrators.RK4,
 ):
     A = 0.01
     B = 1.6
@@ -81,9 +83,7 @@ def run_tullyone_pulsed(
     D = 1.0
     
     # To estimate the delay time
-    start = time.perf_counter()
     _delay = estimate_delay_time(A, B, C, D, p0)
-    print(f"Time elapsed for estimating the delay time is {time.perf_counter()-start:.5f} seconds.", flush=True)
     
     # initialize the model and states
     hamiltonian = get_tullyone(
@@ -94,10 +94,6 @@ def run_tullyone_pulsed(
     
     rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
     s0 = State.from_variables(R=r0, P=p0, rho=rho0)
-    T = 2 * np.pi / Omega 
-    # max_step = 0.1 * T
-    # min_step = None
-    # initialize the integrator 
     dyn = NonadiabaticDynamics(
         hamiltonian=hamiltonian,
         t0=0.0,
@@ -127,7 +123,6 @@ def run_tullyone_pulsed_floquet(
     basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
     integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-    # integrator: NumericalIntegrators = NumericalIntegrators.RK4,
 ):
     A = 0.01
     B = 1.6
@@ -135,13 +130,7 @@ def run_tullyone_pulsed_floquet(
     D = 1.0
     
     # To estimate the delay time
-    start = time.perf_counter()
     _delay = estimate_delay_time(A, B, C, D, p0)
-    print(f"Time elapsed for estimating the delay time is {time.perf_counter()-start:.5f} seconds.", flush=True)
-    # initialize the model and states
-    estimated_NF = estimate_floquet_levels(Omega, tau)
-    if NF < estimated_NF:
-        print(f"Warning: The number of Floquet levels is estimated to be {estimated_NF} for the given Omega and tau. The given NF is {NF}.", flush=True)
         
     hamiltonian = get_tullyone(
         t0=_delay, Omega=Omega, tau=tau,
@@ -150,14 +139,14 @@ def run_tullyone_pulsed_floquet(
     
     pulse = hamiltonian.pulse
     if basis_rep == BasisRepresentation.Diabatic: 
-        # rho0_floquet = get_floquet_rho0(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
-        rho0_floquet = get_floquet_rho0_fully_sampled(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
+        rho0_floquet = get_floquet_rho0(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
+        # rho0_floquet = get_floquet_rho0_fully_sampled(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
         s0 = State.from_variables(R=r0, P=p0, rho=rho0_floquet)
     elif basis_rep == BasisRepresentation.Adiabatic:
-        # rho0_flouqet_diabatic = get_floquet_rho0(np.array([[1, 0], [0, 0.0]], dtype=np.complex128), NF)
-        rho0_floquet_diabatic = get_floquet_rho0_fully_sampled(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
+        rho0_flouqet_diabatic = get_floquet_rho0(np.array([[1, 0], [0, 0.0]], dtype=np.complex128), NF)
+        # rho0_floquet_diabatic = get_floquet_rho0_fully_sampled(np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128), NF)
         hami_return = eval_nonadiabatic_hamiltonian(0.0, np.array([r0]), hamiltonian, basis_rep)
-        rho0_flouqet_adiabatic = diabatic_to_adiabatic(rho0_floquet_diabatic, hami_return.evecs)
+        rho0_flouqet_adiabatic = diabatic_to_adiabatic(rho0_flouqet_diabatic, hami_return.evecs)
         # rho0_floquet_diabatic = get_floquet_rho0_fully_sampled(np.array([[1, 0], [0, 0.0]], dtype=np.complex128), NF)
         # hami_return = eval_nonadiabatic_hamiltonian(0.0, np.array([r0]), hamiltonian, BasisRepresentation.Diabatic)
         # rho0_flouqet_adiabatic = diabatic_to_adiabatic(rho0_floquet_diabatic, hami_return.evecs)
@@ -198,7 +187,7 @@ def estimate_delay_time(A, B, C, D, p0, mass: float=2000.0):
         solver=NonadiabaticDynamicsMethods.EHRENFEST,
         numerical_integrator=NumericalIntegrators.ZVODE,
         dt=1,
-        save_every=1
+        save_every=5
     )
     def stop_condition(t, s, states):
         r, p, _ = s.get_variables()
@@ -226,8 +215,8 @@ def generate_ensembles(
     assert (initial_diabatic_states >= 0) and (initial_diabatic_states < 2), f"Valid states should be between 0 and 1. Got {initial_diabatic_states}."
     rho0_diabatic = np.zeros((2, 2), dtype=np.complex128)
     rho0_diabatic[initial_diabatic_states, initial_diabatic_states] = 1.0
-    # rho0_diabatic_floquet = get_floquet_rho0(rho0_diabatic, NF)
-    rho0_diabatic_floquet = get_floquet_rho0_fully_sampled(rho0_diabatic, NF)   
+    rho0_diabatic_floquet = get_floquet_rho0(rho0_diabatic, NF)
+    # rho0_diabatic_floquet = get_floquet_rho0_fully_sampled(rho0_diabatic, NF)   
     
     assert (n_samples := len(R0_samples)) == len(P0_samples), "The number of R0 and P0 samples should be the same."
     ensemble = ()
@@ -255,7 +244,7 @@ def generate_ensembles(
             solver=solver,
             numerical_integrator=integrator,
             dt=0.1,
-            save_every=10,
+            save_every=1,
         )
         ensemble += (dyn,)
     return ensemble
@@ -295,231 +284,218 @@ def run_tullyone_pulsed_ensemble(
     )
     pulse = emsemble[0].hamiltonian.pulse
     
-    return run_nonadiabatic_dynamics_ensembles(emsemble, stop_condition, break_condition), pulse
+    return run_nonadiabatic_dynamics_ensembles(emsemble, stop_condition, break_condition, inhomogeneous=True), pulse
+
+# plot utilities
+class AppendableFigure:
+    def __init__(self, fig=None, ax=None, gs=None, axs=None, name_prefix=None):
+        self.fig = fig
+        self.ax = ax
+        self.gs = gs
+        self.axs = axs
+        self.lines = []
+        self.labels = []
+        self.name_prefix: str = name_prefix
         
+    def add_plot(self, x, y, **kwargs):
+        line, = self.ax.plot(x, y, **kwargs)
+        self.lines.append(line)
+        self.labels.append(kwargs.get('label', None))
+        
+    def show(self, legend_each=False):
+        if self.ax is not None:
+            self.ax.legend(self.lines, self.labels)
+            
+        if self.axs is not None:
+            if legend_each:
+                for ax in self.axs:
+                    ax.legend()
+            else:
+                # choose the last axis to represent the legend
+                ax = self.axs[-1]
+                fig = self.fig
+                # self.fig.legend(axs[2].get_legend_handles_labels()[0], axs[2].get_legend_handles_labels()[1], loc='upper center', bbox_to_anchor=(0.5, 1.05), ncol=3)
+                fig.legend(ax.get_legend_handles_labels()[0], ax.get_legend_handles_labels()[1], loc='upper center', bbox_to_anchor=(0.5, 1.15), ncol=2)
+        self.fig.tight_layout()
+        # plt.show()
+    
+    def set_xlim(self, xlim):
+        if self.ax is not None:
+            self.ax.set_xlim(xlim)
+        if self.axs is not None:
+            for ax in self.axs:
+                ax.set_xlim(xlim)
+                
+    def savefig(self, **kwargs):
+        if self.name_prefix is None:
+            import warnings
+            warnings.warn(f"cannot save a AppendableFigure without a name prefix.")
+            return None
+        fname_str = self.name_prefix
+        for key, val in kwargs.items():
+            fname_str += f"_{key}-{val}" 
+        fname_str += ".pdf"
+        self.fig.savefig(fname_str)
+
+class FigurePulse(AppendableFigure):
+    def __init__(self):
+        name_prefix = 'pulse'
+        fig = plt.figure(dpi=300, figsize=(3.5, 2.5))
+        ax = fig.add_subplot(111)
+        super().__init__(fig, ax, name_prefix=name_prefix)
+        self.ax.set_xlabel('Time')
+        self.ax.set_ylabel('Pulse')
+        
+class FigureNuclearDynamics(AppendableFigure):
+    def __init__(self):
+        name_prefix = 'nuclear'
+        
+        fig = plt.figure(dpi=300, figsize=(3.5*2, 2.5))
+        gs = fig.add_gridspec(1, 2)
+        axs = gs.subplots().flatten()
+        super().__init__(fig, gs=gs, axs=axs, name_prefix=name_prefix)
+        ylabels = ['R', 'P']
+        for ax, ylabel in zip(axs, ylabels):
+            ax.set_xlabel('Time')
+            ax.set_ylabel(ylabel)
+            
+    def add_plot(self, output: dict, **kwargs):
+        time: ArrayLike = output['time']
+        R: ArrayLike = output['states']['R']
+        P: ArrayLike = output['states']['P']
+        self.axs[0].plot(time, R, **kwargs)
+        self.axs[1].plot(time, P, **kwargs)
+            
+class FigurePopulations(AppendableFigure):
+    def __init__(self):
+        name_prefix = 'populations'
+        
+        fig = plt.figure(dpi=300, figsize=(3.5*2, 2.5))
+        gs = fig.add_gridspec(1, 2)
+        axs = gs.subplots().flatten()
+        super().__init__(fig, gs=gs, axs=axs, name_prefix=name_prefix)
+        ylabels = [r'$P_0$', r'$P_1$']
+        for ax, ylabel in zip(axs, ylabels):
+            ax.set_xlabel('Time')
+            ax.set_ylabel(ylabel)
+            
+    def add_plot(self, output: dict, **kwargs):
+        time: ArrayLike = output['time']
+        adiab_populations: ArrayLike = output['adiab_populations']
+        self.axs[0].plot(time, adiab_populations[:, 0], **kwargs)
+        self.axs[1].plot(time, adiab_populations[:, 1], **kwargs)  
+        
+class FigureEnergetics(AppendableFigure):
+    def __init__(self,):
+        name_prefix = 'energetics'
+        
+        fig = plt.figure(dpi=300, figsize=(3.5*3, 2.5))
+        gs = fig.add_gridspec(1, 3)
+        axs = gs.subplots().flatten()
+        super().__init__(fig, gs=gs, axs=axs, name_prefix=name_prefix)
+        axs[0].set_ylabel('KE')
+        axs[1].set_ylabel('PE')
+        axs[2].set_ylabel(r'$\Delta$ TE')
+        
+        ylabels = ['KE', 'PE', r'$\Delta$ TE']
+        
+        for ax, ylabel in zip(axs, ylabels):
+            ax.set_xlabel('Time')
+            ax.set_ylabel(ylabel) 
+            
+    def add_plot(self, output: dict, **kwargs):
+        time: ArrayLike = output['time']
+        KE: ArrayLike = output['KE']
+        PE: ArrayLike = output['PE']
+        TE: ArrayLike = KE + PE
+        Delta_TE = TE - TE[0]
+        self.axs[0].plot(time, KE, **kwargs)
+        self.axs[1].plot(time, PE, **kwargs)
+        self.axs[2].plot(time, Delta_TE, **kwargs)
     
 def main(
     Omega: float, 
     tau: float, 
     NF: int=1, 
-    pulse_type: TullyOnePulseTypes = TullyOnePulseTypes.PULSE_TYPE2
+    pulse_type: TullyOnePulseTypes = TullyOnePulseTypes.PULSE_TYPE2,
+    n_fssh_traj: int = 16
 ) -> tuple:  
     """ Compare diabatic Ehrenfest, diabatic and adiabatic Floquet Ehrenfest. """
+    # prepare the figures
+    fig_pulse = FigurePulse()
+    fig_nuclear_dynamics = FigureNuclearDynamics()
+    fig_populations = FigurePopulations()
+    fig_energy = FigureEnergetics()
+    
+    figs = (fig_pulse, fig_nuclear_dynamics, fig_populations, fig_energy)
+    
+    def update_figs(output, pulse, label, ls):
+        fig_pulse.add_plot(output['time'], [pulse(t) for t in output['time']], label=label, linestyle=ls)
+        fig_nuclear_dynamics.add_plot(output, label=label, linestyle=ls)
+        fig_populations.add_plot(output, label=label, linestyle=ls)
+        fig_energy.add_plot(output, label=label, linestyle=ls)
+        
+        for fig in figs:
+            fig.set_xlim((400, 1000))
+        
+    def show_figs():
+        fig_pulse.show()
+        fig_nuclear_dynamics.show()
+        fig_populations.show()
+        fig_energy.show()
+        # for fig in figs:
+        #     fig.fig.tight_layout()
+        # for fig in figs:
+        plt.show()
+        
+    def save_figs():
+        for fig in figs:
+            fig.savefig(Omega=Omega, tau=tau, NF=NF, ntraj=n_fssh_traj)
+    
     r0 = -10.0
     p0 = 30
     print("====================================================", flush=True)
     start = time.perf_counter() 
     output_d, pulse_d = run_tullyone_pulsed(r0, p0, Omega, tau, pulse_type)
+    update_figs(output_d, pulse_d, 'Ehrenfest Diabatic', '-')
     print(f"Time elapsed for Ehrenfest Diabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
     print("====================================================", flush=True)
     
     start = time.perf_counter()
-    output_floq_diabatic, pulse_f_diabatic = run_tullyone_pulsed_floquet(r0, p0, Omega, tau, pulse_type=pulse_type, NF=NF, basis_rep=BasisRepresentation.Diabatic)
+    output_floq_diabatic, pulse_f_diabatic = run_tullyone_pulsed_floquet(r0, p0, Omega, tau, 
+                                                                         pulse_type=pulse_type, NF=NF, 
+                                                                         basis_rep=BasisRepresentation.Diabatic)
+    update_figs(output_floq_diabatic, pulse_f_diabatic, 'Floquet Ehrenfest Diabatic', '--')
     print(f"Time elapsed for Floquet Ehrenfest Diabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
     print("====================================================", flush=True)
     
     start = time.perf_counter()
-    output_floq_adiabatic, pulse_f_adiabatic = run_tullyone_pulsed_floquet(r0, p0, Omega, tau, pulse_type=pulse_type, NF=NF, basis_rep=BasisRepresentation.Adiabatic)
+    output_floq_adiabatic, pulse_f_adiabatic = run_tullyone_pulsed_floquet(r0, p0, Omega, tau, 
+                                                                           pulse_type=pulse_type, NF=NF, 
+                                                                           basis_rep=BasisRepresentation.Adiabatic)
+    update_figs(output_floq_adiabatic, pulse_f_adiabatic, 'Floquet Ehrenfest Adiabatic', '-.')
     print(f"Time elapsed for Floquet Ehrenfest Adiabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
     
-    # start = time.perf_counter()
-    # output_floq_fssh, pulse_floq_fssh = run_tullyone_pulsed_ensemble(r0, p0, Omega, tau, pulse_type=pulse_type, n_samples=10, NF=NF, basis_rep=BasisRepresentation.Adiabatic)
-    # print(f"Time elapsed for Floquet FSSH Adiabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
-    # print("====================================================", flush=True)
-    
-    # return pulse_d, output_d, pulse_f_adiabatic, output_floq_adiabatic, pulse_f_diabatic, output_floq_diabatic, pulse_floq_fssh, output_floq_fssh
-    return pulse_d, output_d, pulse_f_adiabatic, output_floq_adiabatic, pulse_f_diabatic, output_floq_diabatic
-    
-
-def compute_reduced_rho(rho_F: np.ndarray, dim_sys: int=2):
-    assert rho_F.shape[0] % dim_sys == 0
-    dim_F = rho_F.shape[0] // dim_sys
-    assert dim_F % 2 == 1
-    NF = (dim_F - 1) // 2
-    
-    rho_block = get_block_representation(rho_F, dim_F, dim_sys)
-    rho_reduced = np.zeros((dim_sys, dim_sys), dtype=np.complex128)
-    for i in range(dim_F):
-        rho_reduced += rho_block[i, i]
-    return rho_reduced
-
-def plot_all(pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd):
-    import matplotlib.pyplot as plt
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    time_d = output_d['time']
-    time_fa = output_fa['time']
-    time_fd = output_fd['time']
-    
-    ax.plot(time_d,  [pulse_d (t) for t in time_d], label='Ehrenfest Diabatic')
-    ax.plot(time_fa, np.abs([pulse_fa(t) for t in time_fa]), label='Floquet Ehrenfest Adiabatic')
-    ax.plot(time_fd, np.abs([pulse_fd(t) for t in time_fd]), label='Floquet Ehrenfest Diabatic')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Pulse')
-    
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time_d, output_d['states']['R'], label='Ehrenfest Diabatic')
-    ax.plot(time_fa, output_fa['states']['R'], label='Floquet Ehrenfest Adiabatic')
-    ax.plot(time_fd, output_fd['states']['R'], label='Floquet Ehrenfest Diabatic')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('R')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time_d, output_d['states']['P'], label='Ehrenfest Diabatic')
-    ax.plot(time_fa, output_fa['states']['P'], label='Floquet Ehrenfest Adiabatic')
-    ax.plot(time_fd, output_fd['states']['P'], label='Floquet Ehrenfest Diabatic')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('P')
-    ax.legend()
-    plt.show()
-    
-    dimF = output_fd['states']['rho'][0].shape[0] // output_d['states']['rho'][0].shape[0]
-    NF = (dimF - 1) // 2
-    
-    floquet_offsets = np.arange(-NF, NF+1).astype(int)
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    # pop_fa_dim0 = sum(output_fa['adiab_populations'].T[:2*NF+1])
-    # pop_fa_dim1 = sum(output_fa['adiab_populations'].T[2*NF+1:])
-    # pop_fa = np.array([pop_fa_dim0, pop_fa_dim1]).T
-    # pop_fd_dim0 = sum(output_fd['adiab_populations'].T[:2*NF+1])
-    # pop_fd_dim1 = sum(output_fd['adiab_populations'].T[2*NF+1:])
-    # pop_fd = np.array([pop_fd_dim0, pop_fd_dim1]).T
-    time_list = [time_d, time_fa, time_fd]
-    labels = ['Ehrenfest Diabatic', 'Floquet Ehrenfest Adiabatic', 'Floquet Ehrenfest Diabatic']
-    ls_list = ['-', '--', '-.']
-    for ii, pops in enumerate((output_d['adiab_populations'], output_fa['adiab_populations'], output_fd['adiab_populations'])):  
-        for jj in range(pops.shape[1]):
-            ax.plot(time_list[ii], pops[:, jj], label=f"$P_{jj}$ from {labels[ii]}", ls=ls_list[ii])
-            
-    ax.set_xlim(400, 1000)
-    # for i in range(output_d['adiab_populations'].shape[1]):
-    #     ax.plot(time_d, output_d['adiab_populations'][:, i], label='Ehrenfest Diabatic')
-    #     ax.plot(time_fa, pop_fa[:, i], ls='--', label='Floquet Ehrenfest Adiabatic')
-    #     ax.plot(time_fd, pop_fd[:, i], ls='-.', label='Floquet Ehrenfest Diabatic')
-    ax.legend()
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('Populations')
-    fig.savefig("populations-pulse2.pdf")
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time_d, output_d['KE'], label='Ehrenfest Diabatic')
-    ax.plot(time_fa, output_fa['KE'], label='Floquet Ehrenfest Adiabatic')
-    ax.plot(time_fd, output_fd['KE'], label='Floquet Ehrenfest Diabatic')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('KE')
-    ax.legend()
-    plt.show() 
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time_d, output_d['PE'], label='Ehrenfest Diabatic')
-    ax.plot(time_fa, output_fa['PE'], label='Floquet Ehrenfest Adiabatic')
-    ax.plot(time_fd, output_fd['PE'], label='Floquet Ehrenfest Diabatic')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('PE')
-    ax.legend()
-    plt.show()
-    
-    def get_TE(PE, KE):
-        return np.array(PE) + np.array(KE)
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time_d, get_TE(output_d['KE'], output_d['PE']), label='Ehrenfest Diabatic')
-    ax.plot(time_fa, get_TE(output_fa['KE'], output_fa['PE']), label='Floquet Ehrenfest Adiabatic')
-    ax.plot(time_fd, get_TE(output_fd['PE'], output_fd['KE']), label='Floquet Ehrenfest Diabatic')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('TE')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time_d, output_d['meanF'], label='Ehrenfest Diabatic')
-    ax.plot(time_fa, output_fa['meanF'], label='Floquet Ehrenfest Adiabatic')
-    ax.plot(time_fd, output_fd['meanF'], label='Floquet Ehrenfest Diabatic')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('meanF')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    R_fa = output_fa['states']['R']
-    dij_fa = output_fa['dij']
-    for ii in range(dij_fa.shape[-1]):
-        for jj in range(ii+1, dij_fa.shape[-1]):
-            ax.plot(time_fa, np.abs(dij_fa[:, 0, ii, jj]), label=f"d_{ii}{jj}")
-    ax.set_xlabel('time_fa')
-    ax.set_ylabel('dij') 
-    ax.legend()
-    plt.show()
-    
-def test_floquet_HF_main(Omega: float, tau: float, pulse_type: TullyOnePulseTypes):
-    A = 0.01
-    B = 1.6
-    C = 0.005
-    D = 1.0
-    
-    p0 = 10
-    
-    NF: int = 1
-    
     start = time.perf_counter()
-    _delay = estimate_delay_time(A, B, C, D, p0)
-    print(f"Time elapsed for estimating the delay time is {time.perf_counter()-start:.5f} seconds.", flush=True)
-    hamiltonian = get_tullyone(
-        t0=_delay, Omega=Omega, tau=tau,
-        pulse_type=pulse_type, td_method=TD_Methods.FLOQUET, NF=NF
-    )
+    output_floq_fssh, pulse_floq_fssh = run_tullyone_pulsed_ensemble(r0, p0, Omega, tau, pulse_type=pulse_type, 
+                                                                     n_samples=n_fssh_traj, NF=NF, 
+                                                                     basis_rep=BasisRepresentation.Adiabatic)
+    update_figs(output_floq_fssh, pulse_floq_fssh, 'Floquet FSSH Adiabatic', ':')
+    print(f"Time elapsed for Floquet FSSH Adiabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
+    print("====================================================", flush=True)
     
-    def get_d(r, t):
-        hami_return = eval_nonadiabatic_hamiltonian(t, np.array([r]), hamiltonian=hamiltonian, basis_rep=BasisRepresentation.Adiabatic)
-        HF = hami_return.H
-        dHFdR = hami_return.dHdR
-        d = hami_return.d
-        HF_block = get_block_representation(HF, 2*NF+1, 2)   
-        return d
-        
-    # r = -10
-    #r = -0.0001
-    r1, r2= -1e-8, 1e-8
-    t1, t2 = _delay - 0.1, _delay + 0.1
-    
-    d1, d2 = get_d(r1, t1), get_d(r2, t2)
-    # d2, d1 = get_d(r2, t2), get_d(r1, t1)
+    show_figs() 
+    save_figs()
     
 # %%Figure,  
 if __name__ == "__main__":
-    Omega = 0.3; tau = 100
-    # pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd, pulse_fssh, output_fssh = main(Omega, tau, NF=1, pulse_type=TullyOnePulseTypes.PULSE_TYPE2)
-    pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd= main(Omega, tau, NF=1, pulse_type=TullyOnePulseTypes.PULSE_TYPE1)
+    Omega = 0.3; tau = 100; NF=1
+    pulse_type = TullyOnePulseTypes.PULSE_TYPE3  
+    n_fssh_traj = 2
+    main(Omega, tau, NF=NF, pulse_type=pulse_type, n_fssh_traj=n_fssh_traj)
     
 
-# %%
-if __name__ == "__main__":
-    # plot_all(pulse_d, output_d, pulse_f, output_floquet)
-    plot_all(pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd)
-    # plot_all(pulse_d, output_d, pulse_fa, output_fa, pulse_fd, output_fd, pulse_fssh, output_fssh)
-
-
-# %%
-if __name__ == "__main__":
-    Omega = 0.2
-    tau = 120
-    test_floquet_HF_main(Omega, tau, TullyOnePulseTypes.PULSE_TYPE3)
 # %%

@@ -142,7 +142,8 @@ def main(ntrajs: int, basis_rep: BasisRepresentation = BasisRepresentation.Diaba
         0, position_samples, momentum_samples, mass,
         qm_rep=QunatumRepresentation.DensityMatrix,
         basis_rep=basis_rep,
-        solver=NonadiabaticDynamicsMethods.EHRENFEST,
+        # solver=NonadiabaticDynamicsMethods.EHRENFEST,
+        solver=solver,
         integrator=NumericalIntegrators.ZVODE,
     )
     
@@ -281,7 +282,7 @@ if __name__ == "__main__":
 if __name__ == "__main__":
     output_diabatic = main(ntrajs=200, basis_rep=BasisRepresentation.Diabatic)
     output_adiabatic = main(ntrajs=200, basis_rep=BasisRepresentation.Adiabatic)
-    output_fssh = main(ntrajs=200, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
+    output_fssh = main(ntrajs=3000, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
     _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
     
 

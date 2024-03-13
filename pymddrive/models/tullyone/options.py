@@ -228,11 +228,7 @@ def _test_tullyone_pulsed(pulse_type: TullyOnePulseTypes):
     _plot_tullyone_hamiltonian(r, E, F)
     _plot_tullyone_deriv_cpouplings(r, d)
 
-def _test_tullyone_floquet(pulse_type: TullyOnePulseTypes):
-    Omega = 0.3
-    tau = 100
-    t0 = 10
-    NF = 1
+def _test_tullyone_floquet(pulse_type: TullyOnePulseTypes, Omega: float=0.3, tau: float=100, t0: float=10, NF: int=1):
     hamiltonian = get_tullyone(
         t0=t0, Omega=Omega, tau=tau,
         pulse_type=pulse_type,
@@ -271,17 +267,21 @@ if __name__ == "__main__":
     # print("=====================================================")
 
     # test the time-dependent Floquet TullyOne model with different pulse types
+    Omega = 0.03
+    tau = 100
+    t0 = 10
+    NF = 1
     print("=====================================================")
     print("Testing the Floquet TullyOne with PulseType1")
-    _test_tullyone_floquet(TullyOnePulseTypes.PULSE_TYPE1)
+    _test_tullyone_floquet(TullyOnePulseTypes.PULSE_TYPE1, Omega=Omega, tau=tau, t0=t0, NF=NF)
     print("=====================================================")
     print("=====================================================")
     print("Testing the Floquet TullyOne with PulseType2")
-    _test_tullyone_floquet(TullyOnePulseTypes.PULSE_TYPE2)
+    _test_tullyone_floquet(TullyOnePulseTypes.PULSE_TYPE2, Omega=Omega, tau=tau, t0=t0, NF=NF) 
     print("=====================================================")
     print("=====================================================")
     print("Testing the Floquet TullyOne with PulseType3")
-    _test_tullyone_floquet(TullyOnePulseTypes.PULSE_TYPE3)
+    _test_tullyone_floquet(TullyOnePulseTypes.PULSE_TYPE3, Omega=Omega, tau=tau, t0=t0, NF=NF)
     print("=====================================================")
 
 # %%
