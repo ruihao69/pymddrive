@@ -412,6 +412,10 @@ class FigureEnergetics(AppendableFigure):
         self.axs[0].plot(time, KE, **kwargs)
         self.axs[1].plot(time, PE, **kwargs)
         self.axs[2].plot(time, Delta_TE, **kwargs)
+        
+def save_data(output: dict, label):
+    np.savez(f"{label}.npz", **output) 
+    
     
 def main(
     Omega: float, 
@@ -420,7 +424,6 @@ def main(
     pulse_type: TullyOnePulseTypes = TullyOnePulseTypes.PULSE_TYPE2,
     n_fssh_traj: int = 16
 ) -> tuple:  
-    """ Compare diabatic Ehrenfest, diabatic and adiabatic Floquet Ehrenfest. """
     # prepare the figures
     fig_pulse = FigurePulse()
     fig_nuclear_dynamics = FigureNuclearDynamics()
@@ -446,7 +449,7 @@ def main(
         # for fig in figs:
         #     fig.fig.tight_layout()
         # for fig in figs:
-        plt.show()
+        # plt.show()
         
     def save_figs():
         for fig in figs:
@@ -458,6 +461,7 @@ def main(
     start = time.perf_counter() 
     output_d, pulse_d = run_tullyone_pulsed(r0, p0, Omega, tau, pulse_type)
     update_figs(output_d, pulse_d, 'Ehrenfest Diabatic', '-')
+    save_data(output_d, 'Ehrenfest_Diabatic')
     print(f"Time elapsed for Ehrenfest Diabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
     print("====================================================", flush=True)
@@ -467,6 +471,7 @@ def main(
                                                                          pulse_type=pulse_type, NF=NF, 
                                                                          basis_rep=BasisRepresentation.Diabatic)
     update_figs(output_floq_diabatic, pulse_f_diabatic, 'Floquet Ehrenfest Diabatic', '--')
+    save_data(output_floq_diabatic, 'Floquet_Ehrenfest_Diabatic')
     print(f"Time elapsed for Floquet Ehrenfest Diabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
     print("====================================================", flush=True)
@@ -476,6 +481,7 @@ def main(
                                                                            pulse_type=pulse_type, NF=NF, 
                                                                            basis_rep=BasisRepresentation.Adiabatic)
     update_figs(output_floq_adiabatic, pulse_f_adiabatic, 'Floquet Ehrenfest Adiabatic', '-.')
+    save_data(output_floq_adiabatic, 'Floquet_Ehrenfest_Adiabatic')
     print(f"Time elapsed for Floquet Ehrenfest Adiabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
     
@@ -484,18 +490,41 @@ def main(
                                                                      n_samples=n_fssh_traj, NF=NF, 
                                                                      basis_rep=BasisRepresentation.Adiabatic)
     update_figs(output_floq_fssh, pulse_floq_fssh, 'Floquet FSSH Adiabatic', ':')
+    save_data(output_floq_fssh, 'Floquet_FSSH_Adiabatic')
     print(f"Time elapsed for Floquet FSSH Adiabatic is {time.perf_counter()-start:.5f} seconds.", flush=True)
     print("====================================================", flush=True)
     
     show_figs() 
     save_figs()
     
+    
 # %%Figure,  
 if __name__ == "__main__":
+    
+    # argparse n_fssh_traj
+    parser = argparse.ArgumentParser(description="Run the comparison of the TullyOne model with Floquet dynamics.")
+    parser.add_argument("--n_fssh_traj", type=int, default=24, help="The number of FSSH trajectories.")
+    
+    n_fssh_traj = parser.parse_args().n_fssh_traj
+    
+    
     Omega = 0.3; tau = 100; NF=1
     pulse_type = TullyOnePulseTypes.PULSE_TYPE3  
-    n_fssh_traj = 2
+    
+    project_prefix = f"floquet_comparison_pulse3_{Omega}_{tau}_{NF}_{n_fssh_traj}"
+    os.makedirs(project_prefix, exist_ok=True)
+    
     main(Omega, tau, NF=NF, pulse_type=pulse_type, n_fssh_traj=n_fssh_traj)
+    
+    import shutil
+    import glob
+    
+    # move the figures and data to the project directory
+    moves = glob.glob("*.pdf")
+    moves.extend(glob.glob("*.npz"))
+    for mm in moves:
+        shutil.move(mm, project_prefix)
+    
     
 
 # %%
