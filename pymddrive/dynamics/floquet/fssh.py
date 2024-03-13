@@ -37,9 +37,13 @@ def _diab_from_adiab_active_surface(
     Omega: float,
     dim: int,
 ) -> Tuple[ArrayLike, ArrayLike]:
-    adiab_populations = np.zeros(dim)
-    adiab_populations[active_surface] = 1.0
-    diab_rhoF = adiabatic_to_diabatic(np.diag(adiab_populations), evecs_F)
+    # adiab_populations = np.zeros(dim)
+    # adiab_populations[active_surface] = 1.0
+    adiab_psiF = np.zeros(dim, dtype=complex)
+    adiab_psiF[active_surface] = 1.0
+    diab_psiF = evecs_F.conjugate().T @ adiab_psiF
+    # diab_rhoF = adiabatic_to_diabatic(np.diag(adiab_populations), evecs_F)
+    diab_rhoF = np.outer(diab_psiF, diab_psiF.conjugate())
     diab_rho = get_Op_from_OpF(diab_rhoF, time, Omega, NF)
     return diab_rho, diab_rho.diagonal().real
 

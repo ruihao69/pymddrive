@@ -18,7 +18,7 @@ from collections import namedtuple
 from dataclasses import dataclass, field
 
 FSSHCache = namedtuple('FSSHCache', 'active_surf, evals, evecs, H_diab, hamiltonian')
-FSSHProperties = namedtuple('FSSHProperties', 'KE, PE, diab_populations, adiab_populations')
+FSSHProperties = namedtuple('FSSHProperties', 'KE, PE, diab_populations, adiab_populations, active_surf')
 
 @dataclass(frozen=True, order=True, unsafe_hash=True)
 class ActiveSurface:
@@ -162,9 +162,11 @@ def _evaluate_hopping_prob(
     v_dot_d: ArrayLike,
     prob_vec: ArrayLike,
 ) -> ArrayLike:
+    # tr_rho: float = np.trace(rho).real
     for to_ in range(prob_vec.shape[0]): 
         if from_ == to_:
             continue
+        # prob_vec[to_] = _hopping_prob(from_, to_, dt, v_dot_d, rho) / tr_rho
         prob_vec[to_] = _hopping_prob(from_, to_, dt, v_dot_d, rho)
         prob_vec[from_] -= prob_vec[to_]
     return prob_vec
@@ -235,21 +237,37 @@ def momentum_rescale(
                                    # i: the index of the classical degree of freedom
                                    # j, k: the index of the electronic states
                                    
-    normalized_direction = d_component / LA.norm(d_component)
+    d_component_norm = LA.norm(d_component)
+    normalized_direction = d_component / d_component_norm 
     M_inv = 1.0 / mass 
     dE = evals[to_] - evals[from_]
     
     # solve the quadratic equation
     a = 0.5 * np.sum(M_inv * normalized_direction**2)
-    b = np.vdot(P_current / M_inv, normalized_direction)
+    b = np.vdot(P_current * M_inv, normalized_direction)
     c = dE
-    roots = np.roots([a, b, c])
-    if np.iscomplexobj(roots):
+    b2_4ac = b**2 - 4 * a * c
+    if b2_4ac < 0:
         return False, P_current
+    elif b < 0:
+        gamma: float = (b + np.sqrt(b2_4ac)) / (2 * a)
+        # print(f"the gamma is {gamma}") 
+        return True, P_current - gamma * normalized_direction 
+    elif b >= 0:
+        # print(f"the gamma is {gamma}")
+        gamma: float = (b - np.sqrt(b2_4ac)) / (2 * a)
+        return True, P_current - gamma * normalized_direction 
     else:
-        gamma = np.min(roots)
-        P_rescaled = P_current - gamma * normalized_direction 
-        return True, P_rescaled
+        return False, P_current
+
+    # roots = np.roots([a, b, c])
+    # print(f"the roots are {roots}")
+    # if np.iscomplexobj(roots):
+    #     return False, P_current
+    # else:
+    #     gamma = np.min(roots)
+    #     P_rescaled = P_current - gamma * normalized_direction 
+    #     return True, P_rescaled
     
 def calculate_properties(t: float, s: State, cache: FSSHCache, mass: ArrayLike) -> FSSHProperties:
     R, P, rho = s.get_variables()
@@ -259,8 +277,9 @@ def calculate_properties(t: float, s: State, cache: FSSHCache, mass: ArrayLike) 
     if isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
         NF: int = hamiltonian.NF
         Omega: float = hamiltonian.get_carrier_frequency()
-        _, pop_adiab = get_rho_and_populations(t, active_surf, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Adiabatic)
-        _, pop_diab = get_rho_and_populations(t, active_surf, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Diabatic)
+        active_surf: ActiveSurface
+        _, pop_adiab = get_rho_and_populations(t, active_surf.index, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Adiabatic)
+        _, pop_diab = get_rho_and_populations(t, active_surf.index, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Diabatic)
     else:
         # calculate the adiabatic populations
         pop_adiab = np.zeros_like(evals)
@@ -268,7 +287,7 @@ def calculate_properties(t: float, s: State, cache: FSSHCache, mass: ArrayLike) 
         # calculate the diabatic populations
         pop_diab = calculate_adiabatic_populations(active_surf.index, evecs, rho)
     
-    return FSSHProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab)
+    return FSSHProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab, active_surf=active_surf.index)
 
 @jit(nopython=True)
 def _initialize_adiabatic_active_surf(
@@ -277,8 +296,9 @@ def _initialize_adiabatic_active_surf(
     random_number: float = np.random.rand()
     init_state: int = 0
     accumulative_prob: float = 0.0
+    tr_rho: float = np.trace(rho_adiab).real # normalize the probability
     while (init_state < rho_adiab.shape[0]):
-        accumulative_prob += rho_adiab[init_state, init_state].real
+        accumulative_prob += rho_adiab[init_state, init_state].real / tr_rho
         if accumulative_prob > random_number:
             break
         init_state += 1

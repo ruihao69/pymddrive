@@ -20,7 +20,7 @@ def get_floquet_multipliers(
     Omega: float, # driving frequency
     NF: int, # floquet levels cutoff
 ) -> ArrayLike: # return floquet multipliers
-    return np.exp(-1j * np.arange(-NF, NF + 1) * Omega * t)
+    return np.exp(1.j * np.arange(-NF, NF + 1) * Omega * t)
 
 def get_Op_from_OpF(
     op_f: ArrayLike, # operator in F-space

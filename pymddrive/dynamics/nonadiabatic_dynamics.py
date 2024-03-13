@@ -20,6 +20,8 @@ from typing import Union, Tuple, Any, Type, Callable, Optional, Dict
 from numbers import Real
 from functools import partial
 
+MAX_STEPS: int = int(1e6)
+
 
 class NonadiabaticDynamics(Dynamics):
     def __init__(
@@ -118,6 +120,7 @@ class NonadiabaticDynamics(Dynamics):
             'method': 'bdf',
             'atol': self.atol, 
             'rtol': self.rtol,
+            'nsteps': MAX_STEPS
         }
         if max_step is not None:
             assert_valid_real_positive_value(max_step)
@@ -132,6 +135,8 @@ class NonadiabaticDynamics(Dynamics):
     
     def _diabatic_ehrenfest_in_conical_intersection(self, t: float, s: State, cache: Any) -> Tuple[float, State, Any]:
         TOL_CONOCAL_INTERSECTION: float = 3e-5
+        # RTOL = 3e-3
+        # R_CI = 0.0
         dE_min: float = -1
         deriv_diabatic_ehrenfest = self.get_deriv(
             quatum_representation=self.qm_rep,
@@ -144,7 +149,8 @@ class NonadiabaticDynamics(Dynamics):
         hami_return = eval_nonadiabatic_hamiltonian(t, R, self.hamiltonian, basis_rep=BasisRepresentation.Diabatic)
         rho[:] = adiabatic_to_diabatic(rho, hami_return.evecs)
         
-        while dE_min < TOL_CONOCAL_INTERSECTION:
+        # while (dE_min < TOL_CONOCAL_INTERSECTION) and (R[0] < R_CI + RTOL):
+        while (dE_min < TOL_CONOCAL_INTERSECTION):
             t, state_during_conical_intersection = rk4(
                 t, state_during_conical_intersection, deriv_diabatic_ehrenfest, dt=self.dt
             )
@@ -153,7 +159,7 @@ class NonadiabaticDynamics(Dynamics):
             evals = hami_return.evals
             dE_min = np.min(evals[1:] - evals[:-1]) 
             
-        _, _, rho = state_during_conical_intersection.get_variables()
+        R, P, rho = state_during_conical_intersection.get_variables()
         rho[:] = diabatic_to_adiabatic(rho, hami_return.evecs)
         state_after_conical_intersection = State.from_unstructured(state_during_conical_intersection.flatten(), dtype=self.dtype, stype=self.stype, copy=True)
         return t, state_after_conical_intersection, cache
@@ -169,15 +175,22 @@ class NonadiabaticDynamics(Dynamics):
         t, y = self.ode_solver.t, self.ode_solver.y
         s_new = State.from_unstructured(y, dtype=self.dtype, stype=self.stype, copy=False)
         R_new, P_new, rho_new = s_new.get_variables()
+        PTOL : float = 1e2
         hami_return = eval_nonadiabatic_hamiltonian(t, R_new, self.hamiltonian, basis_rep=self.basis_rep)
-        self.hamiltonian.update_last_evecs(hami_return.evecs)
+        self.hamiltonian.update_last_evecs(hami_return.evecs) 
+
+        # if self.basis_rep == BasisRepresentation.Adiabatic:
+        #     print(f'{R_new=}', f'{P_new=}', f'{np.isnan(rho_new).any()=}')
         # self.hamiltonian.update_last_deriv_couplings(hami_return.d)
         if self.do_hopping:
             has_hopped, new_active_surf, P_rescaled = fssh.hopping(self.dt, rho_new, hami_return, P_new, self.mass, cache.active_surf)
             if has_hopped:
+                # DeltaPE = np.sum(P_rescaled**2 - P_new**2) / (2 * self.mass)
+                # DeltaE = hami_return.evals[new_active_surf.index] - hami_return.evals[cache.active_surf.index]
+                # print(f'{DeltaPE=}', f'{DeltaE=}', f'{DeltaPE+DeltaE=}')
                 P_new[:] = P_rescaled
                 self.ode_solver.set_initial_value(s_new.flatten(), t)
-            cache = fssh.FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs)
+            cache = fssh.FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=self.hamiltonian)
         evals = hami_return.evals
         dE_min :float = np.min(evals[1:] - evals[:-1])
         TOL_CONOCAL_INTERSECTION = 3e-5

@@ -53,11 +53,63 @@ def reduce_ensemble_output(output: Generator[Dict, None, None]) -> Dict:
         if key == 'states':
             for field in output_reduced['states'].dtype.names:
                 output_reduced['states'][field] /= ntraj
+        elif key == 'active_surf':
+            continue
         else:
             output_reduced[key] /= ntraj
+    output_reduced.pop('active_surf', None)
         
     return {'time': time_cached, **output_reduced}
-            
+
+def reduce_ensemble_output_inhomogeneous(output: Generator[Dict, None, None]) -> Dict:
+    EXPLODE_TOL = 1e2
+    ensemble_tuples = tuple(output_ for output_ in output)
+    ntraj: int = len(ensemble_tuples)
+    shortest_time = None
+    for output_ in ensemble_tuples:
+        if shortest_time is None:
+            shortest_time = output_['time']
+        else:
+            shortest_time = output_['time'] if output_['time'][-1] < shortest_time[-1] else shortest_time
+    output_reduced = {}
+    for output_ in ensemble_tuples:
+        for key in output_:
+            if key == 'time':
+                continue
+            elif key not in output_reduced:
+                mask = output_['time'] <= shortest_time[-1]
+                if key == 'states':
+                    output_reduced['states'] = output_['states'][mask]
+                    for field in output_reduced['states'].dtype.names:
+                        output_reduced['states'][field] /= ntraj
+                else:
+                    try:
+                        output_reduced[key] = output_[key][mask] / ntraj
+                    except TypeError:
+                        raise ValueError(f"Expect the output_ to be a number or an array, but got {output_[key]}.")
+            else:
+                mask = output_['time'] <= shortest_time[-1]
+                if key == 'states':
+                    if output_['states']['P'].max() > EXPLODE_TOL:
+                        warnings.warn(f"The momentum of the states in the ensemble is too large, which may indicate that the simulation is not converged. The maximum momentum is {output_['states']['P'].max()}.")
+                        import os 
+                        work_dir = os.getcwd()
+                        time = output_['time']
+                        R = output_['states']['R']
+                        P = output_['states']['P']
+                        rho = output_['states']['rho']
+                        active_surface = output_['active_surf']
+                        
+                        np.savez(f"{work_dir}/dumpped_trajectory.npz", time=time, R=R, P=P, rho=rho, active_surface=active_surface)
+                        
+                        raise RuntimeError("The momentum of the states in the ensemble is too large, which may indicate that the simulation is not converged, dumpping the specific trajectory.")
+
+                    for field in output_reduced['states'].dtype.names:
+                        output_reduced['states'][field] += output_['states'][field][mask] / ntraj
+                else:
+                    output_reduced[key] += output_[key][mask] / ntraj
+    return {'time': shortest_time, **output_reduced}
+                        
 
 def run_nonadiabatic_dynamics_ensembles(
     dyn: Iterable[NonadiabaticDynamics],
@@ -65,13 +117,17 @@ def run_nonadiabatic_dynamics_ensembles(
     break_condition: callable,
     max_iters: int=int(1e8),
     save_traj: bool=True,
+    inhomogeneous: bool=False,
 ):
     ensemble_output = Parallel(n_jobs=get_ncpus(), return_as='generator', verbose=10)(
         delayed(run_nonadiabatic_dynamics)(
             dyn_, stop_condition, break_condition, max_iters, save_traj
         ) for dyn_ in dyn
     )
-    return reduce_ensemble_output(ensemble_output)
+    if not inhomogeneous:
+        return reduce_ensemble_output(ensemble_output)
+    else:
+        return reduce_ensemble_output_inhomogeneous(ensemble_output)
 
 
 def run_nonadiabatic_dynamics(

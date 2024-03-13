@@ -198,7 +198,7 @@ def calculate_properties(t: Real, s: State, cache: EhrenfestCache, hamiltonian: 
     else:
         raise NotImplemented
     # debugging output
-    PE = PE / (2.0 * hamiltonian.NF + 1.0) if isinstance(hamiltonian, QuasiFloquetHamiltonianBase) else PE
+    # PE = PE / (2.0 * hamiltonian.NF + 1.0) if isinstance(hamiltonian, QuasiFloquetHamiltonianBase) else PE
     return EhrenfestProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab, meanF=meanF, dij=hami_return.d)
     # production output
     # return EhrenfestProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab)
@@ -211,9 +211,9 @@ def compute_ehrenfest_meanF(
 ) -> ArrayLike:
     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
     meanF = _compute_ehrenfest_meanF(qm, hami_return.dHdR, hami_return.evals, hami_return.evecs, hami_return.d, hami_return.F, basis_rep)
-    if isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
-        NF: int = hamiltonian.NF
-        meanF = meanF / (2.0 * NF + 1.0)         
+    # if isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
+    #     NF: int = hamiltonian.NF
+    #     meanF = meanF / (2.0 * NF + 1.0)         
     return meanF, hami_return
     
 def _compute_ehrenfest_meanF(qm, dHdR, evals, evecs, d, F, basis_rep: BasisRepresentation) -> ArrayLike:
