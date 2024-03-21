@@ -193,6 +193,8 @@ class NonadiabaticDynamics(Dynamics):
                 # print(f"Hopped. Checking the ode solver initial value status. {P_new=}, {self.ode_solver.y[1]=}")
                 # print(f'Hopping at {t=}, {new_active_surf=}, prev_surf={cache.active_surf},')
                 cache = fssh.FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=self.hamiltonian)
+            else:
+                cache = fssh.FSSHCache(active_surf=cache.active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=self.hamiltonian)
         evals = hami_return.evals
         dE_min :float = np.min(evals[1:] - evals[:-1])
         TOL_CONOCAL_INTERSECTION = 3e-5
@@ -200,6 +202,7 @@ class NonadiabaticDynamics(Dynamics):
             warnings.warn(f"Alert! The energy gap {dE_min} is smaller than the tolerance {TOL_CONOCAL_INTERSECTION}. We might be near a conical intersection. Switching to the diabatic representation for the dynamics.")
             t, s_new, cache = self._diabatic_ehrenfest_in_conical_intersection(t, s_new, cache)
             self.ode_solver.set_initial_value(s_new.flatten(), t)
+        
         return self.ode_solver.t, State.from_unstructured(self.ode_solver.y, dtype=self.dtype, stype=self.stype, copy=False), cache
     
     def get_deriv(
