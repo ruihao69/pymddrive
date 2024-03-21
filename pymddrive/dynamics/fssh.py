@@ -151,7 +151,9 @@ def _hopping_prob(
     vdotd: ArrayLike,
     rho: ArrayLike,
 ) -> float:
-    prob: float = -2.0 * dt * np.real(rho[to_, from_] * vdotd[to_, from_] / rho[from_, from_])
+    # prob: float = -2.0 * dt * np.real(rho[to_, from_] * vdotd[from_, to_] / rho[from_, from_])
+    prob: float = 2.0 * dt * np.real(rho[to_, from_] * vdotd[from_, to_] / rho[from_, from_])
+    # prob: float = 2.0 * dt * np.real(rho[to_, from_] * vdotd[to_, from_] / rho[from_, from_])
     return prob if prob > 0 else 0.0
 
 @jit(nopython=True)
@@ -251,12 +253,17 @@ def momentum_rescale(
         return False, P_current
     elif b < 0:
         gamma: float = (b + np.sqrt(b2_4ac)) / (2 * a)
-        # print(f"the gamma is {gamma}") 
-        return True, P_current - gamma * normalized_direction 
+        P_rescaled = P_current - gamma * normalized_direction
+        # dPE = np.sum((P_rescaled**2 - P_current**2) * M_inv) / 2
+        # print(f"{dE=}, {dPE=}, {mass=}")
+        return True, P_rescaled
     elif b >= 0:
         # print(f"the gamma is {gamma}")
         gamma: float = (b - np.sqrt(b2_4ac)) / (2 * a)
-        return True, P_current - gamma * normalized_direction 
+        P_rescaled = P_current - gamma * normalized_direction
+        # dPE = np.sum((P_rescaled**2 - P_current**2) * M_inv) / 2
+        # print(f"{dE=}, {dPE=}, {mass=}")
+        return True, P_rescaled
     else:
         return False, P_current
 
@@ -412,9 +419,9 @@ def _ehrenfest_benchmark():
     mass = 2000.0
     
     hamiltonian = get_tullyone(
-        t0=_delay_time, Omega=Omega, tau=tau,
-        pulse_type=TullyOnePulseTypes.PULSE_TYPE3,
-        td_method=TD_Methods.BRUTE_FORCE
+        # t0=_delay_time, Omega=Omega, tau=tau,
+        pulse_type=TullyOnePulseTypes.NO_PULSE
+        # td_method=TD_Methods.BRUTE_FORCE
     )
     dyn = NonadiabaticDynamics(
         hamiltonian=hamiltonian,
@@ -451,7 +458,7 @@ def _step_zvode(t: float, s: State, hamiltonian: HamiltonianBase, mass: ArrayLik
     if has_hopped:
         P[:] = P_rescaled
         ode_solver.set_initial_value(state.flatten(), t)
-    cache = FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs)
+    cache = FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
     return ode_solver.t, state, cache
 
 def _debug_test_run_one_fssh():
@@ -459,22 +466,22 @@ def _debug_test_run_one_fssh():
     NF: int = 1
     t0 = 0.0
     r0 = -5.0; p0 = 30.0; rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
-    rho0_floquet = get_floquet_rho0(rho0, NF=1)
-    s0 = State.from_variables(R=r0, P=p0, rho=rho0_floquet)
+    # rho0_floquet = get_floquet_rho0(rho0, NF=1)
+    s0 = State.from_variables(R=r0, P=p0, rho=rho0)
     
     _delay_time = estimate_delay_time(r0, p0)
     Omega = 0.3; tau = 100
     mass = 2000.0  
     
     hamiltonian = get_tullyone(
-        t0=_delay_time, Omega=Omega, tau=tau,
-        pulse_type=TullyOnePulseTypes.PULSE_TYPE3,
-        td_method=TD_Methods.FLOQUET, NF=NF
+        # t0=_delay_time, Omega=Omega, tau=tau,
+        pulse_type=TullyOnePulseTypes.NO_PULSE
+        # td_method=TD_Methods.FLOQUET, NF=NF
     )
     R0, P0, rho0 = s0.get_variables()   
     hami_return = eval_nonadiabatic_hamiltonian(t0, R0, hamiltonian, BasisRepresentation.Adiabatic)
     active_index = np.diag(rho0).real.argmax()
-    cache = FSSHCache(active_surf=ActiveSurface(index=active_index), evals=hami_return.evals, evecs=hami_return.evecs)
+    cache = FSSHCache(active_surf=ActiveSurface(index=active_index), evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
     
     time_out = np.array([])
     traj_out = None
@@ -512,7 +519,7 @@ def _debug_test_run_one_fssh():
 
 def _para_run_fssh(ntraj: int):
     from joblib import Parallel, delayed
-    ensemble_out = Parallel(n_jobs=-1,)(
+    ensemble_out = Parallel(n_jobs=-1,verbose=5)(
         delayed(_debug_test_run_one_fssh)() for _ in range(ntraj)
     )
     return reduce_ensemble(ensemble_out, ensemble_length=float(ntraj))
@@ -571,20 +578,18 @@ def _plot_all(time_out, traj_out, property_dict, ref_out, fixed_dt: float=None):
     
     fig = plt.figure(dpi=300)
     ax = fig.add_subplot(111)   
-    dimF = len(property_dict['populations'][0])
-    pop_out = np.array(property_dict['populations'])
-    pop0_out = np.sum(pop_out[:, :dimF//2], axis=1)
-    pop1_out = np.sum(pop_out[:, dimF//2:], axis=1)
-    
-    ax.plot(time_out, pop0_out, label='pop0')
-    ax.plot(time_out, pop1_out, label='pop1')
-    ax.plot(ref_out['time'], ref_out['populations'][:, 0], label='pop0_ref')
-    ax.plot(ref_out['time'], ref_out['populations'][:, 1], label='pop1_ref')
+    pop_out = property_dict['diab_populations']
+    ax.plot(time_out, pop_out, label='pop0')
+    ax.plot(time_out, pop_out, label='pop1')
+    ax.plot(ref_out['time'], ref_out['diab_populations'][:, 0], label='pop0_ref')
+    ax.plot(ref_out['time'], ref_out['diab_populations'][:, 1], label='pop1_ref')
     ax.set_xlabel('Time (a.u.)')
     ax.set_ylabel('Population')
     ax.legend()
     plt.show()
     
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)   
     ax.plot(time_out, property_dict['PE'], label='PE')
     ax.plot(ref_out['time'], ref_out['PE'], label='PE_ref')
     ax.set_xlabel('Time (a.u.)')
@@ -592,6 +597,8 @@ def _plot_all(time_out, traj_out, property_dict, ref_out, fixed_dt: float=None):
     ax.legend()
     plt.show()
     
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)   
     ax.plot(time_out, property_dict['KE'], label='KE')
     ax.plot(ref_out['time'], ref_out['KE'], label='KE_ref')
     ax.set_xlabel('Time (a.u.)')
@@ -599,6 +606,8 @@ def _plot_all(time_out, traj_out, property_dict, ref_out, fixed_dt: float=None):
     ax.legend()
     plt.show()
     
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)   
     TE = property_dict['KE'] + property_dict['PE']
     TE_ref = ref_out['KE'] + ref_out['PE']
     ax.plot(time_out, TE, label='TE')
@@ -615,7 +624,7 @@ if __name__ == '__main__':
     start = time.perf_counter()
     # time_out, traj_out, property_dict = _debug_test_run_one_fssh()
     # time_out, traj_out, property_out = _debug_test_fssh(ntraj=2)
-    ntraj = 40
+    ntraj = 1000
     time_out, traj_out, property_dict = _para_run_fssh(ntraj=ntraj)
     print(f"Time: {time.perf_counter()-start:.4f} s")
     ref_out = _ehrenfest_benchmark() 

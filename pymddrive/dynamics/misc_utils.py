@@ -43,7 +43,10 @@ def eval_nonadiabatic_hamiltonian(
     if (d is not None) and (hamiltonian.last_deriv_couplings is not None):
         d = nac_phase_following(hamiltonian.last_deriv_couplings, d)
     # hamiltonian.update_last_deriv_couplings(d)
-        
+    # if has friction attribute, then update the friction
+    # if hasattr(hamiltonian, 'frictional_force'):
+    #     F_fric = hamiltonian.frictional_force(P)
+    #     F += F_fric
     return HamiltonianRetureType(H=H, dHdR=dHdR, evals=evals, evecs=evecs, d=d, F=F)
 
 def estimate_scatter_dt(deriv: callable, r_bounds: tuple, s0: State, nsample: Real=30, t_bounds: Tuple[Real]=None) -> float:

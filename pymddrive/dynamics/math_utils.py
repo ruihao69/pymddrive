@@ -6,14 +6,14 @@ from numba import jit
 from typing import Union
 
 def rhs_density_matrix(rho: ArrayLike, evals: ArrayLike, vdotd: ArrayLike, k_rho:Union[ArrayLike, None]=None):
-    if k_rho is None:
-        k_rho = np.zeros_like(rho)
-    return _rhs_density_matrix(rho=rho, evals=evals, vdotd=vdotd, k_rho=k_rho)
     # if k_rho is None:
     #     k_rho = np.zeros_like(rho)
-    # H_eff = np.diag(evals) + 1.0j * vdotd
-    # k_rho[:] = -1.0j * commutator(H_eff, rho)
-    # return k_rho
+    # return _rhs_density_matrix(rho=rho, evals=evals, vdotd=vdotd, k_rho=k_rho)
+    if k_rho is None:
+        k_rho = np.zeros_like(rho)
+    H_eff = np.diag(evals) - 1.0j * vdotd
+    k_rho[:] = -1.0j * commutator(H_eff, rho)
+    return k_rho
 
 def rhs_wavefunction(c: ArrayLike, evals:ArrayLike, vdotd:ArrayLike, k_c: Union[ArrayLike, None]=None):
     if k_c is None:

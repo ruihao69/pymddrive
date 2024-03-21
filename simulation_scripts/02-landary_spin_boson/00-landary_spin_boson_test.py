@@ -2,7 +2,7 @@
 import numpy as np
 from numpy.typing import ArrayLike
 
-from pymddrive.models.morse import FourLevelMorse, morse, d_morse_dR
+from pymddrive.models.landry_spin_boson import LandrySpinBoson
 from pymddrive.integrators.state import State
 from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
 from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics, run_nonadiabatic_dynamics_ensembles
@@ -12,57 +12,43 @@ import os
 from typing import Tuple
 
 def stop_condition(t, s, states):
-    return t > 500
+    return t > 3000
 
 def break_condition(t, s, states):
     return False
 
-def get_minimum_of_morse_V11(params: dict):
-    r_samples = np.linspace(0, 0.6, 10000)
-    dVdR = d_morse_dR(r_samples, **params)
-    min_mask = np.argmin(np.abs(dVdR))
-    return r_samples[min_mask]
-
-def approximate_second_derivative_of_morse_V11(R0, params: dict, h: float=1e-6) -> float:
-    return (morse(R0+h, **params) - 2 * morse(R0, **params) + morse(R0-h, **params)) / h**2
-
-def get_V11_harmonic(params: dict, mass: float):
-    R0 = get_minimum_of_morse_V11(params)
-    d2VdR2 = approximate_second_derivative_of_morse_V11(R0, params)
-    Omega = np.sqrt(d2VdR2 / mass)
-    print(f"{R0=}, {Omega=}")
-    return R0, Omega
-
-def sample_morse_boltzmann(
+def sample_lsb_boltzmann(
     n_samples: int, 
-    T: float, 
-    params: dict,
-    mass: float = 2000
+    lsb_hamiltonian: LandrySpinBoson,
+    initialize_from_donor: bool =True
 ):
-    kB_in_au = 3.166815e-6
-    beta = 1 / (kB_in_au * T)
+    # constants
+    kT: float = lsb_hamiltonian.kT
+    mass: float = lsb_hamiltonian.M
+    beta: float = 1.0 / kT
+    Omega_nuclear: float = lsb_hamiltonian.Omega_nuclear
+    
+    # sample the momentum
     sigma_momentum = np.sqrt(mass / beta)
     momentum_samples = np.random.normal(0, sigma_momentum, n_samples)
-    R0, Omega = get_V11_harmonic(params, mass)
-    sigma_R = 1.0 / np.sqrt(beta * mass) / Omega
-    print(f"{sigma_R=}")
+    
+    R0 = lsb_hamiltonian.get_donor_R() if initialize_from_donor else lsb_hamiltonian.get_acceptor_R()
+    sigma_R = 1.0 / np.sqrt(beta * mass) / Omega_nuclear
     position_samples = np.random.normal(R0, sigma_R, n_samples)
     return position_samples, momentum_samples
     
-def run_one_four_level_morse(
+def run_one_lsb(
     R0: float,
     P0: float,
-    mass: float=2000,
     qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
     basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
     integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
 ):
     from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian
-    hamiltonian = FourLevelMorse(VV=0.02)
+    hamiltonian = LandrySpinBoson()
     dim = hamiltonian.dim
-    rho0 = np.zeros((dim, dim), dtype=np.complex128)
-    rho0_diabatic = np.array([[1.0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]], dtype=np.complex128)
+    rho0_diabatic = np.zeros((dim, dim), dtype=np.complex128)
     hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
     evecs = hami_return.evecs
     rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
@@ -72,6 +58,7 @@ def run_one_four_level_morse(
         s0 = State.from_variables(R=R0, P=P0, rho=rho0_diabatic)
         
     # dt_max = 0.003
+    mass = hamiltonian.M
     
     dyn = NonadiabaticDynamics(
         hamiltonian=hamiltonian,
@@ -93,7 +80,6 @@ def generate_ensembles(
     initial_diabatic_states: int,
     R0_samples: ArrayLike,
     P0_samples: ArrayLike,
-    mass: float=2000,
     qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
     basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
@@ -101,13 +87,15 @@ def generate_ensembles(
 ) -> Tuple[NonadiabaticDynamics]:
     # initialize the electronic states
     assert (initial_diabatic_states >= 0) and (initial_diabatic_states < 4), f"Valid states should be between 0 and 3. Got {initial_diabatic_states}."
-    rho0_diabatic = np.zeros((4, 4), dtype=np.complex128)
-    rho0_diabatic[initial_diabatic_states, initial_diabatic_states] = 1.0
     
     assert (n_samples := len(R0_samples)) == len(P0_samples), "The number of R0 and P0 samples should be the same."
     ensemble = ()
     for ii, (R0, P0) in enumerate(zip(R0_samples, P0_samples)):
-        hamiltonian = FourLevelMorse(VV=0.02)
+        hamiltonian = LandrySpinBoson() 
+        mass = hamiltonian.M
+        dim: int = hamiltonian.dim
+        rho0_diabatic = np.zeros((dim, dim), dtype=np.complex128)
+        rho0_diabatic[initial_diabatic_states, initial_diabatic_states] = 1.0
         if basis_rep == BasisRepresentation.Diabatic:
             s0 = State.from_variables(R=R0, P=P0, rho=rho0_diabatic)
         else:
@@ -125,7 +113,7 @@ def generate_ensembles(
             solver=solver,
             numerical_integrator=integrator,
             dt=0.1,
-            save_every=10,
+            save_every=30,
         )
         ensemble += (dyn,)
     return ensemble
@@ -133,13 +121,13 @@ def generate_ensembles(
    
 
 def main(ntrajs: int, basis_rep: BasisRepresentation = BasisRepresentation.Diabatic, solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST):
-    T = 300
-    mass = 2000
-    _hamiltonian = FourLevelMorse(VV=0.02)
-    position_samples, momentum_samples = sample_morse_boltzmann(ntrajs, T, _hamiltonian.params_1)
+    _hamiltonian = LandrySpinBoson()
+    position_samples, momentum_samples = sample_lsb_boltzmann(
+        n_samples=ntrajs, lsb_hamiltonian=_hamiltonian, initialize_from_donor=True
+    )
     
     dyn_ensemble = generate_ensembles(
-        0, position_samples, momentum_samples, mass,
+        0, position_samples, momentum_samples,
         qm_rep=QunatumRepresentation.DensityMatrix,
         basis_rep=basis_rep,
         # solver=NonadiabaticDynamicsMethods.EHRENFEST,
@@ -154,27 +142,15 @@ def main(ntrajs: int, basis_rep: BasisRepresentation = BasisRepresentation.Diaba
 
 
 # %%
-def _compare_adiabatic_diabatic(
-    R0: float,
-    P0: float,
-):
-    output_adiabatic = run_one_four_level_morse(
-        R0, P0, basis_rep=BasisRepresentation.Adiabatic,
-    )
-    
-    output_diabatic = run_one_four_level_morse(
-        R0, P0, basis_rep=BasisRepresentation.Diabatic,
-    )
-    return output_adiabatic, output_diabatic
-
 def _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh):
     import matplotlib.pyplot as plt
     ta, td, tfssh = output_adiabatic['time'], output_diabatic['time'], output_fssh['time']
     Ra, Rd, Rfssh = output_adiabatic['states']['R'], output_diabatic['states']['R'], output_fssh['states']['R']
     Pa, Pd, Pfssh = output_adiabatic['states']['P'], output_diabatic['states']['P'], output_fssh['states']['P']
     popa_diab, popd_diab, popfssh_diab = output_adiabatic['diab_populations'], output_diabatic['diab_populations'], output_fssh['diab_populations']
-    KE_d, KE_a, KE_fssh = output_adiabatic['KE'], output_adiabatic['KE'], output_fssh['KE']
-    PE_d, PE_a, PE_fssh = output_adiabatic['PE'], output_adiabatic['PE'], output_fssh['PE']
+    popa_adiab, popd_adiab, popfssh_adiab = output_adiabatic['adiab_populations'], output_diabatic['adiab_populations'], output_fssh['adiab_populations']
+    KE_a, KE_d, KE_fssh = output_adiabatic['KE'], output_diabatic['KE'], output_fssh['KE']
+    PE_a, PE_d, PE_fssh = output_adiabatic['PE'], output_diabatic['PE'], output_fssh['PE']
     # rhoa, rhod = output_adiabatic['states']['rho'], output_diabatic['states']['rho']
     # popa, popd = output_adiabatic['populations'], output_diabatic['populations']
     fig = plt.figure(dpi=300)
@@ -196,13 +172,29 @@ def _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh):
     ax.set_xlabel('Time (a.u.)')
     ax.set_ylabel('P')
     
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    for ii in range(4):
+    fig = plt.figure(dpi=300,)
+    gs = fig.add_gridspec(2, 1)
+    axs = gs.subplots(sharex=True).flatten()
+    for ii in range(popa_diab.shape[1]):
+        ax = axs[ii]
         ax.plot(ta, popa_diab[:, ii], ls='-', label=f'pop{ii+1} adiabatic')
         ax.plot(td, popd_diab[:, ii], ls='-.', label=f'pop{ii+1} diabatic')
         ax.plot(tfssh, popfssh_diab[:, ii], ls='--', label=f'pop{ii+1} fssh')
-        
+    ax = axs[0]
+    dat = np.loadtxt("exact.dat", delimiter=',') 
+    timext, pop1 = dat.T
+    ax.plot(timext, pop1, label='pop1 exact', ls=':')
+    ax.set_xlim(0, ta[-1])
+    ax.legend()
+    
+    fig = plt.figure(dpi=300,)
+    gs = fig.add_gridspec(2, 1)
+    axs = gs.subplots(sharex=True).flatten()
+    for ii in range(popa_diab.shape[1]):
+        ax = axs[ii]
+        ax.plot(ta, popa_adiab[:, ii], ls='-', label=f'pop{ii+1} adiabatic')
+        ax.plot(td, popd_adiab[:, ii], ls='-.', label=f'pop{ii+1} diabatic')
+        ax.plot(tfssh, popfssh_adiab[:, ii], ls='--', label=f'pop{ii+1} fssh') 
     ax.legend()
     
     fig = plt.figure(dpi=300)
@@ -235,6 +227,7 @@ def _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh):
     ax.legend()
     plt.show()
     
+    
 def plot_ensembles_averaged(output_ensemble_averaged):
     import matplotlib.pyplot as plt
     print(output_ensemble_averaged.keys())
@@ -261,7 +254,7 @@ def plot_ensembles_averaged(output_ensemble_averaged):
     
     fig =  plt.figure(dpi=300)
     ax = fig.add_subplot(111)
-    for ii in range(4):
+    for ii in range(pop_diab.shape[1]):
         ax.plot(time, pop_diab[:, ii], label=f'pop{ii+1}')
     ax.set_xlabel('Time (a.u.)')
     ax.set_ylabel('Diabatic Population')
@@ -271,17 +264,19 @@ def plot_ensembles_averaged(output_ensemble_averaged):
 
 def _test_sampling(T: float = 300):
     import matplotlib.pyplot as plt
-    hamiltonian = FourLevelMorse(VV=0.02)
-    position_samples, momentum_samples = sample_morse_boltzmann(3000, T, hamiltonian.params_1)
-    R = np.linspace(0.0, 1.0, 10000)
-    V = np.zeros((4, len(R)))
+    hamiltonian = LandrySpinBoson()
+    position_samples, momentum_samples = sample_lsb_boltzmann(3000, lsb_hamiltonian=hamiltonian)
+    R0 = 0.5 * (hamiltonian.get_donor_R() + hamiltonian.get_acceptor_R())
+    L = 15
+    R = np.linspace(R0-L, R0+L)
+    V = np.zeros((hamiltonian.dim, len(R)))
     for ii, rr in enumerate(R):
         H = hamiltonian.H(0, rr)
-        for jj in range(4):
+        for jj in range(hamiltonian.dim):
             V[jj, ii] = H[jj, jj]
     fig = plt.figure(dpi=300)
     ax = fig.add_subplot(111)
-    for jj in range(4):
+    for jj in range(hamiltonian.dim):
         ax.plot(R, V[jj, :], label=f'V{jj+1}')
     print(position_samples)   
     hist, bins = np.histogram(position_samples, bins=100, density=True)
@@ -312,14 +307,13 @@ if __name__ == "__main__":
     # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
 # %%
 if __name__ == "__main__":
-    output_diabatic = main(ntrajs=2000, basis_rep=BasisRepresentation.Diabatic)
-    output_adiabatic = main(ntrajs=2000, basis_rep=BasisRepresentation.Adiabatic)
-    output_fssh = main(ntrajs=5000, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
-    _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
+    output_diabatic = main(ntrajs=128, basis_rep=BasisRepresentation.Diabatic)
+    output_adiabatic = main(ntrajs=128, basis_rep=BasisRepresentation.Adiabatic)
+    output_fssh = main(ntrajs=256, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
+    # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
     
 
 # %%
 if __name__ == "__main__":
     _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
-
 # %%

@@ -248,23 +248,23 @@ def _test_tullyone_floquet(pulse_type: TullyOnePulseTypes, Omega: float=0.3, tau
 # %%
 if __name__ == "__main__":
     # test the time-independent TullyOne model
-    # print("=====================================================")
-    # print("Testing the time-independent TullyOne model")
-    # _test_tullyone()
-    # print("=====================================================")
+    print("=====================================================")
+    print("Testing the time-independent TullyOne model")
+    _test_tullyone()
+    print("=====================================================")
     # test the time-dependent TullyOne model with different pulse types
-    # print("=====================================================")
-    # print("Testing the TullyOne with PulseType1")
-    # _test_tullyone_pulsed(TullyOnePulseTypes.PULSE_TYPE1)
-    # print("=====================================================")
-    # print("=====================================================")
-    # print("Testing the TullyOne with PulseType2")
-    # _test_tullyone_pulsed(TullyOnePulseTypes.PULSE_TYPE2)
-    # print("=====================================================")
-    # print("=====================================================")
-    # print("Testing the TullyOne with PulseType3")
-    # _test_tullyone_pulsed(TullyOnePulseTypes.PULSE_TYPE3)
-    # print("=====================================================")
+    print("=====================================================")
+    print("Testing the TullyOne with PulseType1")
+    _test_tullyone_pulsed(TullyOnePulseTypes.PULSE_TYPE1)
+    print("=====================================================")
+    print("=====================================================")
+    print("Testing the TullyOne with PulseType2")
+    _test_tullyone_pulsed(TullyOnePulseTypes.PULSE_TYPE2)
+    print("=====================================================")
+    print("=====================================================")
+    print("Testing the TullyOne with PulseType3")
+    _test_tullyone_pulsed(TullyOnePulseTypes.PULSE_TYPE3)
+    print("=====================================================")
 
     # test the time-dependent Floquet TullyOne model with different pulse types
     Omega = 0.03
