@@ -12,7 +12,7 @@ import os
 from typing import Tuple
 
 def stop_condition(t, s, states):
-    return t > 3000
+    return t > 2000
 
 def break_condition(t, s, states):
     return False
@@ -49,6 +49,7 @@ def run_one_lsb(
     hamiltonian = LandrySpinBoson()
     dim = hamiltonian.dim
     rho0_diabatic = np.zeros((dim, dim), dtype=np.complex128)
+    rho0_diabatic[0, 0] = 1.0
     hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
     evecs = hami_return.evecs
     rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
@@ -307,10 +308,41 @@ if __name__ == "__main__":
     # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
 # %%
 if __name__ == "__main__":
-    output_diabatic = main(ntrajs=128, basis_rep=BasisRepresentation.Diabatic)
-    output_adiabatic = main(ntrajs=128, basis_rep=BasisRepresentation.Adiabatic)
-    output_fssh = main(ntrajs=256, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
-    # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
+    ntraj = 128
+    output_diabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Diabatic)
+    output_adiabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Adiabatic)
+    output_fssh = main(ntrajs=ntraj*2, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
+    # _hamiltonian = LandrySpinBoson()
+    # position_samples, momentum_samples = sample_lsb_boltzmann(
+    #     n_samples=1, lsb_hamiltonian=_hamiltonian, initialize_from_donor=True
+    # )
+    # output_fssh = run_one_lsb(position_samples[0], momentum_samples[0], basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
+    # # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
+    # import matplotlib.pyplot as plt 
+    
+    # # P
+    # fig = plt.figure(dpi=300)
+    # ax = fig.add_subplot(111)
+    # ax.plot(output_fssh['time'], output_fssh['states']['P'], ls='-', label='R fssh')
+    
+    # # KE
+    # fig = plt.figure(dpi=300)
+    # ax = fig.add_subplot(111)
+    # ax.plot(output_fssh['time'], output_fssh['KE'], ls='-', label='R fssh')
+    # # PE 
+    # fig = plt.figure(dpi=300)
+    # ax = fig.add_subplot(111)
+    # ax.plot(output_fssh['time'], output_fssh['PE'], ls='-', label='R fssh')
+    # # TE 
+    # fig = plt.figure(dpi=300)
+    # ax = fig.add_subplot(111)
+    # ax.plot(output_fssh['time'], output_fssh['KE']+output_fssh['PE'], ls='-', label='R fssh')
+    # # pop
+    # fig = plt.figure(dpi=300)
+    # ax = fig.add_subplot(111)
+    # for ii in range(output_fssh['adiab_populations'].shape[1]):
+    #     ax.plot(output_fssh['time'], output_fssh['adiab_populations'][:, ii], label=f'pop{ii+1} fssh')
+    
     
 
 # %%

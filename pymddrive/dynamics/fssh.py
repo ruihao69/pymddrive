@@ -239,8 +239,9 @@ def momentum_rescale(
                                    # i: the index of the classical degree of freedom
                                    # j, k: the index of the electronic states
                                    
-    d_component_norm = LA.norm(d_component)
-    normalized_direction = d_component / d_component_norm 
+    # d_component_norm = LA.norm(d_component)
+    # normalized_direction = d_component / d_component_norm 
+    normalized_direction = d_component 
     M_inv = 1.0 / mass 
     dE = evals[to_] - evals[from_]
     

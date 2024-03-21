@@ -185,12 +185,14 @@ class NonadiabaticDynamics(Dynamics):
         if self.do_hopping:
             has_hopped, new_active_surf, P_rescaled = fssh.hopping(self.dt, rho_new, hami_return, P_new, self.mass, cache.active_surf)
             if has_hopped:
-                # print(f"Has hopped. P was {P_new=}, now {P_rescaled=}")
+                # dE = hami_return.evals[new_active_surf.index] - hami_return.evals[cache.active_surf.index]
+                # dPE = np.sum(P_rescaled**2 - P_new**2) / (2 * self.mass)
+                # print(f"Has hopped. P was {P_new=}, now {P_rescaled=}. {dE=}, {dPE=}.")
                 P_new[:] = P_rescaled
                 self.ode_solver.set_initial_value(s_new.flatten(), t)
                 # print(f"Hopped. Checking the ode solver initial value status. {P_new=}, {self.ode_solver.y[1]=}")
                 # print(f'Hopping at {t=}, {new_active_surf=}, prev_surf={cache.active_surf},')
-            cache = fssh.FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=self.hamiltonian)
+                cache = fssh.FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=self.hamiltonian)
         evals = hami_return.evals
         dE_min :float = np.min(evals[1:] - evals[:-1])
         TOL_CONOCAL_INTERSECTION = 3e-5
