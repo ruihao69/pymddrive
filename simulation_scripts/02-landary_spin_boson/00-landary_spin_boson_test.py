@@ -12,7 +12,7 @@ import os
 from typing import Tuple
 
 def stop_condition(t, s, states):
-    return t > 2000
+    return t > 3000
 
 def break_condition(t, s, states):
     return False
@@ -70,8 +70,8 @@ def run_one_lsb(
         qm_rep=qm_rep,
         solver=solver,
         numerical_integrator=integrator,
-        dt=0.1,
-        save_every=10,
+        dt=0.03,
+        save_every=30,
         # max_step=dt_max,
     )
     
@@ -113,15 +113,15 @@ def generate_ensembles(
             qm_rep=qm_rep,
             solver=solver,
             numerical_integrator=integrator,
-            dt=0.1,
-            save_every=30,
+            dt=0.3,
+            save_every=10,
         )
         ensemble += (dyn,)
     return ensemble
         
    
 
-def main(ntrajs: int, basis_rep: BasisRepresentation = BasisRepresentation.Diabatic, solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST):
+def main(ntrajs: int, basis_rep: BasisRepresentation = BasisRepresentation.Diabatic, solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST, numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE):
     _hamiltonian = LandrySpinBoson()
     position_samples, momentum_samples = sample_lsb_boltzmann(
         n_samples=ntrajs, lsb_hamiltonian=_hamiltonian, initialize_from_donor=True
@@ -133,7 +133,7 @@ def main(ntrajs: int, basis_rep: BasisRepresentation = BasisRepresentation.Diaba
         basis_rep=basis_rep,
         # solver=NonadiabaticDynamicsMethods.EHRENFEST,
         solver=solver,
-        integrator=NumericalIntegrators.ZVODE,
+        integrator=numerical_integrator,
     )
     
     output_ensemble_averaged = run_nonadiabatic_dynamics_ensembles(dyn_ensemble, stop_condition, break_condition)
@@ -308,10 +308,11 @@ if __name__ == "__main__":
     # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
 # %%
 if __name__ == "__main__":
-    ntraj = 128
-    output_diabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Diabatic)
-    output_adiabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Adiabatic)
-    output_fssh = main(ntrajs=ntraj*2, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
+    ntraj = 48
+    numerical_integrator = NumericalIntegrators.ZVODE
+    output_diabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Diabatic, numerical_integrator=numerical_integrator)
+    output_adiabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Adiabatic, numerical_integrator=numerical_integrator)
+    output_fssh = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH, numerical_integrator=numerical_integrator)
     # _hamiltonian = LandrySpinBoson()
     # position_samples, momentum_samples = sample_lsb_boltzmann(
     #     n_samples=1, lsb_hamiltonian=_hamiltonian, initialize_from_donor=True

@@ -12,7 +12,7 @@ import os
 from typing import Tuple
 
 def stop_condition(t, s, states):
-    return t > 500
+    return t > 300
 
 def break_condition(t, s, states):
     return False
@@ -312,10 +312,11 @@ if __name__ == "__main__":
     # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
 # %%
 if __name__ == "__main__":
-    output_diabatic = main(ntrajs=2000, basis_rep=BasisRepresentation.Diabatic)
-    output_adiabatic = main(ntrajs=2000, basis_rep=BasisRepresentation.Adiabatic)
-    output_fssh = main(ntrajs=5000, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
-    _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
+    ntrajs = 128
+    output_diabatic = main(ntrajs=ntrajs, basis_rep=BasisRepresentation.Diabatic)
+    output_adiabatic = main(ntrajs=ntrajs, basis_rep=BasisRepresentation.Adiabatic)
+    output_fssh = main(ntrajs=ntrajs, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
+    # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
     
 
 # %%

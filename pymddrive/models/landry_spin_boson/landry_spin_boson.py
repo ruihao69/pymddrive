@@ -85,12 +85,6 @@ class LandrySpinBoson(HamiltonianBase):
     ) -> ArrayLike:
         return V * get_sigma_x()
     
-    def frictional_force(
-        self,
-        P: float, 
-    ) -> float:
-        return -self.gamma * P
-    
     def __repr__(self) -> str:
         return f"LandrySpinBoson(Omega_nuclear={self.Omega_nuclear}, M={self.M}, V={self.V}, Er={self.Er}, epsilon0={self.epsilon0}, gamma={self.gamma}, kT={self.kT})"
     
@@ -125,6 +119,12 @@ class LandrySpinBoson(HamiltonianBase):
     
     def get_acceptor_R(self) -> float:
         return self.spin_boson_offset(self.M, self.Omega_nuclear, self.lambd)
+    
+    def get_friction(self, ) -> float:
+        return self.gamma
+    
+    def get_kT(self, ) -> float:
+        return self.kT
     
 # %% 
 def _test_landry_spin_boson():

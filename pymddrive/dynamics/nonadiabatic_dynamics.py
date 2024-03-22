@@ -13,6 +13,8 @@ from pymddrive.dynamics.options import (
 )
 from pymddrive.integrators.rk4 import rk4
 from pymddrive.dynamics.misc_utils import estimate_scatter_dt, assert_valid_real_positive_value, eval_nonadiabatic_hamiltonian
+from pymddrive.dynamics.langevin import LangevinBase, NullLangevin, Langevin
+from pymddrive.dynamics.cache import Cache
 
 import warnings
 import logging
@@ -41,7 +43,11 @@ class NonadiabaticDynamics(Dynamics):
             hamiltonian, t0, s0, mass, dt, atol, rtol, safety, save_every, numerical_integrator
         ) 
         
-        self.do_hopping = False
+        # initialize the langevin dynamics
+        if hamiltonian.get_friction() is None:
+            self.langevin: LangevinBase = NullLangevin()
+        else:
+            self.langevin: LangevinBase = Langevin(kT=hamiltonian.get_kT(), gamma=hamiltonian.get_friction())
         
         if qm_rep != QunatumRepresentation.DensityMatrix:
             raise NotImplementedError(f"At this time, NonadiabaticDynamics class only supports the Density Matrix representation for quantum system.")
@@ -70,17 +76,19 @@ class NonadiabaticDynamics(Dynamics):
                 
         self.step = self.get_stepper(solver, numerical_integrator, max_step, min_step)
         
+        self.callback = self.get_callback(solver)
+        
     def get_stepper(
         self, 
         method: NonadiabaticDynamicsMethods,
         numerical_integrator: NumericalIntegrators,
         max_step: float,
         min_step: float,
-    ) -> Callable[[float, State, Any], Tuple[float, State, Any]]:
+    ) -> Callable[[float, State, Cache], Tuple[float, State, Cache]]:
         if method == NonadiabaticDynamicsMethods.EHRENFEST:
             if numerical_integrator != NumericalIntegrators.ZVODE:
                 raw_stepper = ehrenfest.choose_ehrenfest_stepper(numerical_integrator)
-                return partial(raw_stepper, dt=self.dt, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=self.basis_rep)
+                return partial(raw_stepper, dt=self.dt, hamiltonian=self.hamiltonian, langevin=self.langevin, mass=self.mass, basis_rep=self.basis_rep)
             else:
                 ode_integrator_options = self._get_ode_integrator_options(max_step, min_step)
                 self.ode_solver = ode(self.deriv).set_integrator(**ode_integrator_options)
@@ -91,20 +99,32 @@ class NonadiabaticDynamics(Dynamics):
             if numerical_integrator != NumericalIntegrators.ZVODE:
                 if numerical_integrator == NumericalIntegrators.RK4:
                     raw_stepper = fssh.choose_fssh_stepper(numerical_integrator)
-                    return partial(raw_stepper, dt=self.dt, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=self.basis_rep)
+                    return partial(raw_stepper, dt=self.dt, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=self.basis_rep, langevin=self.langevin)
             elif numerical_integrator == NumericalIntegrators.ZVODE:
                 ode_integrator_options = self._get_ode_integrator_options(max_step, min_step)
                 self.ode_solver = ode(self.deriv).set_integrator(**ode_integrator_options)
                 self.ode_solver.set_initial_value(self.s0.flatten(), self.t0)
-                self.do_hopping = True
                 return self._step_zvode
+        else:
+            raise NotImplemented(f"Unrecogonized nonadiabatic {method=}. Not implemented in pymddrive.")
+        
+    def get_callback(
+        self, 
+        method: NonadiabaticDynamicsMethods
+    ) -> Callable[[float, State, Cache, ArrayLike], Tuple[State, Cache]]:
+        if method == NonadiabaticDynamicsMethods.EHRENFEST:
+            raw_callback = ehrenfest.callback
+            return partial(raw_callback, hamiltonian=self.hamiltonian, basis_rep=self.basis_rep, dt=self.dt, mass=self.mass)
+        elif method == NonadiabaticDynamicsMethods.FSSH:
+            raw_callback = fssh.callback
+            return partial(raw_callback, hamiltonian=self.hamiltonian, basis_rep=self.basis_rep, dt=self.dt, mass=self.mass)
         else:
             raise NotImplemented(f"Unrecogonized nonadiabatic {method=}. Not implemented in pymddrive.")
         
     def get_cahce_initializer(
         self, 
         method: NonadiabaticDynamicsMethods
-    ) -> Callable[[float, State, Any], Any]:
+    ) -> Callable[[float, State, ArrayLike], Cache]:
         if method == NonadiabaticDynamicsMethods.EHRENFEST:
             return partial(ehrenfest.initialize_cache, hamiltonian=self.hamiltonian, basis_rep=self.basis_rep)
         elif method == NonadiabaticDynamicsMethods.FSSH:
@@ -133,7 +153,7 @@ class NonadiabaticDynamics(Dynamics):
                 ode_integrator_options['min_step'] = min_step
         return ode_integrator_options
     
-    def _diabatic_ehrenfest_in_conical_intersection(self, t: float, s: State, cache: Any) -> Tuple[float, State, Any]:
+    def _diabatic_ehrenfest_in_conical_intersection(self, t: float, s: State, cache: Cache) -> Tuple[float, State, Any]:
         TOL_CONOCAL_INTERSECTION: float = 3e-5
         # RTOL = 3e-3
         # R_CI = 0.0
@@ -163,39 +183,51 @@ class NonadiabaticDynamics(Dynamics):
         rho[:] = diabatic_to_adiabatic(rho, hami_return.evecs)
         state_after_conical_intersection = State.from_unstructured(state_during_conical_intersection.flatten(), dtype=self.dtype, stype=self.stype, copy=True)
         return t, state_after_conical_intersection, cache
+
+    def _get_time_state_from_ode_solver(self, ode_solver: ode) -> Tuple[float, State]:
+        t, y = ode_solver.t, ode_solver.y
+        s = State.from_unstructured(y, dtype=self.dtype, stype=self.stype, copy=False)
+        return t, s
         
         
-    def _step_zvode(self, t: float, s: State, cache: Any) -> Tuple[float, State, Any]:
+    def _step_zvode(self, t: float, s: State, cache: Cache) -> Tuple[float, State, Cache]:
+        ########
+        # Integration using the zvode solver (call the fortran code)
+        ########
         if not self.ode_solver.successful():
             raise RuntimeError("The ode solver is not successful.")
         if t != self.ode_solver.t:
             raise ValueError(f"The time {t} is not the same as the solver time {self.ode_solver.t}.")
         self.ode_solver.set_f_params(cache)
         self.ode_solver.integrate(self.ode_solver.t + self.dt)
-        t, y = self.ode_solver.t, self.ode_solver.y
-        s_new = State.from_unstructured(y, dtype=self.dtype, stype=self.stype, copy=False)
-        R_new, P_new, rho_new = s_new.get_variables()
-        PTOL : float = 1e2
-        hami_return = eval_nonadiabatic_hamiltonian(t, R_new, self.hamiltonian, basis_rep=self.basis_rep)
-        self.hamiltonian.update_last_evecs(hami_return.evecs) 
+        
+        ########
+        # Callback step for the post-step
+        ########
+        t, s = self._get_time_state_from_ode_solver(self.ode_solver)
+        R, P, rh0 = s.get_variables()
+        F_langevin = self.langevin.evaluate_langevin(t, R, P, self.dt)
+        new_s, new_cache= self.callback(t, s, cache, F_langevin)
+        # reset the cache if hopping has occured
+        if self.nonadiabatic_method == NonadiabaticDynamicsMethods.FSSH:
+            if new_cache.active_surface != cache.active_surface:
+                self.ode_solver.set_initial_value(new_s.flatten(), t)
+                # since momentum is rescaled, we need to reset the Langevin forces
+                new_R, new_P, _ = new_s.get_variables()
+                F_langevin_after_mom_rescale = self.langevin.evaluate_langevin(t, new_R, new_P, self.dt)
+                new_cache = Cache(
+                    hamiltonian=new_cache.hamiltonian,
+                    hami_return=new_cache.hami_return, 
+                    meanF=new_cache.meanF, 
+                    active_surface=new_cache.active_surface,
+                    F_langevin=F_langevin_after_mom_rescale,
+                )
+                # print(f"Has hopped. Previous surface: {cache.active_surface}, New surface: {new_cache.active_surface}")
 
-        # if self.basis_rep == BasisRepresentation.Adiabatic:
-        #     print(f'{R_new=}', f'{P_new=}', f'{np.isnan(rho_new).any()=}')
-        # self.hamiltonian.update_last_deriv_couplings(hami_return.d)
-        if self.do_hopping:
-            has_hopped, new_active_surf, P_rescaled = fssh.hopping(self.dt, rho_new, hami_return, P_new, self.mass, cache.active_surf)
-            if has_hopped:
-                # dE = hami_return.evals[new_active_surf.index] - hami_return.evals[cache.active_surf.index]
-                # dPE = np.sum(P_rescaled**2 - P_new**2) / (2 * self.mass)
-                # print(f"Has hopped. P was {P_new=}, now {P_rescaled=}. {dE=}, {dPE=}.")
-                P_new[:] = P_rescaled
-                self.ode_solver.set_initial_value(s_new.flatten(), t)
-                # print(f"Hopped. Checking the ode solver initial value status. {P_new=}, {self.ode_solver.y[1]=}")
-                # print(f'Hopping at {t=}, {new_active_surf=}, prev_surf={cache.active_surf},')
-                cache = fssh.FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=self.hamiltonian)
-            else:
-                cache = fssh.FSSHCache(active_surf=cache.active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=self.hamiltonian)
-        evals = hami_return.evals
+        ########
+        # Ad hoc method to avoid conical intersection
+        ########
+        evals: ArrayLike = new_cache.hami_return.evals
         dE_min :float = np.min(evals[1:] - evals[:-1])
         TOL_CONOCAL_INTERSECTION = 3e-5
         if (dE_min < TOL_CONOCAL_INTERSECTION) and (self.basis_rep==BasisRepresentation.Adiabatic):
@@ -203,7 +235,7 @@ class NonadiabaticDynamics(Dynamics):
             t, s_new, cache = self._diabatic_ehrenfest_in_conical_intersection(t, s_new, cache)
             self.ode_solver.set_initial_value(s_new.flatten(), t)
         
-        return self.ode_solver.t, State.from_unstructured(self.ode_solver.y, dtype=self.dtype, stype=self.stype, copy=False), cache
+        return self.ode_solver.t, State.from_unstructured(self.ode_solver.y, dtype=self.dtype, stype=self.stype, copy=False), new_cache
     
     def get_deriv(
         self, 
@@ -217,9 +249,9 @@ class NonadiabaticDynamics(Dynamics):
             if numerical_integrator != NumericalIntegrators.ZVODE:
                 return partial(raw_deriv, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=basis_representation)
             else:
-                def deriv_wrapper(t, y: ArrayLike, copy: bool=False)->ArrayLike:
+                def deriv_wrapper(t, y: ArrayLike, cache: Cache, copy: bool=False)->ArrayLike:
                     s = State.from_unstructured(y, dtype=self.dtype, stype=self.stype, copy=copy)
-                    dsdt = raw_deriv(t, s, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=basis_representation)
+                    dsdt = raw_deriv(t, s, cache, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=basis_representation)
                     return dsdt.flatten(copy=copy)
                 return deriv_wrapper
         elif method == NonadiabaticDynamicsMethods.FSSH:
@@ -227,9 +259,9 @@ class NonadiabaticDynamics(Dynamics):
             if numerical_integrator != NumericalIntegrators.ZVODE:
                 return partial(raw_deriv, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=basis_representation)
             else:
-                def deriv_wrapper(t, y: ArrayLike, cache: fssh.FSSHCache, copy: bool=False)->ArrayLike:
+                def deriv_wrapper(t, y: ArrayLike, cache: Cache, copy: bool=False)->ArrayLike:
                     s = State.from_unstructured(y, dtype=self.dtype, stype=self.stype, copy=copy)
-                    dsdt = raw_deriv(t, s, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=basis_representation, active_surface=cache.active_surf)
+                    dsdt = raw_deriv(t, s, cache, hamiltonian=self.hamiltonian, mass=self.mass, basis_rep=basis_representation)
                     return dsdt.flatten(copy=copy)
                 return deriv_wrapper
                 

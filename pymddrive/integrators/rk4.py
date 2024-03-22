@@ -8,6 +8,7 @@ from typing import Callable, Tuple, Union
 # Type short hand
 type_time = float
 
+
 def rkgill4(
     t: type_time,
     y: State,
@@ -17,16 +18,33 @@ def rkgill4(
     nstep: int = 1,
 ) -> Tuple[type_time, State]:
     deriv_options = deriv_options or {}
+    y_flatten = y.flatten() 
+    
+    dtype = y.data.dtype 
+    stype = y.stype
+    
+    def _deriv(t: type_time, y: np.ndarray) -> np.ndarray:
+        s = State.from_unstructured(y, dtype=dtype, stype=stype)
+        return derivative(t, s, **deriv_options).flatten()
+    
+    k = np.zeros((4, y_flatten.shape[0]), dtype=y_flatten.dtype)
     for _ in range(nstep):
-        k1 = dt * derivative(t, y, **deriv_options)
-        k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
-        k3 = dt * derivative(t + 0.5 * dt, y + (0.5 * (1.0 - np.sqrt(2.0))) * k1 + (0.5 * (1.0 + np.sqrt(2.0))) * k2, **deriv_options)
-        k4 = dt * derivative(t + 1.0 * dt, y + (-0.5 * np.sqrt(2.0)) * k2 + (1.0 + 0.5 * np.sqrt(2.0)) * k3, **deriv_options)
-
+        k[0] = dt * _deriv(t, y_flatten)
+        k[1] = dt * _deriv(t + 0.5 * dt, y_flatten + 0.5 * k[0])
+        k[2] = dt * _deriv(t + 0.5 * dt, y_flatten + 0.5 * k[1])
+        k[3] = dt * _deriv(t + 1.0 * dt, y_flatten + k[2])
+        
+        y_flatten += np.tensordot(np.array([1.0, 2.0, 2.0, 1.0]), k, axes=(0, 0)) / 6.0 
         t += dt
-        y += 1.0 / 6.0 * (k1 + (2.0 - np.sqrt(2.0)) * k2 + (2.0 + np.sqrt(2.0)) * k3 + k4)
+        # k1 = dt * derivative(t, y, **deriv_options)
+        # k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
+        # k3 = dt * derivative(t + 0.5 * dt, y + (0.5 * (1.0 - np.sqrt(2.0))) * k1 + (0.5 * (1.0 + np.sqrt(2.0))) * k2, **deriv_options)
+        # k4 = dt * derivative(t + 1.0 * dt, y + (-0.5 * np.sqrt(2.0)) * k2 + (1.0 + 0.5 * np.sqrt(2.0)) * k3, **deriv_options)
 
-    return (t, y)
+        # t += dt
+        # y += 1.0 / 6.0 * (k1 + (2.0 - np.sqrt(2.0)) * k2 + (2.0 + np.sqrt(2.0)) * k3 + k4)
+
+    return (t, State.from_unstructured(y_flatten, dtype=dtype, stype=stype))
 
 def rk4(
     t: type_time,
@@ -37,14 +55,33 @@ def rk4(
     nstep: int = 1,
 ) -> Tuple[type_time, State]:
     deriv_options = deriv_options or {}
+    # y_flatten = y.flatten() 
+    
+    # dtype = y.data.dtype 
+    # stype = y.stype
+    
+    # def _deriv(t: type_time, y: np.ndarray) -> np.ndarray:
+    #     s = State.from_unstructured(y, dtype=dtype, stype=stype)
+    #     return derivative(t, s, **deriv_options).flatten()
+    
+    # k = np.zeros((4, y_flatten.shape[0]), dtype=y_flatten.dtype)
     for _ in range(nstep):
         k1 = dt * derivative(t, y, **deriv_options)
         k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
         k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * k2, **deriv_options)
         k4 = dt * derivative(t + 1.0 * dt, y + k3, **deriv_options)
-
-        t += dt
         y += 1.0 / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+        
+        # k[0] = dt * _deriv(t, y_flatten)
+        # k[1] = dt * _deriv(t + 0.5 * dt, y_flatten + 0.5 * k[0])
+        # k[2] = dt * _deriv(t + 0.5 * dt, y_flatten + 0.5 * k[1])
+        # k[3] = dt * _deriv(t + 1.0 * dt, y_flatten + k[2])
+        
+        # y_flatten += np.tensordot(np.array([1.0, 2.0, 2.0, 1.0]), k, axes=(0, 0)) / 6.0 
+        # t += dt
+
+    # return (t, State.from_unstructured(y_flatten, dtype=dtype, stype=stype))
     return (t, y)
 
 # %% The temporary testing/debuging code

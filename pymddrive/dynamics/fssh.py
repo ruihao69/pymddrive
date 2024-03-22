@@ -12,12 +12,14 @@ from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentatio
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian, HamiltonianRetureType
 from pymddrive.dynamics.math_utils import rhs_density_matrix, v_dot_d
 from pymddrive.dynamics.floquet.fssh import get_rho_and_populations
+from pymddrive.dynamics.cache import Cache
+from pymddrive.dynamics.langevin import LangevinBase
 
-from typing import Tuple, List, Callable
+from typing import Tuple, List, Callable, Optional, Union
 from collections import namedtuple 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-FSSHCache = namedtuple('FSSHCache', 'active_surf, evals, evecs, H_diab, hamiltonian')
+# FSSHCache = namedtuple('FSSHCache', 'active_surf, evals, evecs, H_diab, hamiltonian')
 FSSHProperties = namedtuple('FSSHProperties', 'KE, PE, diab_populations, adiab_populations, active_surf')
 
 @dataclass(frozen=True, order=True, unsafe_hash=True)
@@ -59,15 +61,18 @@ def _rho_dot_diab(
 def _deriv_fssh_dm(
     t: float,
     s: State, 
+    cache: Cache,
     hamiltonian: HamiltonianBase,
     mass: ArrayLike,
     basis_rep: BasisRepresentation,
-    active_surface: ActiveSurface,
+    # active_surface: ActiveSurface,
 ) -> State:
     R, P, rho = s.get_variables()
     out = zeros_like(s)
     kR, kP, krho = out.get_variables()
-    i_active_surf = active_surface.index
+    # i_active_surf = active_surface.index
+    i_active_surf = cache.active_surface
+    
     
     # integrate R
     v = P / mass
@@ -76,7 +81,8 @@ def _deriv_fssh_dm(
     # integrate P
     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
     F_active_surf = hami_return.F[i_active_surf]
-    kP[:] = _P_dot(F_active_surf)
+    F_langevin = cache.F_langevin
+    kP[:] = _P_dot(F_active_surf + F_langevin)
     
     # integrate the density matrix
     if basis_rep is BasisRepresentation.Adiabatic:
@@ -88,30 +94,32 @@ def _deriv_fssh_dm(
 def step_rk(
     t: float,
     s: State,
-    cache: FSSHCache,
+    cache: Cache,
     dt: float,
     hamiltonian: HamiltonianBase,
+    langevin: LangevinBase,
     mass: ArrayLike,
     basis_rep: BasisRepresentation,
-) -> Tuple[float, State, FSSHCache]:
+) -> Tuple[float, State, Cache]:
     # The numerical integration 
     deriv_options = {
+        'cache': cache,
         'hamiltonian': hamiltonian,
         'mass': mass,
         'basis_rep': basis_rep,
-        'active_surface': cache.active_surf
     }
     t, s = rk4(t, s, _deriv_fssh_dm, deriv_options, dt)
-    # The callback functions: Updating cache 
-    R, P, rho = s.get_variables()
-    hami_return: HamiltonianRetureType = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
-    hamiltonian.update_last_evecs(hami_return.evecs)
-    hamiltonian.update_last_deriv_couplings(hami_return.d)
     
     # the callback functions: surface hopping
-    _, new_active_surf, P_rescaled = hopping(dt, rho, hami_return, P, mass, cache.active_surf)
-    P[:] = P_rescaled
-    return t, s, FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
+    R, P, _ = s.get_variables()
+    F_langevin = langevin.evaluate_langevin(t, R, P, dt)
+    new_s, new_cache = callback(t, s, cache, F_langevin, hamiltonian, basis_rep, dt, mass)
+    
+    if new_cache.active_surface != cache.active_surface:
+        new_R, new_P, new_rho = new_s.get_variables()
+        new_F_langevin = langevin.evaluate_langevin(t, new_R, new_P, dt)
+        new_cache = Cache(hamiltonian=hamiltonian, hami_return=eval_nonadiabatic_hamiltonian(t, new_R, hamiltonian, basis_rep), active_surface=new_cache.active_surface, F_langevin=new_F_langevin)
+    return t, new_s, new_cache
    
 def hopping(
     dt: float,
@@ -277,25 +285,38 @@ def momentum_rescale(
     #     P_rescaled = P_current - gamma * normalized_direction 
     #     return True, P_rescaled
     
-def calculate_properties(t: float, s: State, cache: FSSHCache, mass: ArrayLike) -> FSSHProperties:
+def calculate_properties(
+    t: float, 
+    s: State, 
+    cache: Cache, 
+    mass: ArrayLike
+) -> FSSHProperties:
+    # unpack the variables 
     R, P, rho = s.get_variables()
-    active_surf, evals, evecs, H_diab, hamiltonian = cache
+    active_surf, hami_return, hamiltonian = cache.active_surface, cache.hami_return, cache.hamiltonian
+    
+    # type annotations
+    active_surf: int
+    hami_return: HamiltonianRetureType
+    
+    H_diab, evals, evecs = hami_return.H, hami_return.evals, hami_return.evecs
+    
+    # calculate the kinetic energy and potential energy 
     KE = 0.5 * np.sum(P**2 / mass)
-    PE = evals[active_surf.index]
+    PE = evals[active_surf]
     if isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
         NF: int = hamiltonian.NF
         Omega: float = hamiltonian.get_carrier_frequency()
-        active_surf: ActiveSurface
-        _, pop_adiab = get_rho_and_populations(t, active_surf.index, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Adiabatic)
-        _, pop_diab = get_rho_and_populations(t, active_surf.index, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Diabatic)
+        _, pop_adiab = get_rho_and_populations(t, active_surf, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Adiabatic)
+        _, pop_diab = get_rho_and_populations(t, active_surf, H_diab, evecs, NF, Omega, F_basis=BasisRepresentation.Adiabatic, target_basis=BasisRepresentation.Diabatic)
     else:
         # calculate the adiabatic populations
         pop_adiab = np.zeros_like(evals)
-        pop_adiab[active_surf.index] = 1.0
+        pop_adiab[active_surf] = 1.0
         # calculate the diabatic populations
-        pop_diab = calculate_adiabatic_populations(active_surf.index, evecs, rho)
+        pop_diab = calculate_adiabatic_populations(active_surf, evecs, rho)
     
-    return FSSHProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab, active_surf=active_surf.index)
+    return FSSHProperties(KE=KE, PE=PE, diab_populations=pop_diab, adiab_populations=pop_adiab, active_surf=active_surf)
 
 @jit(nopython=True)
 def _initialize_adiabatic_active_surf(
@@ -318,10 +339,48 @@ def initialize_active_surf(
     active_surf = _initialize_adiabatic_active_surf(rho)
     return ActiveSurface(index=active_surf)
 
-def initialize_cache(t: float, s: State, hamiltonian: HamiltonianBase, basis_rep: BasisRepresentation) -> FSSHCache:
-    R, _, rho = s.get_variables()
+# def initialize_cache(t: float, s: State, hamiltonian: HamiltonianBase, basis_rep: BasisRepresentation) -> FSSHCache:
+#     R, _, rho = s.get_variables()
+#     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
+#     return FSSHCache(active_surf=initialize_active_surf(rho), evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
+
+def initialize_cache(
+    t: float, 
+    s: State, 
+    langevin_force: ArrayLike,
+    hamiltonian: HamiltonianBase, 
+    basis_rep: BasisRepresentation, 
+) -> Cache:
+    R, P, rho = s.get_variables()
     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
-    return FSSHCache(active_surf=initialize_active_surf(rho), evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
+    langevin_force = langevin_force if langevin_force is not None else np.zeros_like(P)
+    i_active_surface = initialize_active_surf(rho).index
+    return Cache(hamiltonian=hamiltonian, hami_return=hami_return, active_surface=i_active_surface, F_langevin=langevin_force)
+
+def callback(
+    t: float, 
+    s: State, 
+    cache: Cache,
+    F_langevin: Optional[ArrayLike],
+    hamiltonian: HamiltonianBase, 
+    basis_rep: BasisRepresentation, 
+    dt: float,
+    mass: Union[float, ArrayLike],
+) -> Tuple[State, Cache]:
+    R, P, rho = s.get_variables()
+    hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
+    hamiltonian.update_last_evecs(hami_return.evecs)
+    F_langevin = F_langevin if F_langevin is not None else np.zeros_like(P)
+   
+    # the hopping algorithm 
+    prev_active_surf = ActiveSurface(index=cache.active_surface)
+    has_hopped, new_active_surf, P_rescaled = hopping(dt, rho, hami_return, P, mass, prev_active_surf)
+    if has_hopped:
+        P[:] = P_rescaled
+        return s, Cache(hamiltonian=hamiltonian, hami_return=hami_return, active_surface=new_active_surf.index, F_langevin=F_langevin)
+    else:
+        return s, Cache(hamiltonian=hamiltonian, hami_return=hami_return, active_surface=prev_active_surf.index, F_langevin=F_langevin)
+    
 
 # def calculate_cache(t: float, s: State, cache: FSSHCache, hamiltonian: HamiltonianBase, basis_rep: BasisRepresentation) -> FSSHCache:
 #     R, P, rho = s.get_variables()
@@ -381,262 +440,262 @@ def wrap_deriv_fssh_dm(
     return dsdt.flatten()
 
 #FSSH_Dynamics_data = namedtuple('FSSH_Dynamics_data', 'time, state, hamiltonian, cache')
-@dataclass
-class FSSH_Dynamics_data:
-    time: float
-    state: State
-    hamiltonian: HamiltonianBase
-    cache: FSSHCache
-    
-    def __iter__(self):
-        yield self.time
-        yield self.state
-        yield self.hamiltonian
-        yield self.cache
-        
-    def __getitem__(self, index: int):
-        if index == 0:
-            return self.time
-        elif index == 1:
-            return self.state
-        elif index == 2:
-            return self.hamiltonian
-        elif index == 3:
-            return self.cache
-        else:
-            raise IndexError(f"Index {index} is out of range.")
-        
-    def __tuple__(self):
-        return (self.time, self.state, self.hamiltonian, self.cache)
-    
-def _ehrenfest_benchmark():
-    from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
-    from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics, NonadiabaticDynamicsMethods
-    t0 = 0.0    
-    r0 = -5.0; p0 = 30.0; rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
-    s0 = State.from_variables(R=r0, P=p0, rho=rho0)
-    _delay_time = estimate_delay_time(r0, p0)
-    Omega = 0.3; tau = 100
-    mass = 2000.0
-    
-    hamiltonian = get_tullyone(
-        # t0=_delay_time, Omega=Omega, tau=tau,
-        pulse_type=TullyOnePulseTypes.NO_PULSE
-        # td_method=TD_Methods.BRUTE_FORCE
-    )
-    dyn = NonadiabaticDynamics(
-        hamiltonian=hamiltonian,
-        t0=t0,
-        s0=s0,
-        mass=mass,
-        basis_rep=BasisRepresentation.Adiabatic,
-        qm_rep=QunatumRepresentation.DensityMatrix,
-        solver=NonadiabaticDynamicsMethods.EHRENFEST,
-        numerical_integrator=NumericalIntegrators.ZVODE,
-        dt=0.03,
-        save_every=30
-    )
-    
-    def stop_condition(t, s, states):
-        r, p, _ = s.get_variables()
-        return (r>5.0) or (r<-5.0)
-    break_condition = lambda t, s, states: False
-    return run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
-
-def _step_zvode(t: float, s: State, hamiltonian: HamiltonianBase, mass: ArrayLike, basis_rep: BasisRepresentation, cache: FSSHCache, dt: float, ode_solver: ode) -> Tuple[float, State, FSSHCache]:
-    if not ode_solver.successful():
-        raise RuntimeError("The ode solver is not successful.")
-    if t != ode_solver.t:
-        raise ValueError(f"The time {t} is not the same as the solver time {ode_solver.t}.")
-    ode_solver.set_f_params(hamiltonian, mass, basis_rep, cache.active_surf, s.stype, s.data.dtype)
-    ode_solver.integrate(ode_solver.t + dt)
-    state = State.from_unstructured(ode_solver.y, dtype=s.data.dtype, stype=s.stype)
-    R, P, rho = state.get_variables()
-    hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
-    hamiltonian.update_last_evecs(hami_return.evecs)
-    # hamiltonian.update_last_deriv_couplings(hami_return.d)
-    has_hopped, new_active_surf, P_rescaled = hopping(dt, rho, hami_return, P, mass, cache.active_surf)
-    if has_hopped:
-        P[:] = P_rescaled
-        ode_solver.set_initial_value(state.flatten(), t)
-    cache = FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
-    return ode_solver.t, state, cache
-
-def _debug_test_run_one_fssh():
-    from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
-    NF: int = 1
-    t0 = 0.0
-    r0 = -5.0; p0 = 30.0; rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
-    # rho0_floquet = get_floquet_rho0(rho0, NF=1)
-    s0 = State.from_variables(R=r0, P=p0, rho=rho0)
-    
-    _delay_time = estimate_delay_time(r0, p0)
-    Omega = 0.3; tau = 100
-    mass = 2000.0  
-    
-    hamiltonian = get_tullyone(
-        # t0=_delay_time, Omega=Omega, tau=tau,
-        pulse_type=TullyOnePulseTypes.NO_PULSE
-        # td_method=TD_Methods.FLOQUET, NF=NF
-    )
-    R0, P0, rho0 = s0.get_variables()   
-    hami_return = eval_nonadiabatic_hamiltonian(t0, R0, hamiltonian, BasisRepresentation.Adiabatic)
-    active_index = np.diag(rho0).real.argmax()
-    cache = FSSHCache(active_surf=ActiveSurface(index=active_index), evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
-    
-    time_out = np.array([])
-    traj_out = None
-    property_dict = {field: [] for field in FSSHProperties._fields}
-    
-    def _append_properties(properties_dict: dict, properties: FSSHProperties) -> dict:
-        for (field, value) in zip(FSSHProperties._fields, properties):
-            properties_dict[field].append(value)
-        return properties_dict
-            
-    def stop_condition(t, s, states):
-        r, p, _ = s.get_variables()
-        return (r>5.0) or (r<-5.0)
-    
-    dt = 0.1
-    t, s = t0, s0
-    
-    
-    ode_solver = ode(wrap_deriv_fssh_dm).set_integrator('zvode', method='bdf')
-    ode_solver.set_initial_value(s.flatten(), t)
-    
-    for ns in range(int(1e6)):
-        if ns % 10 == 0:
-            properties = calculate_properties(t, s, cache, mass)
-            time_out = np.append(time_out, t)   
-            traj_out = np.array([s.data]) if traj_out is None else np.append(traj_out, s.data)
-            property_dict = _append_properties(property_dict, properties)
-            if stop_condition(t, s, traj_out):
-                break
-        t, s, cache = _step_zvode(t, s, hamiltonian, mass, BasisRepresentation.Adiabatic, cache, dt, ode_solver)
-        
-    for (field, value) in property_dict.items():
-        property_dict[field] = np.array(value)
-    return time_out, traj_out, property_dict 
-
-def _para_run_fssh(ntraj: int):
-    from joblib import Parallel, delayed
-    ensemble_out = Parallel(n_jobs=-1,verbose=5)(
-        delayed(_debug_test_run_one_fssh)() for _ in range(ntraj)
-    )
-    return reduce_ensemble(ensemble_out, ensemble_length=float(ntraj))
-
-def get_shortest_time_length(ensemble_out: List[Tuple[np.ndarray, np.ndarray, dict]]):
-    len_time = int(1e10)
-    for time_out, _, _ in ensemble_out:
-        if len(time_out) < len_time:
-            len_time = len(time_out)
-    return len_time
-    
-def reduce_ensemble(ensemble_out: List[Tuple[np.ndarray, np.ndarray, dict]], ensemble_length: int):
-    len_time = get_shortest_time_length(ensemble_out)
-    time_reduced = None
-    traj_reduced = None
-    property_reduced = {field: None for field in FSSHProperties._fields}
-    for i, (time_out, traj_out, property_dict) in enumerate(ensemble_out):
-        if time_reduced is None:
-            time_reduced = time_out[:len_time]
-        if traj_reduced is None:
-            traj_reduced = traj_out[:len_time]
-        else:
-            for name in traj_out.dtype.names:
-                traj_reduced[name] += traj_out[name][:len_time]
-        for (field, value) in property_dict.items():  
-            property_reduced[field] = value[:len_time] if property_reduced[field] is None else property_reduced[field] + value[:len_time]
-    for name in traj_reduced.dtype.names:
-        traj_reduced[name] /= ensemble_length
-    for (field, value) in property_reduced.items():
-        property_reduced[field] = np.array(value) / ensemble_length
-    return time_reduced, traj_reduced, property_reduced
-        
-        
-
-def _plot_all(time_out, traj_out, property_dict, ref_out, fixed_dt: float=None):
-    import matplotlib.pyplot as plt
-    if fixed_dt is not None: 
-        time_out = np.arange(len(time_out)) / fixed_dt
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time_out, traj_out['R'], label='R')
-    ax.plot(ref_out['time'], ref_out['states']['R'], label='R_ref')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('R (a.u.)')
-    ax.legend()
-    plt.show()
-
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time_out, traj_out['P'], label='P')
-    ax.plot(ref_out['time'], ref_out['states']['P'], label='P_ref')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('P (a.u.)')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)   
-    pop_out = property_dict['diab_populations']
-    ax.plot(time_out, pop_out, label='pop0')
-    ax.plot(time_out, pop_out, label='pop1')
-    ax.plot(ref_out['time'], ref_out['diab_populations'][:, 0], label='pop0_ref')
-    ax.plot(ref_out['time'], ref_out['diab_populations'][:, 1], label='pop1_ref')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('Population')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)   
-    ax.plot(time_out, property_dict['PE'], label='PE')
-    ax.plot(ref_out['time'], ref_out['PE'], label='PE_ref')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('Potential Energy (a.u.)')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)   
-    ax.plot(time_out, property_dict['KE'], label='KE')
-    ax.plot(ref_out['time'], ref_out['KE'], label='KE_ref')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('Kinetic Energy (a.u.)')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)   
-    TE = property_dict['KE'] + property_dict['PE']
-    TE_ref = ref_out['KE'] + ref_out['PE']
-    ax.plot(time_out, TE, label='TE')
-    ax.plot(ref_out['time'], TE_ref, label='TE_ref')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('Total Energy (a.u.)')
-    ax.legend()
-    plt.show()
-
-    
-# %%
-if __name__ == '__main__':
-    import time
-    start = time.perf_counter()
-    # time_out, traj_out, property_dict = _debug_test_run_one_fssh()
-    # time_out, traj_out, property_out = _debug_test_fssh(ntraj=2)
-    ntraj = 1000
-    time_out, traj_out, property_dict = _para_run_fssh(ntraj=ntraj)
-    print(f"Time: {time.perf_counter()-start:.4f} s")
-    ref_out = _ehrenfest_benchmark() 
-    
-# %%
-if __name__ == '__main__':
-    ref_out = _ehrenfest_benchmark() 
-    print(ref_out['time'][-1])
-   
-# %%    
-if __name__ == '__main__':
-    _plot_all(time_out, traj_out, property_dict, ref_out)
-    
-# %%
+# @dataclass
+# class FSSH_Dynamics_data:
+#     time: float
+#     state: State
+#     hamiltonian: HamiltonianBase
+#     cache: FSSHCache
+#     
+#     def __iter__(self):
+#         yield self.time
+#         yield self.state
+#         yield self.hamiltonian
+#         yield self.cache
+#         
+#     def __getitem__(self, index: int):
+#         if index == 0:
+#             return self.time
+#         elif index == 1:
+#             return self.state
+#         elif index == 2:
+#             return self.hamiltonian
+#         elif index == 3:
+#             return self.cache
+#         else:
+#             raise IndexError(f"Index {index} is out of range.")
+#         
+#     def __tuple__(self):
+#         return (self.time, self.state, self.hamiltonian, self.cache)
+#     
+# def _ehrenfest_benchmark():
+#     from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
+#     from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics, NonadiabaticDynamicsMethods
+#     t0 = 0.0    
+#     r0 = -5.0; p0 = 30.0; rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
+#     s0 = State.from_variables(R=r0, P=p0, rho=rho0)
+#     _delay_time = estimate_delay_time(r0, p0)
+#     Omega = 0.3; tau = 100
+#     mass = 2000.0
+#     
+#     hamiltonian = get_tullyone(
+#         # t0=_delay_time, Omega=Omega, tau=tau,
+#         pulse_type=TullyOnePulseTypes.NO_PULSE
+#         # td_method=TD_Methods.BRUTE_FORCE
+#     )
+#     dyn = NonadiabaticDynamics(
+#         hamiltonian=hamiltonian,
+#         t0=t0,
+#         s0=s0,
+#         mass=mass,
+#         basis_rep=BasisRepresentation.Adiabatic,
+#         qm_rep=QunatumRepresentation.DensityMatrix,
+#         solver=NonadiabaticDynamicsMethods.EHRENFEST,
+#         numerical_integrator=NumericalIntegrators.ZVODE,
+#         dt=0.03,
+#         save_every=30
+#     )
+#     
+#     def stop_condition(t, s, states):
+#         r, p, _ = s.get_variables()
+#         return (r>5.0) or (r<-5.0)
+#     break_condition = lambda t, s, states: False
+#     return run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
+# 
+# def _step_zvode(t: float, s: State, hamiltonian: HamiltonianBase, mass: ArrayLike, basis_rep: BasisRepresentation, cache: FSSHCache, dt: float, ode_solver: ode) -> Tuple[float, State, FSSHCache]:
+#     if not ode_solver.successful():
+#         raise RuntimeError("The ode solver is not successful.")
+#     if t != ode_solver.t:
+#         raise ValueError(f"The time {t} is not the same as the solver time {ode_solver.t}.")
+#     ode_solver.set_f_params(hamiltonian, mass, basis_rep, cache.active_surf, s.stype, s.data.dtype)
+#     ode_solver.integrate(ode_solver.t + dt)
+#     state = State.from_unstructured(ode_solver.y, dtype=s.data.dtype, stype=s.stype)
+#     R, P, rho = state.get_variables()
+#     hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
+#     hamiltonian.update_last_evecs(hami_return.evecs)
+#     # hamiltonian.update_last_deriv_couplings(hami_return.d)
+#     has_hopped, new_active_surf, P_rescaled = hopping(dt, rho, hami_return, P, mass, cache.active_surf)
+#     if has_hopped:
+#         P[:] = P_rescaled
+#         ode_solver.set_initial_value(state.flatten(), t)
+#     cache = FSSHCache(active_surf=new_active_surf, evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
+#     return ode_solver.t, state, cache
+# 
+# def _debug_test_run_one_fssh():
+#     from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
+#     NF: int = 1
+#     t0 = 0.0
+#     r0 = -5.0; p0 = 30.0; rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
+#     # rho0_floquet = get_floquet_rho0(rho0, NF=1)
+#     s0 = State.from_variables(R=r0, P=p0, rho=rho0)
+#     
+#     _delay_time = estimate_delay_time(r0, p0)
+#     Omega = 0.3; tau = 100
+#     mass = 2000.0  
+#     
+#     hamiltonian = get_tullyone(
+#         # t0=_delay_time, Omega=Omega, tau=tau,
+#         pulse_type=TullyOnePulseTypes.NO_PULSE
+#         # td_method=TD_Methods.FLOQUET, NF=NF
+#     )
+#     R0, P0, rho0 = s0.get_variables()   
+#     hami_return = eval_nonadiabatic_hamiltonian(t0, R0, hamiltonian, BasisRepresentation.Adiabatic)
+#     active_index = np.diag(rho0).real.argmax()
+#     cache = FSSHCache(active_surf=ActiveSurface(index=active_index), evals=hami_return.evals, evecs=hami_return.evecs, H_diab=hami_return.H, hamiltonian=hamiltonian)
+#     
+#     time_out = np.array([])
+#     traj_out = None
+#     property_dict = {field: [] for field in FSSHProperties._fields}
+#     
+#     def _append_properties(properties_dict: dict, properties: FSSHProperties) -> dict:
+#         for (field, value) in zip(FSSHProperties._fields, properties):
+#             properties_dict[field].append(value)
+#         return properties_dict
+#             
+#     def stop_condition(t, s, states):
+#         r, p, _ = s.get_variables()
+#         return (r>5.0) or (r<-5.0)
+#     
+#     dt = 0.1
+#     t, s = t0, s0
+#     
+#     
+#     ode_solver = ode(wrap_deriv_fssh_dm).set_integrator('zvode', method='bdf')
+#     ode_solver.set_initial_value(s.flatten(), t)
+#     
+#     for ns in range(int(1e6)):
+#         if ns % 10 == 0:
+#             properties = calculate_properties(t, s, cache, mass)
+#             time_out = np.append(time_out, t)   
+#             traj_out = np.array([s.data]) if traj_out is None else np.append(traj_out, s.data)
+#             property_dict = _append_properties(property_dict, properties)
+#             if stop_condition(t, s, traj_out):
+#                 break
+#         t, s, cache = _step_zvode(t, s, hamiltonian, mass, BasisRepresentation.Adiabatic, cache, dt, ode_solver)
+#         
+#     for (field, value) in property_dict.items():
+#         property_dict[field] = np.array(value)
+#     return time_out, traj_out, property_dict 
+# 
+# def _para_run_fssh(ntraj: int):
+#     from joblib import Parallel, delayed
+#     ensemble_out = Parallel(n_jobs=-1,verbose=5)(
+#         delayed(_debug_test_run_one_fssh)() for _ in range(ntraj)
+#     )
+#     return reduce_ensemble(ensemble_out, ensemble_length=float(ntraj))
+# 
+# def get_shortest_time_length(ensemble_out: List[Tuple[np.ndarray, np.ndarray, dict]]):
+#     len_time = int(1e10)
+#     for time_out, _, _ in ensemble_out:
+#         if len(time_out) < len_time:
+#             len_time = len(time_out)
+#     return len_time
+#     
+# def reduce_ensemble(ensemble_out: List[Tuple[np.ndarray, np.ndarray, dict]], ensemble_length: int):
+#     len_time = get_shortest_time_length(ensemble_out)
+#     time_reduced = None
+#     traj_reduced = None
+#     property_reduced = {field: None for field in FSSHProperties._fields}
+#     for i, (time_out, traj_out, property_dict) in enumerate(ensemble_out):
+#         if time_reduced is None:
+#             time_reduced = time_out[:len_time]
+#         if traj_reduced is None:
+#             traj_reduced = traj_out[:len_time]
+#         else:
+#             for name in traj_out.dtype.names:
+#                 traj_reduced[name] += traj_out[name][:len_time]
+#         for (field, value) in property_dict.items():  
+#             property_reduced[field] = value[:len_time] if property_reduced[field] is None else property_reduced[field] + value[:len_time]
+#     for name in traj_reduced.dtype.names:
+#         traj_reduced[name] /= ensemble_length
+#     for (field, value) in property_reduced.items():
+#         property_reduced[field] = np.array(value) / ensemble_length
+#     return time_reduced, traj_reduced, property_reduced
+#         
+#         
+# 
+# def _plot_all(time_out, traj_out, property_dict, ref_out, fixed_dt: float=None):
+#     import matplotlib.pyplot as plt
+#     if fixed_dt is not None: 
+#         time_out = np.arange(len(time_out)) / fixed_dt
+#     fig = plt.figure(dpi=300)
+#     ax = fig.add_subplot(111)
+#     ax.plot(time_out, traj_out['R'], label='R')
+#     ax.plot(ref_out['time'], ref_out['states']['R'], label='R_ref')
+#     ax.set_xlabel('Time (a.u.)')
+#     ax.set_ylabel('R (a.u.)')
+#     ax.legend()
+#     plt.show()
+# 
+#     fig = plt.figure(dpi=300)
+#     ax = fig.add_subplot(111)
+#     ax.plot(time_out, traj_out['P'], label='P')
+#     ax.plot(ref_out['time'], ref_out['states']['P'], label='P_ref')
+#     ax.set_xlabel('Time (a.u.)')
+#     ax.set_ylabel('P (a.u.)')
+#     ax.legend()
+#     plt.show()
+#     
+#     fig = plt.figure(dpi=300)
+#     ax = fig.add_subplot(111)   
+#     pop_out = property_dict['diab_populations']
+#     ax.plot(time_out, pop_out, label='pop0')
+#     ax.plot(time_out, pop_out, label='pop1')
+#     ax.plot(ref_out['time'], ref_out['diab_populations'][:, 0], label='pop0_ref')
+#     ax.plot(ref_out['time'], ref_out['diab_populations'][:, 1], label='pop1_ref')
+#     ax.set_xlabel('Time (a.u.)')
+#     ax.set_ylabel('Population')
+#     ax.legend()
+#     plt.show()
+#     
+#     fig = plt.figure(dpi=300)
+#     ax = fig.add_subplot(111)   
+#     ax.plot(time_out, property_dict['PE'], label='PE')
+#     ax.plot(ref_out['time'], ref_out['PE'], label='PE_ref')
+#     ax.set_xlabel('Time (a.u.)')
+#     ax.set_ylabel('Potential Energy (a.u.)')
+#     ax.legend()
+#     plt.show()
+#     
+#     fig = plt.figure(dpi=300)
+#     ax = fig.add_subplot(111)   
+#     ax.plot(time_out, property_dict['KE'], label='KE')
+#     ax.plot(ref_out['time'], ref_out['KE'], label='KE_ref')
+#     ax.set_xlabel('Time (a.u.)')
+#     ax.set_ylabel('Kinetic Energy (a.u.)')
+#     ax.legend()
+#     plt.show()
+#     
+#     fig = plt.figure(dpi=300)
+#     ax = fig.add_subplot(111)   
+#     TE = property_dict['KE'] + property_dict['PE']
+#     TE_ref = ref_out['KE'] + ref_out['PE']
+#     ax.plot(time_out, TE, label='TE')
+#     ax.plot(ref_out['time'], TE_ref, label='TE_ref')
+#     ax.set_xlabel('Time (a.u.)')
+#     ax.set_ylabel('Total Energy (a.u.)')
+#     ax.legend()
+#     plt.show()
+# 
+#     
+# # %%
+# if __name__ == '__main__':
+#     import time
+#     start = time.perf_counter()
+#     # time_out, traj_out, property_dict = _debug_test_run_one_fssh()
+#     # time_out, traj_out, property_out = _debug_test_fssh(ntraj=2)
+#     ntraj = 1000
+#     time_out, traj_out, property_dict = _para_run_fssh(ntraj=ntraj)
+#     print(f"Time: {time.perf_counter()-start:.4f} s")
+#     ref_out = _ehrenfest_benchmark() 
+#     
+# # %%
+# if __name__ == '__main__':
+#     ref_out = _ehrenfest_benchmark() 
+#     print(ref_out['time'][-1])
+#    
+# # %%    
+# if __name__ == '__main__':
+#     _plot_all(time_out, traj_out, property_dict, ref_out)
+#     
+# # %%

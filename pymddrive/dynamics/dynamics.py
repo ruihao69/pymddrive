@@ -1,7 +1,7 @@
 # %% The package code
 import numpy as np
 
-from typing import Union, Tuple, Any, Type, Callable, NamedTuple
+from typing import Union, Tuple, Type, Callable, NamedTuple
     
 from numbers import Real
 from numpy.typing import ArrayLike
@@ -12,6 +12,7 @@ from pymddrive.integrators.state import State
 from abc import ABC
 
 from pymddrive.dynamics.options import NumericalIntegrators
+from pymddrive.dynamics.cache import Cache
     
 class Dynamics(ABC):
     def __init__(
@@ -37,14 +38,20 @@ class Dynamics(ABC):
         self.stype = s0.stype
         
         # the stepper design: takes time, state, and cache, returns time, state, and cache
-        self.step: Callable[[float, State, Any], Tuple[float, State, Any]] = None
+        self.step: Callable[[float, State, Cache], Tuple[float, State, Cache]] = None
+        
         # the derivative function: takes time and state, returns the derivative of the state
         self.deriv: Callable[[float, State], State] = None
+        
         # the properties calculator: takes the current time and state, returns the properties as a namedtuple
         self.calculate_properties: Callable[[float, State], NamedTuple] = None
+        
+        # the callback function: takes the current time, state, cache, and langevin forces, returns the updated state and cache
+        self.callback: Callable[[float, State, Cache, np.ndarray], Tuple[State, Cache]] = None
+        
         # the cache calculator: takes the current time, state, and cache, returns the updated cache
-        # self.calculate_cache: Callable[[float, State, Any], Any] = None
-        self.cache_initializer: Callable[[float, State], Any] = None
+        self.cache_initializer: Callable[[float, State, ArrayLike], Cache] = None
+        
         self.properties_type: Type = None 
         
         self.numerical_integrator: NumericalIntegrators = numerical_integrator

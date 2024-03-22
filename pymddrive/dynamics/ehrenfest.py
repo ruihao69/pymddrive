@@ -11,13 +11,15 @@ from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentatio
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian, HamiltonianRetureType
 from pymddrive.dynamics.math_utils import commutator, rhs_density_matrix, v_dot_d, expected_value
 from pymddrive.dynamics.floquet.ehrenfest import get_rho_and_populations
+from pymddrive.dynamics.cache import Cache
+from pymddrive.dynamics.langevin import LangevinBase
 
 from numbers import Real
-from typing import Union, Callable
+from typing import Union, Callable, Optional
 from collections import namedtuple  
 
 
-EhrenfestCache = namedtuple('EhrenfestCache', 'meanF, evals, evecs')
+# EhrenfestCache = namedtuple('EhrenfestCache', 'meanF, evals, evecs')
 # for debugging
 # EhrenfestProperties = namedtuple('EhrenfestProperties', 'KE, PE, populations, meanF, dij') 
 EhrenfestProperties = namedtuple('EhrenfestProperties', 'KE, PE, diab_populations, adiab_populations, meanF, dij')
@@ -30,11 +32,13 @@ def choose_ehrenfest_stepper(
     if numerical_integrator == NumericalIntegrators.RK4:
         return step_rk
     elif numerical_integrator == NumericalIntegrators.VVRK4:
-        return step_vv_rk
+        # return step_vv_rk
+        raise NotImplementedError
     elif numerical_integrator == NumericalIntegrators.VVRK4_GPAW:
         return step_vv_rk_gpaw
     else:
-        raise NotImplementedError(f"Numerical integrator {numerical_integrator} is not implemented for Ehrenfest dynamics.")
+        # raise NotImplementedError(f"Numerical integrator {numerical_integrator} is not implemented for Ehrenfest dynamics.")
+        raise NotImplementedError
     
 def choose_ehrenfest_deriv(
     quantum_representation: QunatumRepresentation
@@ -76,6 +80,7 @@ def _rho_dot_diab(rho, H) -> ArrayLike:
 def _deriv_ehrenfest_dm(
     t: Real,
     s: State,
+    cache: Cache,
     hamiltonian: HamiltonianBase,
     mass: Union[Real, np.ndarray],
     basis_rep: BasisRepresentation,
@@ -90,7 +95,7 @@ def _deriv_ehrenfest_dm(
     
     # integrate the momentum
     meanF, hami_return = compute_ehrenfest_meanF(t, R, rho, hamiltonian, basis_rep)
-    kP[:] = _P_dot(meanF)
+    kP[:] = _P_dot(meanF + cache.F_langevin)
     
     
     # integrate the density matrix
@@ -101,18 +106,29 @@ def _deriv_ehrenfest_dm(
     
     return out 
 
-def step_rk(t, s, cache, dt, hamiltonian, mass, basis_rep):
+def step_rk(
+    t: float,
+    s: State,
+    cache: Cache,
+    dt: float,
+    hamiltonian: HamiltonianBase,
+    langevin: LangevinBase,
+    mass: Union[float, np.ndarray],
+    basis_rep: BasisRepresentation,
+):
+    # numerical Integration
     deriv_options = {
+        "cache": cache,
         "hamiltonian": hamiltonian,
         "mass": mass,
         "basis_rep": basis_rep
     }
     t, s = rk4(t, s, _deriv_ehrenfest_dm, deriv_options, dt)
-    R, _, _ = s.get_variables()
-    hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
-    hamiltonian.update_last_evecs(hami_return.evecs)
-    hamiltonian.update_last_deriv_couplings(hami_return.d)
-    return t, s, EhrenfestCache(meanF=None, evals=None, evecs=None)
+    # callback after one step
+    R, P, _ = s.get_variables()
+    F_Langevin = langevin.evaluate_langevin(t, R, P, dt)
+    new_s, new_cache = callback(t, s, cache, F_Langevin, hamiltonian, basis_rep, dt, mass)
+    return t, new_s, new_cache
 
 def step_vv_rk(t, s, cache, dt, hamiltonian, mass, basis_rep):
     R, P, rho = s.get_variables()
@@ -137,7 +153,8 @@ def step_vv_rk(t, s, cache, dt, hamiltonian, mass, basis_rep):
     P += 0.5 * dt * _P_dot(meanF)
         
     t += dt     
-    return t, s, EhrenfestCache(meanF=meanF, evals=hami_return.evals, evecs=hami_return.evecs)
+    cache = callback(t, s, hamiltonian, basis_rep)
+    return t, s, cache
 
 def step_vv_rk_gpaw(t, s, cache, dt, hamiltonian, mass, basis_rep):
     R, P, rho = s.get_variables()
@@ -169,13 +186,16 @@ def step_vv_rk_gpaw(t, s, cache, dt, hamiltonian, mass, basis_rep):
     # update the time
     t += dt
     
-    return t, s, EhrenfestCache(meanF=meanF, evals=hami_return.evals, evecs=hami_return.evecs)
+    cache = callback(t, s, hamiltonian, basis_rep)
+    
+    return t, s, cache
 
-def calculate_properties(t: Real, s: State, cache: EhrenfestCache, hamiltonian: HamiltonianBase, mass: Union[Real, np.ndarray], basis_rep: BasisRepresentation):
-    R, _, rho = s.get_variables()
-    meanF, hami_return = compute_ehrenfest_meanF(t, R, rho, hamiltonian, basis_rep)
+def calculate_properties(t: Real, s: State, cache: Cache, hamiltonian: HamiltonianBase, mass: Union[Real, np.ndarray], basis_rep: BasisRepresentation):
+    _, P, rho = s.get_variables()
+    # meanF, hami_return = compute_ehrenfest_meanF(t, R, rho, hamiltonian, basis_rep)
+    meanF, hami_return = cache.meanF, cache.hami_return
     hami_return: HamiltonianRetureType
-    KE = 0.5 * np.sum(s.data['P']**2 / mass)
+    KE = 0.5 * np.sum(P**2 / mass)
     if isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
         # print(np.sum(rho.diagonal().real))
         NF: int = hamiltonian.NF
@@ -247,10 +267,34 @@ def _eval_Ehrenfest_meanF(evals, d, rho, F):
     meanF_term2 = second_term_meanF(rho, evals, d)         # nonadiabatic changes of the adiabatic state occupations
     return meanF_term1 + meanF_term2
 
-def initialize_cache(t: Real, s: State, hamiltonian: HamiltonianBase, basis_rep: BasisRepresentation):
+def initialize_cache(
+    t: float, 
+    s: State, 
+    F_Langevin: ArrayLike,
+    hamiltonian: HamiltonianBase, 
+    basis_rep: BasisRepresentation, 
+) -> Cache:
     R, _, rho = s.get_variables()
     meanF, hami_return = compute_ehrenfest_meanF(t, R, rho, hamiltonian, basis_rep)
-    return EhrenfestCache(meanF=meanF, evals=hami_return.evals, evecs=hami_return.evecs)
+    return Cache(hamiltonian=hamiltonian, hami_return=hami_return, meanF=meanF, F_langevin=F_Langevin)
+
+def callback(
+    t: float, 
+    s: State, 
+    cache: Cache,
+    F_langevin: Optional[ArrayLike],
+    hamiltonian: HamiltonianBase, 
+    basis_rep: BasisRepresentation, 
+    dt: float,
+    mass: Union[float, ArrayLike],
+) -> Cache:
+    R, _, rho = s.get_variables()
+    hami_return = eval_nonadiabatic_hamiltonian(t, R, hamiltonian, basis_rep)
+    meanF = _compute_ehrenfest_meanF(rho, hami_return.dHdR, hami_return.evals, hami_return.evecs, hami_return.d, hami_return.F, basis_rep)
+    hamiltonian.update_last_evecs(hami_return.evecs)
+    # hamiltonian.update_last_deriv_couplings(hami_return.d)
+    F_langevin = F_langevin if F_langevin is not None else np.zeros_like(meanF)
+    return s, Cache(hamiltonian=hamiltonian, hami_return=hami_return, meanF=meanF, F_langevin=F_langevin)
     
 # %% the testing/debugging code
 

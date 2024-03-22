@@ -145,7 +145,9 @@ def run_nonadiabatic_dynamics(
     
     t, s = dyn.t0, dyn.s0
     # cache = None
-    cache = dyn.cache_initializer(t, s)
+    R0, P0, rho0 = s.get_variables()
+    F_langevin = dyn.langevin.evaluate_langevin(t, R0, P0, dyn.dt)
+    cache = dyn.cache_initializer(t, s, F_langevin)
     
     for istep in range(max_iters):
         if istep % dyn.save_every == 0:

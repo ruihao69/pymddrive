@@ -1,7 +1,7 @@
 from numpy.typing import ArrayLike
 
 from abc import ABC, abstractmethod
-from typing import Union, Optional
+from typing import Union, Optional, Callable
 
 class HamiltonianBase(ABC):
     def __init__(
@@ -25,3 +25,9 @@ class HamiltonianBase(ABC):
         
     def update_last_deriv_couplings(self, deriv_couplings: ArrayLike) -> None:
         self.last_deriv_couplings = deriv_couplings
+        
+    def get_friction(self, ) -> Union[None, float, ArrayLike, Callable]:
+        return None
+    
+    def get_kT(self, ) -> Union[None, float]:
+        return None
