@@ -1,6 +1,5 @@
-from .state import State, zeros_like
+from .state import State
 
 __all__ = [
     'State',
-    'zeros_like',
 ]

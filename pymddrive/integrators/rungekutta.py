@@ -147,8 +147,8 @@ def evaluate_initial_dt(
     """
     if f0 is None:
         f0 = derivative(t0, y0)
-    _y0 = y0.flatten(copy=True)
-    _f0 = f0.flatten(copy=True)
+    _y0 = y0.flatten()
+    _f0 = f0.flatten()
     
     scale = atol + np.abs(_y0) * rtol
     d0 = np.linalg.norm(_y0 / scale)

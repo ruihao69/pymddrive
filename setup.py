@@ -138,11 +138,24 @@ class CMakeBuild(build_ext):
         #         print(f"{file=}")
         #         print(f"{dest_dir / file.name=}")
         #         print(f"{ext_fullpath=}")
+        
+def remove_root_binaries():
+    import glob
+    # remove "*.so"
+    root_dir = Path(__file__).parent
+    bin_dir = root_dir / '*.so' 
+    binaries = list(glob.glob(str(bin_dir)))
+    if binaries:
+        for file in binaries:
+            print(f"Removing {file}")
+            os.remove(file)
+    
+    
 
 if os.path.exists('requirements.txt'):
     with open('requirements.txt') as f:
         requirements = f.read().splitlines()
-
+        
 setup(
     name="pymddrive",
     version="0.0.1",
@@ -163,4 +176,6 @@ setup(
     zip_safe=False,
     requires=requirements,
 )
+
+remove_root_binaries()
 
