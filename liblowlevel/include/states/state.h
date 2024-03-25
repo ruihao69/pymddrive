@@ -23,7 +23,6 @@ struct StateData {
   Eigen::VectorXcd psi;  // wave function
   Eigen::MatrixXcd rho;  // density matrix
   // StateData() : mass(-1.0), R(Eigen::VectorXd::Zero(0)), P(Eigen::VectorXd::Zero(0)), psi(Eigen::VectorXcd::Zero(0)), rho(Eigen::MatrixXcd::Zero(0, 0)) {}
-
   StateData zeros_like() const;
 };
 
@@ -58,6 +57,15 @@ class State {
       const Eigen::MatrixXcd& rho  //
   );
 
+  // constructor for pickle
+  State(
+    const Eigen::VectorXd& R,    // R are the
+    const Eigen::VectorXd& P,    // P are the momenta of the vibrational mode
+    double mass,                 //
+    const Eigen::VectorXcd& psi, // wave function
+    const Eigen::MatrixXcd& rho // density matrix
+  );
+
   // straight forward constructor (directly construction from private data)
   State(StateData state_data, QuantumStateRepresentation representation, StateType state_type, const Eigen::VectorXcd& flatten_view);
 
@@ -68,13 +76,16 @@ class State {
   const Eigen::VectorXd& get_P() const { return state_data.P; }
   void set_P(const Eigen::VectorXd& P) { state_data.P = P; }
   const Eigen::VectorXcd& get_psi() const { return state_data.psi; }
+  Eigen::VectorXd get_v() const { return state_data.P / state_data.mass; }
   void set_psi(const Eigen::VectorXcd& psi) { state_data.psi = psi; }
   const Eigen::MatrixXcd& get_rho() const { return state_data.rho; }
   void set_rho(const Eigen::MatrixXcd& rho) { state_data.rho = rho; }
   const Eigen::VectorXcd& get_flatten_view() const { return flatten_view; }
   StateData get_state_data() const { return state_data; }
   QuantumStateRepresentation get_representation() const { return representation; }
+  void set_representation(QuantumStateRepresentation representation) { this->representation = representation; }
   StateType get_state_type() const { return state_type; }
+  void set_state_type(StateType state_type) { this->state_type = state_type; }
 
 
   // access the state data as an 1D array

@@ -80,6 +80,21 @@ State::State(
 State::State(StateData state_data, QuantumStateRepresentation representation, StateType state_type, const Eigen::VectorXcd& flatten_view)
     : state_data(state_data), representation(representation), state_type(state_type), flatten_view(flatten_view) {}
 
+State::State(
+    const Eigen::VectorXd& R,    // R are the
+    const Eigen::VectorXd& P,    // P are the momenta of the vibrational mode
+    double mass,                 //
+    const Eigen::VectorXcd& psi, // wave function
+    const Eigen::MatrixXcd& rho // density matrix
+  ) :  flatten_view(R.size() + P.size() + psi.size() + rho.size()) {
+  state_data.R = R;
+  state_data.P = P;
+  state_data.mass = mass;
+  state_data.psi = psi;
+  state_data.rho = rho;
+  }
+
+
 const Eigen::VectorXcd& State::flatten() {
   if (state_type == StateType::CLASSICAL) {
     concatenate_RP(state_data.R, state_data.P, flatten_view);

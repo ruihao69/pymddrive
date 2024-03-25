@@ -30,6 +30,19 @@ PYBIND11_MODULE(_low_level, m) {
 
   // The binding code for State class
   py::class_<State>(m_states, "State")
+      .def(py::pickle(
+          [](const State& state) { // __getstate__
+            // Return a tuple that contains the necessary data to reconstruct the State object
+            return py::make_tuple(state.get_R(), state.get_P(), state.get_psi(), state.get_rho(), state.get_mass(), state.get_state_type(), state.get_representation());
+          },
+          [](py::tuple tuple) { // __setstate__
+            // Reconstruct the State object from the tuple
+            State state(tuple[0].cast<Eigen::VectorXd>(), tuple[1].cast<Eigen::VectorXd>(), tuple[4].cast<double>(), tuple[2].cast<Eigen::VectorXcd>(), tuple[3].cast<Eigen::MatrixXcd>());
+            state.set_state_type(tuple[5].cast<StateType>());
+            state.set_representation(tuple[6].cast<QuantumStateRepresentation>());
+            return state;
+          }
+      ))
       .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double>())
       .def(py::init<const Eigen::VectorXcd&>())
       .def(py::init<const Eigen::MatrixXcd&>())
@@ -40,6 +53,7 @@ PYBIND11_MODULE(_low_level, m) {
       .def("set_R", &State::set_R)
       .def("get_P", &State::get_P)
       .def("set_P", &State::set_P)
+      .def("get_v", &State::get_v)
       .def("get_psi", &State::get_psi)
       .def("set_psi", &State::set_psi)
       .def("get_rho", &State::get_rho)

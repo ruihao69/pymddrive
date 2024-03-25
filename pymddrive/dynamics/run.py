@@ -1,7 +1,8 @@
 # %% This file contains the main function to run the nonadiabatic dynamics simulation.
 import numpy as np
+from numpy.typing import DTypeLike
 
-from pymddrive.integrators.state import State
+from pymddrive.integrators.state import get_state
 from pymddrive.dynamics.nonadiabatic_dynamics import NonadiabaticDynamics
 from pymddrive.utils import get_ncpus   
 
@@ -146,6 +147,15 @@ def run_nonadiabatic_dynamics(
     t, s = dyn.t0, dyn.s0
     # cache = None
     R0, P0, rho0 = s.get_variables()
+    struct_array_dtype: DtypeLike = [
+        ('R', np.float64, R0.shape[0]),
+        ('P', np.float64, P0.shape[0]),
+        ('rho', np.complex128, rho0.shape),
+    ]
+    
+    def get_struct_array(R, P, rho):
+        return np.array([(R, P, rho)], dtype=struct_array_dtype)
+    
     F_langevin = dyn.langevin.evaluate_langevin(t, R0, P0, dyn.dt)
     cache = dyn.cache_initializer(t, s, F_langevin)
     
@@ -154,7 +164,8 @@ def run_nonadiabatic_dynamics(
             properties = dyn.calculate_properties(t, s, cache)
             properties_dict = _append_properties(properties_dict, properties)
             time_array = np.append(time_array, t)
-            traj_array = np.array([s.data]) if traj_array is None else np.append(traj_array, s.data)
+            data = get_struct_array(*s.get_variables())
+            traj_array = np.array([data]) if traj_array is None else np.append(traj_array, data)
             # print(f"{s.data['R']=}")
             if istep % check_stop_every == 0:
                 if stop_condition(t, s, traj_array):
@@ -196,12 +207,12 @@ def _debug_test():
     # initial conditions
     t0 = 0.0; r0 = -10.0; p0 = 30.0
     rho0 = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
-    s0 = State.from_variables(R=r0, P=p0, rho=rho0)
+    s0 = get_state(mass=mass, R=r0, P=p0, rho_or_psi=rho0)
     
     # prepare the dynamics object
     dyn = NonadiabaticDynamics( 
         hamiltonian=hamiltonian,
-        t0=t0, s0=s0, mass=mass,
+        t0=t0, s0=s0,
         qm_rep=QunatumRepresentation.DensityMatrix,
         basis_rep=BasisRepresentation.Diabatic,
         solver=NonadiabaticDynamicsMethods.EHRENFEST,
@@ -231,12 +242,12 @@ def _debug_test():
     # initial conditions
     t0 = 0.0; r0 = -10.0; p0 = 30.0
     rho0 = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
-    s0 = State.from_variables(R=r0, P=p0, rho=rho0)
+    s0 = get_state(mass=mass, R=r0, P=p0, rho_or_psi=rho0)
     
     # prepare the dynamics object
     dyn = NonadiabaticDynamics( 
         hamiltonian=hamiltonian,
-        t0=t0, s0=s0, mass=mass,
+        t0=t0, s0=s0,
         qm_rep=QunatumRepresentation.DensityMatrix,
         basis_rep=BasisRepresentation.Diabatic,
         solver=NonadiabaticDynamicsMethods.EHRENFEST,
@@ -251,7 +262,7 @@ def _debug_test():
     r0, r1 = output['states']['R'], output_zvode['states']['R']
     p0, p1 = output['states']['P'], output_zvode['states']['P']
     # rho0, rho1= output['states']['rho'], output_zvode['states']['rho']
-    pop0, pop1 = output['populations'], output_zvode['populations']
+    pop0, pop1 = output['adiab_populations'], output_zvode['adiab_populations']
     
     plt.plot(t0, r0, ls='-', label='home-made RK4')
     plt.plot(t1, r1, ls='-.', label='scipy zvode')

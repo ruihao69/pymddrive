@@ -4,7 +4,7 @@
 import numpy as np
 
 from collections import namedtuple
-from typing import Callable, Union, Tuple
+from typing import Callable, Union, Tuple, Any
 
 from pymddrive.integrators.state import State   
 
@@ -123,7 +123,8 @@ def evaluate_initial_dt(
     order: int,
     rtol: float,
     atol: float,
-    f0: Union[None, State]=None
+    f0: Union[None, State]=None,
+    cache: Any=None
 ):
     
     """Evaluate the initial step size for the Runge-Kutta type integrators.
@@ -146,7 +147,7 @@ def evaluate_initial_dt(
           Equations I: Nonstiff Problems", Sec. II.4.
     """
     if f0 is None:
-        f0 = derivative(t0, y0)
+        f0 = derivative(t0, y0, cache)
     _y0 = y0.flatten()
     _f0 = f0.flatten()
     
@@ -160,9 +161,9 @@ def evaluate_initial_dt(
         h0 = 0.01 * max(d0, d1)
         
     _y1 = _y0 + h0 * _f0 
-    y1 = State.from_unstructured(flat_data=_y1, dtype=y0.data.dtype, stype=y0.stype, copy=True)
-    f1 = derivative(t0 + h0, y1)
-    _f1 = f1.flatten(copy=True)
+    y1 = y0.from_unstructured(_y1)
+    f1 = derivative(t0 + h0, y1, cache)
+    _f1 = f1.flatten()
     
     d2 = np.linalg.norm((_f1 - _f0) / scale) / h0
     
