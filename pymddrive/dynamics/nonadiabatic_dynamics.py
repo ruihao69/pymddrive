@@ -53,7 +53,7 @@ class NonadiabaticDynamics(Dynamics):
         if hamiltonian.get_friction() is None:
             self.langevin: LangevinBase = NullLangevin()
         else:
-            self.langevin: LangevinBase = Langevin(kT=hamiltonian.get_kT(), gamma=hamiltonian.get_friction())
+            self.langevin: LangevinBase = Langevin(kT=hamiltonian.get_kT(), mass=s0.get_mass(), gamma=hamiltonian.get_friction())
         
         if qm_rep != QunatumRepresentation.DensityMatrix:
             raise NotImplementedError(f"At this time, NonadiabaticDynamics class only supports the Density Matrix representation for quantum system.")

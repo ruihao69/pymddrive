@@ -10,7 +10,9 @@
 #include <unsupported/Eigen/CXX11/Tensor>
 
 // local includes
+#include "equations_of_motion/equations_of_motion.h"
 #include "states/state.h"
+#include "row_major_types.h"
 
 // C++ standard library
 #include <complex>
@@ -31,18 +33,17 @@ PYBIND11_MODULE(_low_level, m) {
   // The binding code for State class
   py::class_<State>(m_states, "State")
       .def(py::pickle(
-          [](const State& state) { // __getstate__
+          [](const State& state) {  // __getstate__
             // Return a tuple that contains the necessary data to reconstruct the State object
             return py::make_tuple(state.get_R(), state.get_P(), state.get_psi(), state.get_rho(), state.get_mass(), state.get_state_type(), state.get_representation());
           },
-          [](py::tuple tuple) { // __setstate__
+          [](py::tuple tuple) {  // __setstate__
             // Reconstruct the State object from the tuple
             State state(tuple[0].cast<Eigen::VectorXd>(), tuple[1].cast<Eigen::VectorXd>(), tuple[4].cast<double>(), tuple[2].cast<Eigen::VectorXcd>(), tuple[3].cast<Eigen::MatrixXcd>());
             state.set_state_type(tuple[5].cast<StateType>());
             state.set_representation(tuple[6].cast<QuantumStateRepresentation>());
             return state;
-          }
-      ))
+          }))
       .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double>())
       .def(py::init<const Eigen::VectorXcd&>())
       .def(py::init<const Eigen::MatrixXcd&>())
@@ -64,7 +65,7 @@ PYBIND11_MODULE(_low_level, m) {
       .def("zeros_like", &State::zeros_like)
       .def("get_state_type", &State::get_state_type)
       .def("get_quantum_representation", &State::get_representation)
-      .def("get_variables", [](const State& state){
+      .def("get_variables", [](const State& state) {
         if (state.get_representation() == QuantumStateRepresentation::NONE) {
           return py::make_tuple(state.get_R(), state.get_P(), py::none());
         } else if (state.get_representation() == QuantumStateRepresentation::WAVE_FUNCTION) {
@@ -79,22 +80,67 @@ PYBIND11_MODULE(_low_level, m) {
           } else {
             return py::make_tuple(py::none(), py::none(), state.get_rho());
         }
-      }})
+      } })
       // static methods
       .def_static("axpy", &State::axpy)
       .def_static("rk4_step", &State::rk4_step)
       // __repr__ method
       .def("__repr__", &State::__repr__);
 
-    // The binding code for QuantumStateRepresentation enum
-    py::enum_<QuantumStateRepresentation>(m_states, "QuantumStateRepresentation")
-        .value("NONE", QuantumStateRepresentation::NONE)
-        .value("WAVE_FUNCTION", QuantumStateRepresentation::WAVE_FUNCTION)
-        .value("DENSITY_MATRIX", QuantumStateRepresentation::DENSITY_MATRIX);
+  // The binding code for QuantumStateRepresentation enum
+  py::enum_<QuantumStateRepresentation>(m_states, "QuantumStateRepresentation")
+      .value("NONE", QuantumStateRepresentation::NONE)
+      .value("WAVE_FUNCTION", QuantumStateRepresentation::WAVE_FUNCTION)
+      .value("DENSITY_MATRIX", QuantumStateRepresentation::DENSITY_MATRIX);
 
-    // The binding code for StateType enum
-    py::enum_<StateType>(m_states, "StateType")
-        .value("CLASSICAL", StateType::CLASSICAL)
-        .value("QUANTUM", StateType::QUANTUM)
-        .value("MQC", StateType::MQC);
+  // The binding code for StateType enum
+  py::enum_<StateType>(m_states, "StateType")
+      .value("CLASSICAL", StateType::CLASSICAL)
+      .value("QUANTUM", StateType::QUANTUM)
+      .value("MQC", StateType::MQC);
+
+  /****
+   * The equations_of_motion submodule
+   ****/
+  py::module m_eom = m.def_submodule("equations_of_motion");
+  m_eom.doc() = "Low-level version of the equations_of_motion module, including the electornic equations of motion for the quantum / quantum classical dynamics simulation.";
+
+  // real hamiltonian (non-adiabatic coupling) and wave_function quantum state
+  m_eom.def("diabatic_equations_of_motion", [](Eigen::Ref<const RowMatrixXd> H, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    return diabatic_equations_of_motion(H, psi);
+  });
+
+  m_eom.def("adiabatic_equations_of_motion", [](Eigen::Ref<const Eigen::VectorXd> E, Eigen::Ref<const RowMatrixXd> v_dot_d, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    return adiabatic_equations_of_motion(E, v_dot_d, psi);
+  });
+
+
+  // real hamiltonian (non-adiabatic coupling) and density matrix quantum state
+  m_eom.def("diabatic_equations_of_motion", [](Eigen::Ref<const RowMatrixXd> H, Eigen::Ref<const RowMatrixXcd> rho) { 
+    return diabatic_equations_of_motion(H, rho);
+  });
+
+  m_eom.def("adiabatic_equations_of_motion", [](Eigen::Ref<const Eigen::VectorXd> E, Eigen::Ref<const RowMatrixXd> v_dot_d, Eigen::Ref<const RowMatrixXcd> rho) {
+    return adiabatic_equations_of_motion(E, v_dot_d, rho);
+  });
+
+  // complex hamiltonian (non-adiabatic coupling) and wave_function quantum state
+  m_eom.def("diabatic_equations_of_motion", [](Eigen::Ref<const RowMatrixXcd> H, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    return diabatic_equations_of_motion(H, psi);
+  });
+
+  m_eom.def("adiabatic_equations_of_motion", [](Eigen::Ref<const Eigen::VectorXd> E, Eigen::Ref<const RowMatrixXcd> v_dot_d, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    return adiabatic_equations_of_motion(E, v_dot_d, psi);
+  });
+
+  // complex hamiltonian (non-adiabatic coupling) and density matrix quantum state
+  m_eom.def("diabatic_equations_of_motion", [](Eigen::Ref<const RowMatrixXcd> H, Eigen::Ref<const RowMatrixXcd> rho) {
+    return diabatic_equations_of_motion(H, rho);
+  });
+  m_eom.def("adiabatic_equations_of_motion", [](Eigen::Ref<const Eigen::VectorXd> E, Eigen::Ref<const RowMatrixXcd> v_dot_d, Eigen::Ref<const RowMatrixXcd> rho) {
+    return adiabatic_equations_of_motion(E, v_dot_d, rho);
+  });
+
+
+
 }

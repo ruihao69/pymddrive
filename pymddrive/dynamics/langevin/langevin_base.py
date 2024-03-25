@@ -2,7 +2,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, Union
 
 class LangevinBase(ABC):
     # def __init__(self, kT: Optional[float]=None) -> None:
@@ -14,6 +14,10 @@ class LangevinBase(ABC):
     
     @abstractmethod
     def get_gamma(self, t: float, R: Optional[NDArray[np.float64]]=None) -> NDArray[np.float64]:
+        pass
+    
+    @abstractmethod
+    def get_mass(self) -> Optional[float]:
         pass
     
     @abstractmethod
@@ -35,11 +39,12 @@ class LangevinBase(ABC):
         self,
         dt: float,
         kT: float,
+        mass: Union[float, NDArray[np.float64]],
         gamma: NDArray[np.float64],
         P: NDArray[np.float64],
     ) -> NDArray[np.float64]:
         random_force = np.zeros_like(P)
-        D = kT * gamma
+        D = kT * gamma * mass
         random_force[:] = np.random.normal(0, 1, P.shape) * np.sqrt(2 * D / dt)
         return random_force
     
@@ -52,10 +57,11 @@ class LangevinBase(ABC):
     ) -> NDArray[np.float64]:
         # get all the necessary parameters 
         gamma = self.get_gamma(t, R)
+        mass = self.get_mass()
         kT = self.get_kT()
         
         friction = self.frictional_force(gamma, P)
-        random_force = self.random_force(dt, kT, gamma, P)
+        random_force = self.random_force(dt, kT, mass, gamma, P)
         return friction + random_force 
         # return friction
     

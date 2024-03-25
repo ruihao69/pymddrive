@@ -14,6 +14,9 @@ class NullLangevin(LangevinBase):
     def get_gamma(self, t: float, R: Optional[NDArray[np.float64]]=None) -> NDArray[np.float64]:
         return 0.0
     
+    def get_mass(self) -> None:
+        return None
+    
     def get_kT(self) -> None:
         return None
     
