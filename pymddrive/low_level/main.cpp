@@ -159,5 +159,15 @@ PYBIND11_MODULE(_low_level, m) {
   // instantiate for get_HF_cos: real H0, real V
   m_floquet.def("get_HF_cos", &get_HF_cos<RowMatrixXd, RowMatrixXd>);
 
-  
+  // instantiate for get_dHF_dR_cos: complex dH0_dR, complex dV_dR
+  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<RowTensor3cd, RowTensor3cd>);
+
+  // instantiate for get_dHF_dR_cos: complex dH0_dR, real dV_dR
+  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<RowTensor3cd, RowTensor3d>);
+
+  // instantiate for get_dHF_dR_cos: real dH0_dR, complex dV_dR
+  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<RowTensor3d, RowTensor3cd>);
+
+  // instantiate for get_dHF_dR_cos: real dH0_dR, real dV_dR
+  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<RowTensor3d, RowTensor3d>);
 }
