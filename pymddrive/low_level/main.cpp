@@ -14,6 +14,7 @@
 #include "floquet/floquet.h"
 #include "row_major_types.h"
 #include "states/state.h"
+#include "states/expected_values.h"
 
 // C++ standard library
 #include <complex>
@@ -100,6 +101,45 @@ PYBIND11_MODULE(_low_level, m) {
       .value("QUANTUM", StateType::QUANTUM)
       .value("MQC", StateType::MQC);
 
+  // real or complex quantum operator and wave_function quantum state
+  m_states.def("get_expected_value", [](Eigen::Ref<const RowMatrixXd> O, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    return get_expected_value(O, psi);
+  });
+
+  m_states.def("get_expected_value", [](Eigen::Ref<const RowMatrixXcd> O, Eigen::Ref<const Eigen::VectorXcd>psi) {
+    return get_expected_value(O, psi);
+  });
+
+  // real or complex quantum operator and density_matrix quantum state
+  m_states.def("get_expected_value", [](Eigen::Ref<const RowMatrixXd> O, Eigen::Ref<const RowMatrixXcd> rho) {
+    return get_expected_value(O, rho);
+  });
+
+  m_states.def("get_expected_value", [](Eigen::Ref<const RowMatrixXcd> O, Eigen::Ref<const RowMatrixXcd> rho) {
+    return get_expected_value(O, rho);
+  });
+
+  // real or complex quantum-classical operator and wave_function quantum state
+  m_states.def("get_expected_value", [](const Tensor3d& O, const Eigen::Ref<const Eigen::VectorXcd>& psi) {
+    return get_expected_value(O, psi);
+  });
+
+  m_states.def("get_expected_value", [](const Tensor3cd& O, const Eigen::Ref<const Eigen::VectorXcd>& psi) {
+    return get_expected_value(O, psi);
+  });
+
+  // real or complex quantum-classical operator and density_matrix quantum state
+  m_states.def("get_expected_value", [](const Tensor3d& O, const Eigen::Ref<const RowMatrixXcd>& rho) {
+    return get_expected_value(O, rho);
+  });
+
+  m_states.def("get_expected_value", [](const Tensor3cd& O, const Eigen::Ref<const RowMatrixXcd>& rho) {
+    return get_expected_value(O, rho);
+  });
+
+
+
+
   /****
    * The equations_of_motion submodule
    ****/
@@ -160,14 +200,14 @@ PYBIND11_MODULE(_low_level, m) {
   m_floquet.def("get_HF_cos", &get_HF_cos<RowMatrixXd, RowMatrixXd>);
 
   // instantiate for get_dHF_dR_cos: complex dH0_dR, complex dV_dR
-  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<RowTensor3cd, RowTensor3cd>);
+  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<Tensor3cd, Tensor3cd>);
 
   // instantiate for get_dHF_dR_cos: complex dH0_dR, real dV_dR
-  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<RowTensor3cd, RowTensor3d>);
+  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<Tensor3cd, Tensor3d>);
 
   // instantiate for get_dHF_dR_cos: real dH0_dR, complex dV_dR
-  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<RowTensor3d, RowTensor3cd>);
+  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<Tensor3d, Tensor3cd>);
 
   // instantiate for get_dHF_dR_cos: real dH0_dR, real dV_dR
-  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<RowTensor3d, RowTensor3d>);
+  m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<Tensor3d, Tensor3d>);
 }

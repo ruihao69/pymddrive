@@ -5,8 +5,6 @@
 #include <string>
 
 // local includes
-// #include "electronic.h"
-// #include "mode.h"
 
 namespace rhbi {
 enum QuantumStateRepresentation { NONE = 0,

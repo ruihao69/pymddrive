@@ -63,9 +63,9 @@ void fill_dHF_dR_offdiagonal_cosine(
 
 template <typename dH0_dR_t, typename dV_dR_t>
 using dHF_dRReturnType = std::conditional_t<
-    std::is_same_v<dH0_dR_t, RowTensor3cd> || std::is_same_v<dV_dR_t, RowTensor3cd>,
-    RowTensor3cd,
-    RowTensor3d>;
+    std::is_same_v<dH0_dR_t, Tensor3cd> || std::is_same_v<dV_dR_t, Tensor3cd>,
+    Tensor3cd,
+    Tensor3d>;
 
 template <typename dH0_dR_t, typename dV_dR_t>
 dHF_dRReturnType<dH0_dR_t, dV_dR_t> get_dHF_dR_cos(

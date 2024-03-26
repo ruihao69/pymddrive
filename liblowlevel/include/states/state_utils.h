@@ -44,5 +44,4 @@ void flat_to_RPRho(
     Eigen::MatrixXcd& rho //
 );
 
-
 } // namespace rhbi
