@@ -37,7 +37,8 @@ void _eom_wave_function_adiabatic(
     Eigen::Ref<const Eigen::VectorXcd> psi,  // Wave function
     Eigen::Ref<Eigen::VectorXcd> d_psi_dt    // Time derivative of wave function
 ) {
-  d_psi_dt.array() = -constants::IM * E.array() * psi.array();
+  // d_psi_dt.array() = -constants::IM * E.array() * psi.array();
+  d_psi_dt.noalias() += -constants::IM * psi.cwiseProduct(E);
   d_psi_dt.noalias() += -v_dot_d * psi;
 }
 

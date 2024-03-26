@@ -1,6 +1,7 @@
 add_library(liblowlevel STATIC
   src/states/state.cpp
   src/states/state_utils.cpp
+  include/floquet/floquet.h
 )
 target_include_directories(liblowlevel PUBLIC 
     ${LIB_LOW_LEVEL_INCLUDE_DIR}

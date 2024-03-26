@@ -11,8 +11,9 @@
 
 // local includes
 #include "equations_of_motion/equations_of_motion.h"
-#include "states/state.h"
+#include "floquet/floquet.h"
 #include "row_major_types.h"
+#include "states/state.h"
 
 // C++ standard library
 #include <complex>
@@ -114,9 +115,8 @@ PYBIND11_MODULE(_low_level, m) {
     return adiabatic_equations_of_motion(E, v_dot_d, psi);
   });
 
-
   // real hamiltonian (non-adiabatic coupling) and density matrix quantum state
-  m_eom.def("diabatic_equations_of_motion", [](Eigen::Ref<const RowMatrixXd> H, Eigen::Ref<const RowMatrixXcd> rho) { 
+  m_eom.def("diabatic_equations_of_motion", [](Eigen::Ref<const RowMatrixXd> H, Eigen::Ref<const RowMatrixXcd> rho) {
     return diabatic_equations_of_motion(H, rho);
   });
 
@@ -141,6 +141,23 @@ PYBIND11_MODULE(_low_level, m) {
     return adiabatic_equations_of_motion(E, v_dot_d, rho);
   });
 
+  /****
+   * The floquet submodule
+   ****/
 
+  py::module m_floquet = m.def_submodule("floquet", "Low-level version of the floquet module");
 
+  // instantiate for get_HF_cos: complex H0, complex V
+  m_floquet.def("get_HF_cos", &get_HF_cos<RowMatrixXcd, RowMatrixXcd>); 
+
+  // instantiate for get_HF_cos: complex H0, real V
+  m_floquet.def("get_HF_cos", &get_HF_cos<RowMatrixXcd, RowMatrixXd>);
+
+  // instantiate for get_HF_cos: real H0, complex V
+  m_floquet.def("get_HF_cos", &get_HF_cos<RowMatrixXd, RowMatrixXcd>);
+
+  // instantiate for get_HF_cos: real H0, real V
+  m_floquet.def("get_HF_cos", &get_HF_cos<RowMatrixXd, RowMatrixXd>);
+
+  
 }

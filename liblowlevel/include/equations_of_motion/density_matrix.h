@@ -38,8 +38,8 @@ void _eom_density_matrix_adiabatic(
   Eigen::Ref<const RowMatrixXcd> rho,  // Density matrix
   Eigen::Ref<RowMatrixXcd> drho_dt     // Time derivative of density matrix
 ) {
-  drho_dt += -constants::IM * commutator(E.asDiagonal(), rho);
-  drho_dt += -commutator(v_dot_d, rho);
+  drho_dt.noalias() += -constants::IM * commutator(E.asDiagonal(), rho);
+  drho_dt.noalias() += -commutator(v_dot_d, rho);
 }
 
 template <typename dc_t>

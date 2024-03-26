@@ -3,12 +3,12 @@ project(low_level LANGUAGES CXX)
 
 # Compiler options: C++17, warnings, and optimization
 set(CMAKE_CXX_STANDARD 17)
-add_compile_options(-O2)              # Generic maximum code optimization
+add_compile_options(-O3)              # Generic maximum code optimization
 add_compile_options(-ftree-vectorize) # SIMD vectorize the loops
 add_compile_options(-funroll-loops)   # explicit optimize the loops
 add_compile_options(-Wall -Wextra -Wpedantic) # Enable warning
-add_compile_options(-DNDEBUG)          # Disable assert
-add_compile_options(-march=native)    # Enable the native architecture
+# add_compile_options(-DNDEBUG)          # Disable assert
+# add_compile_options(-march=native)    # Enable the native architecture
 # apply this: -DEIGEN_DONT_VECTORIZE
 # add_compile_definitions(EIGEN_DONT_VECTORIZE)
 
