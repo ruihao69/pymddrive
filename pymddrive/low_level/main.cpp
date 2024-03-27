@@ -15,6 +15,7 @@
 #include "row_major_types.h"
 #include "states/state.h"
 #include "states/expected_values.h"
+#include "ehrenfest/ehrenfest.h"
 
 // C++ standard library
 #include <complex>
@@ -210,4 +211,51 @@ PYBIND11_MODULE(_low_level, m) {
 
   // instantiate for get_dHF_dR_cos: real dH0_dR, real dV_dR
   m_floquet.def("get_dHF_dR_cos", &get_dHF_dR_cos<Tensor3d, Tensor3d>);
+
+  /****
+   * The ehrenfest submodule
+   ****/
+  py::module m_ehrenfest = m.def_submodule("ehrenfest", "Low-level version of the ehrenfest module");
+  m_ehrenfest.doc() = "Low-level version of the ehrenfest module, including the Ehrenfest theorems for the quantum / quantum classical dynamics simulation.";
+
+  // real diabatic mean force, wavefunction
+  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3d &dHdR, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    return ehrenfest_meanF_diabatic(dHdR, psi);
+  });
+
+  // real diabatic mean force, density matrix
+  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3d &dHdR, Eigen::Ref<const RowMatrixXcd> rho) {
+    return ehrenfest_meanF_diabatic(dHdR, rho);
+  });
+
+  // complex diabatic mean force, wavefunction
+  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3cd &dHdR, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    return ehrenfest_meanF_diabatic(dHdR, psi);
+  });
+
+  // complex diabatic mean force, density matrix
+  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3cd &dHdR, Eigen::Ref<const RowMatrixXcd> rho) {
+    return ehrenfest_meanF_diabatic(dHdR, rho);
+  });
+
+  // real derivative coupling, wavefunction
+  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3d &d, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    return ehrenfest_meanF_adiabatic(F, eig_vals, d, psi);
+  });
+
+  // real derivative coupling, density matrix
+  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3d &d, Eigen::Ref<const RowMatrixXcd> rho) {
+    return ehrenfest_meanF_adiabatic(F, eig_vals, d, rho);
+  });
+
+  // complex derivative coupling, wavefunction
+  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd &d, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    return ehrenfest_meanF_adiabatic(F, eig_vals, d, psi);
+  });
+
+  // complex derivative coupling, density matrix
+  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd &d, Eigen::Ref<const RowMatrixXcd> rho) {
+    return ehrenfest_meanF_adiabatic(F, eig_vals, d, rho);
+  });
+
 }

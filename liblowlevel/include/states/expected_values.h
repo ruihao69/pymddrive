@@ -20,13 +20,13 @@ double expected_value_wave_function(
 );
 
 template <typename TENSOR_OP_t>
-Tensor1d tensor_expected_value_density_matrix(
+Eigen::VectorXd tensor_expected_value_density_matrix(
     const TENSOR_OP_t& op,              // quantum-classical operator as a rank-3 tensor
     Eigen::Ref<const RowMatrixXcd> rho  // quantum state as a density matrix
 );
 
 template <typename TENSOR_OP_t>
-Tensor1d tensor_expected_value_wave_function(
+Eigen::VectorXd tensor_expected_value_wave_function(
     const TENSOR_OP_t& op,                  // quantum-classical operator as a rank-3 tensor
     Eigen::Ref<const Eigen::VectorXcd> psi  // quantum state as a wave function
 );
@@ -38,7 +38,7 @@ double get_expected_value(
 );
 
 template <typename TENSOR_OP_t, typename State_t>
-Tensor1d get_expected_value(
+Eigen::VectorXd get_expected_value(
     const TENSOR_OP_t& op,           // quantum-classical operator as a rank-3 tensor
     Eigen::Ref<const State_t> state  // quantum state
 );

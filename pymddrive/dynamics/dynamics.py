@@ -6,7 +6,8 @@ from typing import Union, Tuple, Type, Callable, NamedTuple
 from numpy.typing import ArrayLike, NDArray
 
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
-from pymddrive.integrators.state import State
+# from pymddrive.integrators.state import State
+from pymddrive.low_level.states import State
 
 from abc import ABC
 

@@ -24,26 +24,19 @@ double expected_value_wave_function(
 }
 
 template <typename TENSOR_OP_t>
-Tensor1d tensor_expected_value_density_matrix(
+Eigen::VectorXd tensor_expected_value_density_matrix(
     const TENSOR_OP_t& op,
     Eigen::Ref<const RowMatrixXcd> rho) {
   // Suppose the quantum classical operator is a rank-3 tensor,
   // shaped (n, n, m), where n is the number of electronic dofs
   // and m is the number of classical dofs.
 
-  Tensor1d result(op.dimension(2));
-  result.setZero();
+  Eigen::VectorXd result = Eigen::VectorXd::Zero(op.dimension(2));
 
   for (int i = 0; i < op.dimension(2); i++) {
-    for (int j = 0; j < rho.rows(); j++) {
-      // for (int k = 0; k < rho.cols(); k++) {  
-      //   result(i) += (rho(j, k) * op(k, j, i)).real();
-      // }
-      for (int k = j; k < rho.cols(); k++) {
+    for (int k = 0; k < rho.cols(); k++) {
+      for (int j = 0; j < rho.rows(); j++) {
         result(i) += (rho(j, k) * op(k, j, i)).real();
-        if (j != k) {
-          result(i) += (rho(k, j) * op(j, k, i)).real();
-        }
       }
     }
   }
@@ -51,14 +44,15 @@ Tensor1d tensor_expected_value_density_matrix(
 }
 
 template <typename TENSOR_OP_t>
-Tensor1d tensor_expected_value_wave_function(
+Eigen::VectorXd tensor_expected_value_wave_function(
     const TENSOR_OP_t& op,
     Eigen::Ref<const Eigen::VectorXcd> psi) {
   // Suppose the quantum classical operator is a rank-3 tensor,
   // shaped (n, n, m), where n is the number of electronic dofs
   // and m is the number of classical dofs.
 
-  Tensor1d result(op.dimension(2));
+  Eigen::VectorXd result = Eigen::VectorXd::Zero(op.dimension(2));
+
 
   // map psi as a rank-2 tensor
   const Tensor1cd psi_as_tensor = TensorCast(psi);
@@ -88,7 +82,7 @@ double get_expected_value(
 }
 
 template <typename TENSOR_OP_t, typename State_t>
-Tensor1d get_expected_value(
+Eigen::VectorXd get_expected_value(
     const TENSOR_OP_t& op,
     Eigen::Ref<const State_t> state) {
   if constexpr (State_t::RowsAtCompileTime == 1 ||
