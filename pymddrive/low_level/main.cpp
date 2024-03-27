@@ -10,12 +10,13 @@
 #include <unsupported/Eigen/CXX11/Tensor>
 
 // local includes
+#include "ehrenfest/ehrenfest.h"
 #include "equations_of_motion/equations_of_motion.h"
 #include "floquet/floquet.h"
 #include "row_major_types.h"
-#include "states/state.h"
 #include "states/expected_values.h"
-#include "ehrenfest/ehrenfest.h"
+#include "states/state.h"
+#include "surface_hopping/surface_hopping.h"
 
 // C++ standard library
 #include <complex>
@@ -107,7 +108,7 @@ PYBIND11_MODULE(_low_level, m) {
     return get_expected_value(O, psi);
   });
 
-  m_states.def("get_expected_value", [](Eigen::Ref<const RowMatrixXcd> O, Eigen::Ref<const Eigen::VectorXcd>psi) {
+  m_states.def("get_expected_value", [](Eigen::Ref<const RowMatrixXcd> O, Eigen::Ref<const Eigen::VectorXcd> psi) {
     return get_expected_value(O, psi);
   });
 
@@ -137,9 +138,6 @@ PYBIND11_MODULE(_low_level, m) {
   m_states.def("get_expected_value", [](const Tensor3cd& O, const Eigen::Ref<const RowMatrixXcd>& rho) {
     return get_expected_value(O, rho);
   });
-
-
-
 
   /****
    * The equations_of_motion submodule
@@ -189,7 +187,7 @@ PYBIND11_MODULE(_low_level, m) {
   py::module m_floquet = m.def_submodule("floquet", "Low-level version of the floquet module");
 
   // instantiate for get_HF_cos: complex H0, complex V
-  m_floquet.def("get_HF_cos", &get_HF_cos<RowMatrixXcd, RowMatrixXcd>); 
+  m_floquet.def("get_HF_cos", &get_HF_cos<RowMatrixXcd, RowMatrixXcd>);
 
   // instantiate for get_HF_cos: complex H0, real V
   m_floquet.def("get_HF_cos", &get_HF_cos<RowMatrixXcd, RowMatrixXd>);
@@ -219,43 +217,54 @@ PYBIND11_MODULE(_low_level, m) {
   m_ehrenfest.doc() = "Low-level version of the ehrenfest module, including the Ehrenfest theorems for the quantum / quantum classical dynamics simulation.";
 
   // real diabatic mean force, wavefunction
-  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3d &dHdR, Eigen::Ref<const Eigen::VectorXcd> psi) {
+  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3d& dHdR, Eigen::Ref<const Eigen::VectorXcd> psi) {
     return ehrenfest_meanF_diabatic(dHdR, psi);
   });
 
   // real diabatic mean force, density matrix
-  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3d &dHdR, Eigen::Ref<const RowMatrixXcd> rho) {
+  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3d& dHdR, Eigen::Ref<const RowMatrixXcd> rho) {
     return ehrenfest_meanF_diabatic(dHdR, rho);
   });
 
   // complex diabatic mean force, wavefunction
-  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3cd &dHdR, Eigen::Ref<const Eigen::VectorXcd> psi) {
+  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3cd& dHdR, Eigen::Ref<const Eigen::VectorXcd> psi) {
     return ehrenfest_meanF_diabatic(dHdR, psi);
   });
 
   // complex diabatic mean force, density matrix
-  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3cd &dHdR, Eigen::Ref<const RowMatrixXcd> rho) {
+  m_ehrenfest.def("ehrenfest_meanF_diabatic", [](const Tensor3cd& dHdR, Eigen::Ref<const RowMatrixXcd> rho) {
     return ehrenfest_meanF_diabatic(dHdR, rho);
   });
 
   // real derivative coupling, wavefunction
-  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3d &d, Eigen::Ref<const Eigen::VectorXcd> psi) {
+  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3d& d, Eigen::Ref<const Eigen::VectorXcd> psi) {
     return ehrenfest_meanF_adiabatic(F, eig_vals, d, psi);
   });
 
   // real derivative coupling, density matrix
-  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3d &d, Eigen::Ref<const RowMatrixXcd> rho) {
+  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3d& d, Eigen::Ref<const RowMatrixXcd> rho) {
     return ehrenfest_meanF_adiabatic(F, eig_vals, d, rho);
   });
 
   // complex derivative coupling, wavefunction
-  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd &d, Eigen::Ref<const Eigen::VectorXcd> psi) {
+  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd& d, Eigen::Ref<const Eigen::VectorXcd> psi) {
     return ehrenfest_meanF_adiabatic(F, eig_vals, d, psi);
   });
 
   // complex derivative coupling, density matrix
-  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd &d, Eigen::Ref<const RowMatrixXcd> rho) {
+  m_ehrenfest.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd& d, Eigen::Ref<const RowMatrixXcd> rho) {
     return ehrenfest_meanF_adiabatic(F, eig_vals, d, rho);
   });
 
+  /***
+   * The low-level module for surface hopping
+   ***/
+
+  py::module m_surface_hopping = m.def_submodule("surface_hopping", "Low-level version of the surface_hopping module");
+  m_surface_hopping.doc() = "Low-level version of the surface_hopping module, including the surface hopping dynamics for the quantum / quantum classical dynamics simulation.";
+
+  // scalar mass, real derivative coupling, density matrix
+  m_surface_hopping.def("fssh_surface_hopping", [](double dt, int active_surface, Eigen::Ref<const Eigen::RowVectorXd> P_current, Eigen::Ref<const RowMatrixXcd> rho, Eigen::Ref<const Eigen::RowVectorXd> eig_vals, Eigen::Ref<const RowMatrixXd> v_dot_d, const Tensor3d& dc, double mass) {
+    return fssh_surface_hopping(dt, active_surface, P_current, rho, eig_vals, v_dot_d, dc, mass);
+  });
 }
