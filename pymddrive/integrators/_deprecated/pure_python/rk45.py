@@ -8,8 +8,7 @@ from typing import Callable, Union, Any
 from numpy.typing import ArrayLike
 
 # from pymddrive.integrators.rungekutta import 
-from pymddrive.low_level.states import State
-from pymddrive.integrators.state import get_state
+from pymddrive.integrators.state import State, zeros_like
 from pymddrive.integrators.rungekutta import (
     tsit5_tableau, 
     evaluate_initial_dt,
@@ -35,7 +34,6 @@ class RungeKutta45:
         *args: Any,
         **kwargs: Any
     ) -> None:
-        raise NotImplementedError("The RK45(Tsit5) integrator has not been fully tested yet.")
         self.derivative = derivative
         self.t0 = t0
         self.y0 = y0
@@ -79,7 +77,6 @@ class RungeKutta45:
 
 # %% The temporary test code
 def _debug_test():
-    from pymddrive.integrators.state import get_state
     assert np.all(tsit5_tableau.a[0] == 0)
     assert tsit5_tableau.a[1][0] == 0.161
     assert tsit5_tableau.c[2] - tsit5_tableau.a[2, 1] == tsit5_tableau.a[2][0]
@@ -88,29 +85,29 @@ def _debug_test():
     assert tsit5_tableau.c[5] - tsit5_tableau.a[5, 1] - tsit5_tableau.a[5, 2] - tsit5_tableau.a[5, 3] - tsit5_tableau.a[5, 4] == tsit5_tableau.a[5][0]
     
     def derivative(t: float, s: State):
-        out = s.zeros_like()
+        out = zeros_like(s)
         r, p, _ = s.get_variables()
-        out.set_R(p * 0.01 / s.get_mass())  
-        out.set_P(-r * 0.01)
-        return out
+        kr, kp, _ = out.get_variables()
+        # print(r.shape)
+        kr[:] = p
+        kp[:] = -r
+        return 0.01*out
     n_particle = 100
+    # s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
     R = np.random.normal(0, 1, n_particle)
     P = np.random.normal(0, 1, n_particle)
-    mass = 1.0
-    s = get_state(mass, R, P, None)
+    s = State.from_variables(R=R, P=P, rho=None)
     
     N = 100000
     time = np.zeros(N)
-    out_R = np.zeros((N, n_particle))
-    out_P = np.zeros((N, n_particle))
+    out = np.zeros(N, dtype=s.data.dtype)
     
     def benchmark(N: int):
         t = 0.0 
         n_particle = 100
         R = np.random.normal(0, 1, n_particle)
         P = np.random.normal(0, 1, n_particle)
-        mass = 1.0
-        s = get_state(mass, R, P, None)
+        s = State.from_variables(R=R, P=P, rho=None)
         rk45 = RungeKutta45(
             derivative=derivative,
             t0=t,
@@ -124,7 +121,7 @@ def _debug_test():
         i = 0
         for _ in range(N):
             t, s = rk45._adaptive_step(t, s)
-            out_R[i], out_P[i], _ = s.get_variables()
+            out[i] = s.data
             time[i] = t
             i += 1
             
@@ -135,22 +132,28 @@ def _debug_test():
          
     from matplotlib import pyplot as plt
     
-    plt.plot(time, out_R[:, 0], label="r")
-    plt.plot(time, out_P[:, 0], label="p")
+    r = out['R']
+    p = out['P']
+    
+    plt.plot(time, r[:, 0], label="r")
+    plt.plot(time, p[:, 0], label="p")
     plt.title("Time series")
     plt.legend()
     
     plt.show()
     plt.figure(dpi=300)
-    plt.plot(out_R[:, 0], out_P[:, 0])
-    plt.plot(out_R[:, 1], out_P[:, 1])
-    plt.plot(out_R[:, -1], out_P[:, -1])
+    plt.plot(r[:, 0], p[:, 0])
+    plt.plot(r[:, 1], p[:, 1])
+    plt.plot(r[:, -1], p[:, -1])
     plt.xlabel("r")
     plt.ylabel("p")
     plt.title("Phase space")
     plt.show()
     
-    E = np.nansum(out_R**2 + out_P**2, axis=-1)
+    E = r**2 + p**2
+    print(E.shape)
+
+    E = np.nansum(r**2 + p**2, axis=-1)
     plt.plot(time, E-E[0])
     plt.yscale('symlog') 
     plt.xlabel("time")

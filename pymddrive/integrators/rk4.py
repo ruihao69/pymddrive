@@ -1,7 +1,8 @@
 # %% The package: pymddrive.integrators.rk4
 import numpy as np
+from numpy.typing import NDArray
 
-from pymddrive.integrators.state import State, zeros_like
+from pymddrive.low_level.states import State
 
 from typing import Callable, Tuple, Union
 
@@ -11,151 +12,107 @@ type_time = float
 
 def rkgill4(
     t: type_time,
-    y: State,
-    derivative: Callable[[type_time, State], State],
+    y: NDArray[np.any],
+    derivative: Callable[[type_time, NDArray[np.any]], NDArray[np.any]],
     deriv_options: Union[dict, None]= None,
     dt: type_time = 1.0,
     nstep: int = 1,
-) -> Tuple[type_time, State]:
-    deriv_options = deriv_options or {}
-    y_flatten = y.flatten() 
-    
-    dtype = y.data.dtype 
-    stype = y.stype
-    
-    def _deriv(t: type_time, y: np.ndarray) -> np.ndarray:
-        s = State.from_unstructured(y, dtype=dtype, stype=stype)
-        return derivative(t, s, **deriv_options).flatten()
-    
-    k = np.zeros((4, y_flatten.shape[0]), dtype=y_flatten.dtype)
-    for _ in range(nstep):
-        k[0] = dt * _deriv(t, y_flatten)
-        k[1] = dt * _deriv(t + 0.5 * dt, y_flatten + 0.5 * k[0])
-        k[2] = dt * _deriv(t + 0.5 * dt, y_flatten + 0.5 * k[1])
-        k[3] = dt * _deriv(t + 1.0 * dt, y_flatten + k[2])
-        
-        y_flatten += np.tensordot(np.array([1.0, 2.0, 2.0, 1.0]), k, axes=(0, 0)) / 6.0 
-        t += dt
-        # k1 = dt * derivative(t, y, **deriv_options)
-        # k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
-        # k3 = dt * derivative(t + 0.5 * dt, y + (0.5 * (1.0 - np.sqrt(2.0))) * k1 + (0.5 * (1.0 + np.sqrt(2.0))) * k2, **deriv_options)
-        # k4 = dt * derivative(t + 1.0 * dt, y + (-0.5 * np.sqrt(2.0)) * k2 + (1.0 + 0.5 * np.sqrt(2.0)) * k3, **deriv_options)
-
-        # t += dt
-        # y += 1.0 / 6.0 * (k1 + (2.0 - np.sqrt(2.0)) * k2 + (2.0 + np.sqrt(2.0)) * k3 + k4)
-
-    return (t, State.from_unstructured(y_flatten, dtype=dtype, stype=stype))
+) -> Tuple[type_time, NDArray[np.any]]:
+    raise NotImplementedError("The RKGill4 integrator is not implemented yet.")
 
 def rk4(
     t: type_time,
-    y: State,
-    derivative: Callable[[type_time, State], State],
+    y: NDArray[np.any],
+    derivative: Callable[[type_time, NDArray[np.any]], NDArray[np.any]],
     deriv_options: Union[dict, None]= None,
     dt: type_time = 1.0,
     nstep: int = 1,
-) -> Tuple[type_time, State]:
+) -> Tuple[type_time, NDArray[np.any]]:
     deriv_options = deriv_options or {}
-    # y_flatten = y.flatten() 
-    
-    # dtype = y.data.dtype 
-    # stype = y.stype
-    
-    # def _deriv(t: type_time, y: np.ndarray) -> np.ndarray:
-    #     s = State.from_unstructured(y, dtype=dtype, stype=stype)
-    #     return derivative(t, s, **deriv_options).flatten()
-    
-    # k = np.zeros((4, y_flatten.shape[0]), dtype=y_flatten.dtype)
     for _ in range(nstep):
-        k1 = dt * derivative(t, y, **deriv_options)
-        k2 = dt * derivative(t + 0.5 * dt, y + 0.5 * k1, **deriv_options)
-        k3 = dt * derivative(t + 0.5 * dt, y + 0.5 * k2, **deriv_options)
-        k4 = dt * derivative(t + 1.0 * dt, y + k3, **deriv_options)
-        y += 1.0 / 6.0 * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-
+        k1 = derivative(t, y, **deriv_options)
+        k2 = derivative(t + 0.5 * dt, y + 0.5 * dt * k1, **deriv_options)
+        k3 = derivative(t + 0.5 * dt, y + 0.5 * dt * k2, **deriv_options)
+        k4 = derivative(t + 1.0 * dt, y + dt * k3, **deriv_options)
+        # k1 = derivative(t, y)
+        # k2 = derivative(t + 0.5 * dt, State.axpy(0.5 * dt, k1, y))
+        # k3 = derivative(t + 0.5 * dt, State.axpy(0.5 * dt, k2, y))
+        # k4 = derivative(t + 1.0 * dt, State.axpy(dt, k3, y))
+        y += dt * (k1 + 2 * k2 + 2 * k3 + k4) / 6
+        t += dt
         
-        # k[0] = dt * _deriv(t, y_flatten)
-        # k[1] = dt * _deriv(t + 0.5 * dt, y_flatten + 0.5 * k[0])
-        # k[2] = dt * _deriv(t + 0.5 * dt, y_flatten + 0.5 * k[1])
-        # k[3] = dt * _deriv(t + 1.0 * dt, y_flatten + k[2])
-        
-        # y_flatten += np.tensordot(np.array([1.0, 2.0, 2.0, 1.0]), k, axes=(0, 0)) / 6.0 
-        # t += dt
-
-    # return (t, State.from_unstructured(y_flatten, dtype=dtype, stype=stype))
     return (t, y)
 
 # %% The temporary testing/debuging code
 def _debug_test():
-    def derivative(t: float, s: State):
-        out = zeros_like(s)
-        r, p, _ = s.get_variables()
-        kr, kp, _ = out.get_variables()
-        # print(type(out))
-        # print("shape: ", r.shape)
-        kr[:] = p
-        kp[:] = -r
-                
-        return 0.01*out
-        #return out
-    rho = np.array([[0.5, 0], [0, 0.5]])
     n_particle = 100
-    # s = State(r=np.random.normal(0, 1, n_particle), p=np.random.normal(0, 1, n_particle), rho=None)
+    from pymddrive.integrators.state import get_state
+    def derivative(t: float, y: NDArray[np.any]):
+        dy_dt = np.zeros_like(y)
+        R, P = y[:n_particle], y[n_particle:]
+        dy_dt[:n_particle] = P / 1.0 * 0.01
+        dy_dt[n_particle:] = -R / 1.0 * 0.01
+        return dy_dt
+    
+    mass = 1.0
     R = np.random.normal(0, 1, n_particle)
     P = np.random.normal(0, 1, n_particle)
-    rho = None
-    s = State.from_variables(R=R, P=P, rho=rho)
+    y = np.concatenate([R, P])
     
     N = 100000
     time = np.zeros(N)
-    out = np.zeros(N, dtype=s.data.dtype)
-    
     
     def benchmark(N: int):
         t = 0.0 
         n_particle = 100
         R = np.random.normal(0, 1, n_particle)
         P = np.random.normal(0, 1, n_particle)
-        s = State.from_variables(R=R, P=P, rho=None)
+        mass = 1.0
+        y = np.concatenate([R, P])
         import timeit
         start = timeit.default_timer() 
+        R_out = np.zeros((N, n_particle))
+        P_out = np.zeros((N, n_particle))
+        
         for i in range(N):
-            t, s = rk4(t, s, derivative, dt=0.05)
-            out[i] = s.data
+            t, y = rk4(t, y, derivative, dt=0.05)
+            R_out[i, :], P_out[i, :] = y[:n_particle], y[n_particle:]
             time[i] = t
         time_elapsed = timeit.default_timer() - start
         print(f"The speed of the integrator: {N/time_elapsed} iteractions per second")
+        return time, R_out, P_out
     
-    benchmark(N)
+    time, R_out, P_out = benchmark(N)
          
     from matplotlib import pyplot as plt
     
-    r = out['R']
-    p = out['P']
-    
-    plt.plot(time, r[:, 0], label="r")
-    plt.plot(time, p[:, 0], label="p")
+    print(f"{R.shape=}") 
+     
+    plt.plot(time, R_out[:, 0], label="r")
+    plt.plot(time, P_out[:, 0], label="p")
     plt.title("Time series")
     plt.legend()
     
     plt.show()
     plt.figure(dpi=300)
-    plt.plot(r[:, 0], p[:, 0])
-    plt.plot(r[:, 1], p[:, 1])
-    plt.plot(r[:, -1], p[:, -1])
+    plt.plot(R_out[:, 0], P_out[:, 0])
+    plt.plot(R_out[:, 1], P_out[:, 1])
+    plt.plot(R_out[:, -1], P_out[:, -1])
     plt.xlabel("r")
     plt.ylabel("p")
     plt.title("Phase space")
     plt.show()
     
-    E = r**2 + p**2
+    E = R_out**2 + P_out**2
     print(E.shape)
 
-    E = np.nansum(r**2 + p**2, axis=-1)
+    E = np.nansum(R_out**2 + P_out**2, axis=-1)
     plt.plot(time, E-E[0])
     plt.yscale('symlog') 
     plt.xlabel("time")
     plt.ylabel("Energy")
     plt.title("Energy conservation")
+    
 
 # %% The test code
 if __name__ == "__main__":

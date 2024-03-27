@@ -35,12 +35,12 @@ def _expected_value_dm(
     O: ArrayLike,   # operator (matrix and/or eigenvalues)
     is_diagonal: bool=False,
 ):
-    if is_diagonal:
-        return rho.diagonal().real.dot(O)
-    elif O.ndim == 1:
-        return np.dot(np.diagonal(rho).real, O)
-    elif (O.ndim == 2) or ((O.ndim == 3) and (O.shape[0] == O.shape[1])):
-        return np.trace(np.dot(rho, O)).real 
+    if O.ndim == 2:
+        return np.trace(np.dot(rho, O)).real
+    elif O.ndim == 3:
+        return [np.trace(np.dot(rho, O[i, :, :])).real for i in range(O.shape[0])]
+    elif is_diagonal:
+        return np.dot(rho.diagonal().real, O)
     else:
         raise ValueError("Invalid shape for operator O: {}".format(O.shape))
     
@@ -49,10 +49,12 @@ def _expected_value_wf(
     O: ArrayLike, # operator (matrix and/or eigenvalues)
     is_diagonal: bool=False,
 ):
-    if (is_diagonal) or (O.ndim == 1):
+    if O.ndim == 2:
+        return np.dot(c.conj().T, np.dot(O, c)).real
+    elif O.ndim == 3:
+        return [np.dot(c.conj().T, np.dot(O[i, :, :], c)).real for i in range(O.shape[0])]
+    elif is_diagonal:
         return np.dot(c.conj(), O * c).real
-    elif O.ndim == 2:
-        return np.dot(c.conj(), np.dot(O, c)).real
     else:
         raise ValueError("Invalid shape for operator O: {}".format(O.shape))
     

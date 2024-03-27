@@ -3,11 +3,11 @@ import numpy as np
 
 from typing import Union, Tuple, Type, Callable, NamedTuple
     
-from numbers import Real
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
-from pymddrive.integrators.state import State
+# from pymddrive.integrators.state import State
+from pymddrive.low_level.states import State
 
 from abc import ABC
 
@@ -18,15 +18,18 @@ class Dynamics(ABC):
     def __init__(
         self,
         hamiltonian: HamiltonianBase,
-        t0: float, s0: State, mass: Union[float, ArrayLike], 
+        t0: float, 
+        s0: State, 
         dt: Union[float, None]=None, 
-        atol: float=1e-8, rtol: float=1e-8, safety: float=0.9, save_every: int=10,
+        atol: float=1e-8, 
+        rtol: float=1e-8, 
+        safety: float=0.9, 
+        save_every: int=10,
         numerical_integrator: NumericalIntegrators=NumericalIntegrators.ZVODE,
     ) -> None:
         self.hamiltonian = hamiltonian
         self.t0 = t0    
         self.s0 = s0    
-        self.mass = self._process_mass(s0, mass)
         self.dt = dt
         self.safty = safety
         self.save_every = save_every
@@ -34,8 +37,8 @@ class Dynamics(ABC):
         self.rtol = rtol
         
         self.ode_solver = None
-        self.dtype = s0.data.dtype
-        self.stype = s0.stype
+        # self.dtype = s0.data.dtype
+        # self.stype = s0.stype
         
         # the stepper design: takes time, state, and cache, returns time, state, and cache
         self.step: Callable[[float, State, Cache], Tuple[float, State, Cache]] = None
@@ -47,7 +50,7 @@ class Dynamics(ABC):
         self.calculate_properties: Callable[[float, State], NamedTuple] = None
         
         # the callback function: takes the current time, state, cache, and langevin forces, returns the updated state and cache
-        self.callback: Callable[[float, State, Cache, np.ndarray], Tuple[State, Cache]] = None
+        self.callback: Callable[[float, State, Cache], Tuple[State, Cache]] = None
         
         # the cache calculator: takes the current time, state, and cache, returns the updated cache
         self.cache_initializer: Callable[[float, State, ArrayLike], Cache] = None
@@ -56,24 +59,24 @@ class Dynamics(ABC):
         
         self.numerical_integrator: NumericalIntegrators = numerical_integrator
             
-    @staticmethod 
-    def _process_mass(
-        s0: State, mass: Union[Real, None, ArrayLike],
-    ) -> Union[float, ArrayLike]:
-        if mass is None:
-            return 1.0
-        elif isinstance(mass, Real):
-            if mass < 0:
-                raise ValueError("The mass should be positive.")
-            return mass
-        elif isinstance(mass, np.ndarray, list, tuple):
-            r, _, _ = s0.get_variables()
-            if len(mass) != len(r):
-                raise ValueError("The length of mass should be the same as the length of r.")
-            if all(m < 0 for m in mass):
-                raise ValueError("The mass should be positive.")
-            if all(m == mass[0] for m in mass):
-                return mass[0]
-            else:
-                return mass
-        raise ValueError("The mass should be a float, int, list, tuple or numpy.ndarray.") 
+    # @staticmethod 
+    # def _process_mass(
+    #     s0: State, mass: Union[Real, None, ArrayLike],
+    # ) -> Union[float, ArrayLike]:
+    #     if mass is None:
+    #         return 1.0
+    #     elif isinstance(mass, Real):
+    #         if mass < 0:
+    #             raise ValueError("The mass should be positive.")
+    #         return mass
+    #     elif isinstance(mass, np.ndarray, list, tuple):
+    #         r, _, _ = s0.get_variables()
+    #         if len(mass) != len(r):
+    #             raise ValueError("The length of mass should be the same as the length of r.")
+    #         if all(m < 0 for m in mass):
+    #             raise ValueError("The mass should be positive.")
+    #         if all(m == mass[0] for m in mass):
+    #             return mass[0]
+    #         else:
+    #             return mass
+    #     raise ValueError("The mass should be a float, int, list, tuple or numpy.ndarray.") 

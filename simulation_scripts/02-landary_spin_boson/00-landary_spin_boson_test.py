@@ -3,7 +3,8 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from pymddrive.models.landry_spin_boson import LandrySpinBoson
-from pymddrive.integrators.state import State
+from pymddrive.low_level.states import State
+from pymddrive.integrators.state import get_state
 from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
 from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics, run_nonadiabatic_dynamics_ensembles
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian
@@ -54,9 +55,9 @@ def run_one_lsb(
     evecs = hami_return.evecs
     rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
     if basis_rep == BasisRepresentation.Adiabatic:
-        s0 = State.from_variables(R=R0, P=P0, rho=rho0_adiabatic)
+        s0 = get_state(mass=hamiltonian.M, R=R0, P=P0, rho_or_psi=rho0_adiabatic)
     elif basis_rep == BasisRepresentation.Diabatic:
-        s0 = State.from_variables(R=R0, P=P0, rho=rho0_diabatic)
+        s0 = get_state(mass=hamiltonian.M, R=R0, P=P0, rho_or_psi=rho0_diabatic)
         
     # dt_max = 0.003
     mass = hamiltonian.M
@@ -65,7 +66,6 @@ def run_one_lsb(
         hamiltonian=hamiltonian,
         t0=0.0,
         s0=s0,
-        mass=mass,
         basis_rep=basis_rep,
         qm_rep=qm_rep,
         solver=solver,
@@ -98,17 +98,16 @@ def generate_ensembles(
         rho0_diabatic = np.zeros((dim, dim), dtype=np.complex128)
         rho0_diabatic[initial_diabatic_states, initial_diabatic_states] = 1.0
         if basis_rep == BasisRepresentation.Diabatic:
-            s0 = State.from_variables(R=R0, P=P0, rho=rho0_diabatic)
+            s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_diabatic)
         else:
             hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
             evecs = hami_return.evecs
             rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
-            s0 = State.from_variables(R=R0, P=P0, rho=rho0_adiabatic)
+            s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_adiabatic)
         dyn = NonadiabaticDynamics(
             hamiltonian=hamiltonian,
             t0=0.0,
             s0=s0,
-            mass=mass,
             basis_rep=basis_rep,
             qm_rep=qm_rep,
             solver=solver,
@@ -309,7 +308,7 @@ if __name__ == "__main__":
 # %%
 if __name__ == "__main__":
     ntraj = 48
-    numerical_integrator = NumericalIntegrators.ZVODE
+    numerical_integrator = NumericalIntegrators.RK4
     output_diabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Diabatic, numerical_integrator=numerical_integrator)
     output_adiabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Adiabatic, numerical_integrator=numerical_integrator)
     output_fssh = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH, numerical_integrator=numerical_integrator)

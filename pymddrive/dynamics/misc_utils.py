@@ -3,12 +3,13 @@ import numpy as np
 from numpy.typing import ArrayLike  
 import scipy.sparse as sp
 
-from pymddrive.integrators.state import State
+from pymddrive.low_level.states import State
+from pymddrive.integrators.state import get_state
 from pymddrive.integrators.rungekutta import evaluate_initial_dt
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, nac_phase_following
 from pymddrive.dynamics.options import BasisRepresentation
 
-from typing import Tuple
+from typing import Tuple, Any
 from numbers import Real
 from collections import namedtuple
 
@@ -49,7 +50,14 @@ def eval_nonadiabatic_hamiltonian(
     #     F += F_fric
     return HamiltonianRetureType(H=H, dHdR=dHdR, evals=evals, evecs=evecs, d=d, F=F)
 
-def estimate_scatter_dt(deriv: callable, r_bounds: tuple, s0: State, nsample: Real=30, t_bounds: Tuple[Real]=None) -> float:
+def estimate_scatter_dt(
+    deriv: callable, 
+    r_bounds: tuple, 
+    s0: State, 
+    cache: Any,
+    nsample: Real=30, 
+    t_bounds: Tuple[Real]=None
+) -> float:
     _, p0, rho0 = s0.get_variables()
     r_list = np.linspace(*r_bounds, nsample)
     if t_bounds is not None:
@@ -57,9 +65,10 @@ def estimate_scatter_dt(deriv: callable, r_bounds: tuple, s0: State, nsample: Re
     else:
         t_list = np.zeros(nsample)
     _dt = 99999999999
+    mass = s0.get_mass()
     for i in range(nsample):
-        s0 = State.from_variables(R=r_list[i], P=p0, rho=rho0)
-        _dt = min(_dt, evaluate_initial_dt(deriv, t_list[i], s0, order=4, atol=1e-8, rtol=1e-8,))
+        s0 = get_state(mass, r_list[i], p0, rho0)
+        _dt = min(_dt, evaluate_initial_dt(deriv, t_list[i], s0, order=4, atol=1e-8, rtol=1e-8, cache=cache))
     return _dt
 
 def valid_real_positive_value(value: Real) -> bool:
