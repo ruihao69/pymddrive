@@ -76,8 +76,14 @@ namespace rhbi {
         const Eigen::RowVectorXd& P_current,        // current momentum
         const mass_t& mass                          // mass matrix
     ) {
-        double a = 0.5 * (direction.dot(direction / mass));
-        double b = direction.dot(P_current / mass);
+        double a, b;
+        if constexpr (std::is_same_v<mass_t, double>){
+            a = 0.5 * (direction.dot(direction / mass));
+            b = direction.dot(P_current / mass);
+        } else{
+            a = 0.5 * (direction.dot(direction.cwiseQuotient(mass)));
+            b = direction.dot(P_current.cwiseQuotient(mass));
+        }
         double c = dE;
 
         double discriminant = b2_4ac(a, b, c);
