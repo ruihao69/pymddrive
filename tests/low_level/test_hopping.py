@@ -23,10 +23,8 @@ class TestSurfaceHopping(unittest.TestCase):
         self.dHdR_real = get_random_vO(self.dim, self.n_nuclear, is_complex=False)
         self.dHdR_complex = get_random_vO(self.dim, self.n_nuclear, is_complex=True)
 
-        self.dc_real, self.F_real, self.evals_real = compute_dc(self.H_real, self.dHdR_real)
-        self.dc_complex, self.F_complex, self.evals_complex = compute_dc(self.H_complex, self.dHdR_complex)
-
-
+        self.dc_real, self.F_real, self.evals_real, _ = compute_dc(self.H_real, self.dHdR_real)
+        self.dc_complex, self.F_complex, self.evals_complex, _ = compute_dc(self.H_complex, self.dHdR_complex)
 
     def _get_inputs(self, is_complex: bool):
         if is_complex:

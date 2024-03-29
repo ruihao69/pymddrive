@@ -3,7 +3,7 @@ from .langevin import Langevin
 from .null_langevin import NullLangevin
 
 __all__ = [
-    "LangevinBase", 
-    "Langevin", 
+    "LangevinBase",
+    "Langevin",
     "NullLangevin"
 ]

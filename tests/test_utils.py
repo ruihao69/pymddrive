@@ -41,5 +41,5 @@ def compute_dc(H: np.ndarray, dHdR: np.ndarray) -> tuple:
             nac[ii, jj, :] /= evals[jj] - evals[ii]
             nac[jj, ii, :] = -nac[ii, jj, :].conjugate()
 
-    return nac, F, evals
+    return nac, F, evals, evecs
 

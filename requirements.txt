@@ -1,5 +1,16 @@
+# scientific-python
 numpy
 numba
 scipy
 matplotlib
+
+# third-party dataclasses
+attrs
+
+# multi-processing
 joblib
+
+# static typing / module compilation
+mypy
+mypyc
+nptyping

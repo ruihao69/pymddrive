@@ -1,21 +1,5 @@
 from enum import Enum, unique
 
-# use Enum class to define the dynamics options
-@unique
-class BasisRepresentation(Enum):
-    Diabatic = 'Diabatic'
-    Adiabatic = 'Adiabatic'
-
-@unique
-class QunatumRepresentation(Enum):
-    Wavefunction = 'Wavefunction'
-    DensityMatrix = 'Density Matrix'
-
-@unique
-class NonadiabaticDynamicsMethods(Enum):
-    EHRENFEST = 'Ehrenfest'
-    FSSH = 'FSSH'
-
 @unique
 class NumericalIntegrators(Enum):
     ############################################################################
