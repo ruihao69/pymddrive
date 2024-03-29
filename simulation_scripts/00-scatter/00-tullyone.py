@@ -4,7 +4,8 @@ import numpy as np
 from numpy.typing import ArrayLike
 from typing import Tuple
 from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
-from pymddrive.integrators.state import State
+from pymddrive.low_level.states import State
+from pymddrive.integrators.state import get_state
 from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
 from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics, run_nonadiabatic_dynamics_ensembles
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian
@@ -32,13 +33,12 @@ def run_tullyone(
     
     # initialize the states
     rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
-    s0 = State.from_variables(R=r0, P=p0, rho=rho0)
+    s0 = get_state(mass=mass, R=r0, P=p0, rho_or_psi=rho0)
     
     dyn = NonadiabaticDynamics(
         hamiltonian=hamiltonian,
         t0=0.0,
         s0=s0,
-        mass=mass,
         basis_rep=basis_rep,
         qm_rep=qm_rep,
         solver=solver,
@@ -76,7 +76,8 @@ def generate_ensembles(
     qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
     basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
-    integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+    # integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+    integrator: NumericalIntegrators = NumericalIntegrators.RK4,
 ) -> Tuple[NonadiabaticDynamics]:
     # initialize the electronic states
     rho0_diabatic = np.zeros((2, 2), dtype=np.complex128)
@@ -89,17 +90,16 @@ def generate_ensembles(
             pulse_type=TullyOnePulseTypes.NO_PULSE
         )
         if basis_rep == BasisRepresentation.Diabatic:
-            s0 = State.from_variables(R=R0, P=P0, rho=rho0_diabatic)
+            s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_diabatic)
         else:
             hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
             evecs = hami_return.evecs
             rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
-            s0 = State.from_variables(R=R0, P=P0, rho=rho0_adiabatic)
+            s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_adiabatic)
         dyn = NonadiabaticDynamics(
             hamiltonian=hamiltonian,
             t0=0.0,
             s0=s0,
-            mass=mass,
             basis_rep=basis_rep,
             qm_rep=qm_rep,
             solver=solver,
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     ouput_ehrenfest = run_tullyone(r0, p0, solver=NonadiabaticDynamicsMethods.EHRENFEST)
     # ouput_fssh = run_tullyone(r0, p0, solver=NonadiabaticDynamicsMethods.FSSH) 
     
-    nsamples = 1000
+    nsamples = 100
     R0_samples = np.array([r0]*nsamples)
     P0_samples = np.array([p0]*nsamples)
     dyn_ensemble = generate_ensembles(R0_samples, P0_samples, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.Adiabatic)

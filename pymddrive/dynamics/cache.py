@@ -12,7 +12,6 @@ class Cache:
     ##########
     # hamiltonian related cache
     ##########
-    hamiltonian: Optional[HamiltonianBase] = None
     hami_return: Optional[HamiltonianRetureType] = None
     
     ##########
@@ -28,6 +27,9 @@ class Cache:
     ##########
     # Langevin related cache
     ##########
-    F_langevin: Optional[NDArray[np.float64]] = None
+    # treat the lanvegin force as first-order
+    # that is, only update the friction and random force once per MD step
+    # meaning each RK step will use the same friction and random force
+    F_langevin: Optional[NDArray[np.float64]] = None 
     
     
