@@ -122,9 +122,9 @@ class CMakeBuild(build_ext):
         subprocess.run(
             ["cmake", "--build", ".", *build_args], cwd=build_temp, check=True
         )
-        
+
         # move the shared library to the destination directory
-        import warnings 
+        import warnings
         ext_fullpath = Path(ext_fullpath)
         dest_dir = Path(ext.dest_dir)
         warnings.warn(f"{ext_fullpath=}"+f"{ext.dest_dir=}")
@@ -138,24 +138,24 @@ class CMakeBuild(build_ext):
         #         print(f"{file=}")
         #         print(f"{dest_dir / file.name=}")
         #         print(f"{ext_fullpath=}")
-        
+
 def remove_root_binaries():
     import glob
     # remove "*.so"
     root_dir = Path(__file__).parent
-    bin_dir = root_dir / '*.so' 
+    bin_dir = root_dir / '*.so'
     binaries = list(glob.glob(str(bin_dir)))
     if binaries:
         for file in binaries:
             print(f"Removing {file}")
             os.remove(file)
-    
-    
+
+
 
 if os.path.exists('requirements.txt'):
     with open('requirements.txt') as f:
         requirements = f.read().splitlines()
-        
+
 setup(
     name="pymddrive",
     version="0.0.1",
@@ -171,8 +171,11 @@ setup(
     entry_points={
         'console_scripts': [
             'simulation_scripts = pymddrive.simulation_scripts:main',
+        ],
+        'tests': [
+            'tests = pymddrive.tests:main'
         ]
-    }, 
+    },
     zip_safe=False,
     requires=requirements,
 )

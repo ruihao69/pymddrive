@@ -70,7 +70,7 @@ void adiabatic_real_wavefunction(py::module& m) {
 }
 
 void adiabatic_complex_wavefunction(py::module& m) {
-    m.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd& d, Eigen::Ref<const Eigen::VectorXcd> psi) {
+    m.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXcd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd& d, Eigen::Ref<const Eigen::VectorXcd> psi) {
         return ehrenfest_meanF_adiabatic(F, eig_vals, d, psi);
         });
 }
@@ -82,7 +82,7 @@ void adiabatic_real_density_matrix(py::module& m) {
 }
 
 void adiabatic_complex_density_matrix(py::module& m) {
-    m.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd& d, Eigen::Ref<const RowMatrixXcd> rho) {
+    m.def("ehrenfest_meanF_adiabatic", [](Eigen::Ref<const RowMatrixXcd> F, Eigen::Ref<const Eigen::VectorXd> eig_vals, const Tensor3cd& d, Eigen::Ref<const RowMatrixXcd> rho) {
         return ehrenfest_meanF_adiabatic(F, eig_vals, d, rho);
         });
 }
