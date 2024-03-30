@@ -1,102 +1,80 @@
-from numpy.typing import ArrayLike
-
-from .td_hamiltonian_base import TD_HamiltonianBase
+from pymddrive.my_types import RealVector, GenericOperator, GenericVectorOperator
 from pymddrive.pulses import PulseBase as Pulse
 from pymddrive.pulses import get_carrier_frequency
-from pymddrive.models.floquet import get_HF, FloquetType, _dim_to_dimF
+from pymddrive.models.nonadiabatic_hamiltonian.hamiltonian_base import HamiltonianBase
+from pymddrive.models.floquet import FloquetType
+from pymddrive.models.floquet import get_floquet_space_dim
+from pymddrive.models.floquet import get_envelope_function_type, get_floquet_type
+from pymddrive.low_level.floquet import get_HF_cos, get_dHF_dR_cos
 
 from typing import Union
-from enum import Enum, unique
-
-@unique
-class FloquetablePulses(Enum):
-    MORLET = "Morlet"
-    MORLET_REAL = "MorletReal"
-    COSINE = "CosinePulse"
-    SINE = "SinePulse"
-    EXPONENTIAL = "ExponentialPulse"
-
-@unique 
-class ValidQuasiFloqeuetPulses(Enum):
-    GAUSSIAN = "Gaussian"
-    UNIT = "UnitPulse"
+from abc import abstractmethod
     
-def get_floquet_type_from_pulsetype(pulsetype: FloquetablePulses) -> FloquetType:
-    if pulsetype == FloquetablePulses.MORLET_REAL:
-        return FloquetType.COSINE
-    elif pulsetype == FloquetablePulses.MORLET:
-        return FloquetType.EXPONENTIAL
-    elif pulsetype == FloquetablePulses.COSINE:
-        return FloquetType.COSINE
-    elif pulsetype == FloquetablePulses.SINE:
-        return FloquetType.SINE
-    elif pulsetype == FloquetablePulses.EXPONENTIAL:
-        return FloquetType.EXPONENTIAL
-    else:
-        raise NotImplementedError(f"The quasi-floquet model for pulse type {pulsetype} is not implemented yet.")
-    
-def check_original_pulse(pulse: Pulse) -> FloquetType:
-    try:
-        pulse_type = FloquetablePulses(pulse.__class__.__name__)
-    except ValueError:
-        raise ValueError(f"The pulse {pulse.__class__.__name__} is not a Floquet-able pulse.")
-    return get_floquet_type_from_pulsetype(pulse_type)
-
-def check_validity_of_floquet_pulse(pulse: Pulse) -> None:
-    try:
-        ValidQuasiFloqeuetPulses(pulse.__class__.__name__)
-    except ValueError:
-        raise ValueError(f"The pulse {pulse.__class__.__name__} is not a valid quasi-Floquet pulse.")
-
-
-class QuasiFloquetHamiltonianBase(TD_HamiltonianBase):
+class QuasiFloquetHamiltonianBase(HamiltonianBase):
     def __init__(
         self,
         dim: int,
-        orig_pulse: Pulse,
-        floq_pulse: Pulse,
+        ultrafast_pulse: Pulse,
+        envelope_pulse: Pulse,
         NF: int,
-        Omega: Union[float, None]=None,
-        floquet_type: Union[FloquetType, None]=None,
     ) -> None:
         """ Quasi-Floquet Hamiltonian for a time-dependent Hamiltonian """
         """ whose time dependence is definded by a 'Pulse' object. """
-        if Omega is None:
-            self.Omega = get_carrier_frequency(orig_pulse)
-        else:
-            assert Omega == get_carrier_frequency(orig_pulse)
-            self.Omega = Omega
-        assert self.Omega is not None 
         
-        if floquet_type is None:
-            self.floquet_type = check_original_pulse(orig_pulse)
-        else:
-            assert floquet_type == check_original_pulse(orig_pulse)
-            self.floquet_type = floquet_type
-            
-        check_validity_of_floquet_pulse(floq_pulse)
-            
+        super().__init__(dim)
         
-        super().__init__(dim, floq_pulse)
+        self.Omega = get_carrier_frequency(ultrafast_pulse)
+        # assert (self.Omega>0) and (self.Omega is not None), "The carrier frequency must be a positive number."
+        assert self.Omega is not None, "The carrier frequency must be a positive number."
+        
+        self.floquet_type = get_floquet_type(ultrafast_pulse)
+        self.envelope_function_type = get_envelope_function_type(envelope_pulse)
+        
+        assert self.envelope_function_type.value == envelope_pulse.__class__.__name__, \
+            f"Invalid envelope function type. Expected {self.envelope_function_type.value}, yet got {envelope_pulse.__class__.__name__}"
+        
         self.NF = NF
-        self.floquet_type = floquet_type
-        self.orig_pulse = orig_pulse
-        self.floq_pulse = floq_pulse
+        # self._ultrafast_pulse = ultrafast_pulse
+        self.envelope_pulse = envelope_pulse
         
-    def H(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
-        return get_HF(self.H0(r), self.H1(t, r), self.Omega, self.NF, floquet_type=self.floquet_type) 
+        if self.floquet_type == FloquetType.COSINE:
+            self._get_HF = get_HF_cos
+            self._get_dHF_dR = get_dHF_dR_cos
+        elif self.floquet_type == FloquetType.SINE:
+            raise NotImplementedError("The sine type of Floquet Hamiltonian is not implemented yet.") 
+        elif self.floquet_type == FloquetType.EXPONENTIAL:
+            raise NotImplementedError("The exponential type of Floquet Hamiltonian is not implemented yet.")
+        else:
+            raise NotImplementedError("The Hamiltonian type is not implemented yet.")
+        
+    @abstractmethod 
+    def H0(self, R: RealVector) -> GenericOperator:
+        pass
     
-    def dHdR(self, t: float, r: Union[float, ArrayLike]) -> ArrayLike:
-        return get_HF(self.dH0dR(r), self.dH1dR(t, r), self.Omega, self.NF, floquet_type=self.floquet_type, is_gradient=True)
+    @abstractmethod 
+    def H1(self, t: float, RealVector) -> GenericOperator:
+        pass
+    
+    @abstractmethod
+    def dH0dR(self, R: RealVector) -> GenericVectorOperator:
+        pass
+    
+    @abstractmethod 
+    def dH1dR(self, t: float, R: RealVector) -> GenericVectorOperator: 
+        pass
+        
+    def H(self, t: float, R: RealVector) -> GenericOperator:
+        H0 = self.H0(R)
+        H1 = self.H1(t, R)
+        return self._get_HF(H0, H1, self.Omega, self.NF)
+    
+    def dHdR(self, t: float, R: RealVector) -> GenericVectorOperator:
+        dH0dR = self.dH0dR(R)
+        dH1dR = self.dH1dR(t, R)
+        return self._get_dHF_dR(dH0dR, dH1dR, self.NF)
     
     def get_floquet_space_dim(self) -> int:
-        return _dim_to_dimF(self.dim, self.NF)
-    
-    def set_NF(self, NF: int) -> None:
-        if isinstance(NF, int) and NF > 0:
-            self.NF = NF
-        else:
-            raise ValueError(f"The number of Floquet replicas must be a positive integer, but {NF} is given.")
+        return get_floquet_space_dim(self.dim, self.NF)
         
     def get_carrier_frequency(self) -> float:
         return self.Omega

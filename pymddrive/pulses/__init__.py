@@ -1,5 +1,4 @@
 from .pulse_base import PulseBase
-from .pulse_base import get_carrier_frequency
 from .multipulse import MultiPulse
 
 from .cosine_pulse import CosinePulse
@@ -10,6 +9,8 @@ from .zero_pulse import ZeroPulse
 from .morlet import Morlet
 from .morlet_real import MorletReal
 from .gaussian import Gaussian
+
+from .pulse_utils import get_carrier_frequency
 
 __all__ = [
     "PulseBase",
