@@ -293,7 +293,7 @@ def _test_enforce_gauge_main(pulse_type):
     h_tullyone = get_tullyone(
         t0=t0, Omega=Omega, tau=120,
         pulse_type=pulse_type,
-        td_method=TD_Methods.FLOQUET, NF=NF
+        NF=NF
     )
     # from negative to positive
 
@@ -307,7 +307,7 @@ def _test_enforce_gauge_main(pulse_type):
     h_tullyone = get_tullyone(
         t0=t0, Omega=Omega, tau=120,
         pulse_type=pulse_type,
-        td_method=TD_Methods.FLOQUET, NF=NF
+        NF=NF
     )
 
     # from positive to negative
@@ -319,7 +319,7 @@ def _test_enforce_gauge_main(pulse_type):
 
 # %%
 if __name__ == "__main__":
-    from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
+    from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
     # _test_enforce_gauge_main(pulse_type=TullyOnePulseTypes.NO_PULSE)
     _test_enforce_gauge_main(pulse_type=TullyOnePulseTypes.PULSE_TYPE1)
 # %%

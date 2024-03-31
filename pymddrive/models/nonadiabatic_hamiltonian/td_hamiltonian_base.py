@@ -1,21 +1,28 @@
+import attr
+import numpy as np
+from attrs import define, field
+
 from pymddrive.my_types import RealVector, GenericOperator, GenericVectorOperator
-from pymddrive.models.nonadiabatic_hamiltonian.hamiltonian_base import HamiltonianBase
-from pymddrive.pulses import PulseBase as Pulse
 
-from abc import abstractmethod
-from typing import Union
+from abc import ABC, abstractmethod
 
-class TD_HamiltonianBase(HamiltonianBase):
-    def __init__(
-        self,
-        dim: int,
-        pulse: Pulse,
-    ) -> None:
-        """ Time-dependent nonadiabatic Hamiltonian. """
-        """ The time dependence is defined by a 'Pulse' object. """
-        """ The pulse consists of a carrier frequency <Omega> and an envelope <E(t)>. """
-        super().__init__(dim)
-        self.pulse = pulse
+@define
+class TD_HamiltonianBase(ABC):
+    dim: int = field(on_setattr=attr.setters.frozen)
+    _last_evecs: GenericOperator = field(default=np.zeros((0, 0)))
+    _last_deriv_couplings: GenericVectorOperator = field(default=np.zeros((0, 0, 0)))
+    
+    def update_last_evecs(self, evecs: GenericOperator) -> None:
+        if self._last_evecs.size == 0:
+            self._last_evecs = np.copy(evecs)
+        else:
+            np.copyto(self._last_evecs, evecs)
+            
+    def update_last_deriv_couplings(self, deriv_couplings: GenericVectorOperator) -> None:
+        if self._last_deriv_couplings.size == 0:
+            self._last_deriv_couplings = np.copy(deriv_couplings)
+        else:
+            np.copyto(self._last_deriv_couplings, deriv_couplings)
         
     def H(self, t: float, R: RealVector) -> GenericOperator:
         return self.H0(R) + self.H1(t, R)

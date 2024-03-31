@@ -1,26 +1,26 @@
 # %%
 import numpy as np
-from numpy.typing import ArrayLike
 
-from typing import Union
+from pymddrive.my_types import RealOperator, RealVector, RealVectorOperator
+
 
 def morse(
-    R: Union[float, ArrayLike],
+    R: RealVector,
     k: float,
     a: float,
     r_e: float,
     offset: float = 0,
-) -> ArrayLike:
+) -> RealVector:
     return k * (1 - np.exp(-a * (R - r_e)))**2 + offset
 
 def d_morse_dR(
-    R: Union[float, ArrayLike],
+    R: RealVector,
     k: float,
     a: float,
     r_e: float,
     *args,
     **kwargs,
-) -> ArrayLike:
+) -> RealVector:
     return 2 * k * a * (1 - np.exp(-a * (R - r_e))) * np.exp(-a * (R - r_e))
 
 # %%

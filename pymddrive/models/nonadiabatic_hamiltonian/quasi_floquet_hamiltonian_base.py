@@ -1,16 +1,29 @@
+import attr
+from attrs import define, field
+
 from pymddrive.my_types import RealVector, GenericOperator, GenericVectorOperator
 from pymddrive.pulses import PulseBase as Pulse
 from pymddrive.pulses import get_carrier_frequency
 from pymddrive.models.nonadiabatic_hamiltonian.hamiltonian_base import HamiltonianBase
-from pymddrive.models.floquet import FloquetType
+from pymddrive.models.floquet import FloquetType, ValidEnvolpeFunctions
 from pymddrive.models.floquet import get_floquet_space_dim
 from pymddrive.models.floquet import get_envelope_function_type, get_floquet_type
 from pymddrive.low_level.floquet import get_HF_cos, get_dHF_dR_cos
 
-from typing import Union
+from typing import Callable
 from abc import abstractmethod
-    
+
+@define
 class QuasiFloquetHamiltonianBase(HamiltonianBase):
+    envelope_pulse: Pulse = field(default=None, on_setattr=attr.setters.frozen)
+    ultrafast_pulse: Pulse = field(default=None, on_setattr=attr.setters.frozen)
+    Omega: float = field(default=None, on_setattr=attr.setters.frozen)
+    floquet_type: FloquetType = field(default=None, on_setattr=attr.setters.frozen)
+    envelope_function_type: ValidEnvolpeFunctions= field(default=None, on_setattr=attr.setters.frozen)
+    NF: int = field(default=None, on_setattr=attr.setters.frozen)
+    _get_HF: Callable = field(default=None, init=False, on_setattr=attr.setters.frozen)
+    _get_dHF_dR: Callable = field(default=None, init=False, on_setattr=attr.setters.frozen)
+    
     def __init__(
         self,
         dim: int,
@@ -23,23 +36,23 @@ class QuasiFloquetHamiltonianBase(HamiltonianBase):
         
         super().__init__(dim)
         
-        self.Omega = get_carrier_frequency(ultrafast_pulse)
+        object.__setattr__(self, "Omega", get_carrier_frequency(ultrafast_pulse))
         # assert (self.Omega>0) and (self.Omega is not None), "The carrier frequency must be a positive number."
         assert self.Omega is not None, "The carrier frequency must be a positive number."
         
-        self.floquet_type = get_floquet_type(ultrafast_pulse)
-        self.envelope_function_type = get_envelope_function_type(envelope_pulse)
+        object.__setattr__(self, "floquet_type", get_floquet_type(ultrafast_pulse))
+        object.__setattr__(self, "envelope_function_type", get_envelope_function_type(ultrafast_pulse)) 
         
         assert self.envelope_function_type.value == envelope_pulse.__class__.__name__, \
             f"Invalid envelope function type. Expected {self.envelope_function_type.value}, yet got {envelope_pulse.__class__.__name__}"
         
-        self.NF = NF
-        # self._ultrafast_pulse = ultrafast_pulse
-        self.envelope_pulse = envelope_pulse
+        object.__setattr__(self, "NF", NF)
+        object.__setattr__(self, "ultrafast_pulse", ultrafast_pulse)
+        object.__setattr__(self, "envelope_pulse", envelope_pulse)
         
         if self.floquet_type == FloquetType.COSINE:
-            self._get_HF = get_HF_cos
-            self._get_dHF_dR = get_dHF_dR_cos
+            object.__setattr__(self, "_get_HF", get_HF_cos)
+            object.__setattr__(self, "_get_dHF_dR", get_dHF_dR_cos)
         elif self.floquet_type == FloquetType.SINE:
             raise NotImplementedError("The sine type of Floquet Hamiltonian is not implemented yet.") 
         elif self.floquet_type == FloquetType.EXPONENTIAL:

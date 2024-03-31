@@ -10,6 +10,9 @@ from .morlet import Morlet
 from .morlet_real import MorletReal
 from .gaussian import Gaussian
 
+from .sine_square_pulse import SineSquarePulse
+from .sine_square_envelope import SineSquareEnvelope
+
 from .pulse_utils import get_carrier_frequency
 
 __all__ = [
@@ -22,5 +25,7 @@ __all__ = [
     "ZeroPulse",
     "Morlet",
     "MorletReal",
-    "Gaussian"
+    "Gaussian",
+    "SineSquarePulse",
+    "SineSquareEnvelope",
 ]

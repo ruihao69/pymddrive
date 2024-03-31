@@ -4,9 +4,8 @@ from .tullyone_td_type2 import TullyOneTD_type2
 from .tullyone_floquet_type1 import TullyOneFloquet_type1
 from .tullyone_floquet_type2 import TullyOneFloquet_type2
 
-from .options import TullyOnePulseTypes
-from .options import TD_Methods
-from .options import get_tullyone
+from .tullyone_pulse_types import TullyOnePulseTypes
+from .get_tullyone import get_tullyone
 
 __all__ = [
     "TullyOne",

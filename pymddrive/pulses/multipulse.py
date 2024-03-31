@@ -67,8 +67,6 @@ class MultiPulse(PulseBase):
 def _test_debug_multipulse():
     import numpy as np
     import matplotlib.pyplot as plt
-    import scienceplots
-    plt.style.use('science')
     
     from pymddrive.pulses.gaussian import Gaussian
     from pymddrive.pulses.morlet_real import MorletReal

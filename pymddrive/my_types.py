@@ -28,4 +28,10 @@ RealDiagonalVectorOperator = NDArray[Shape['A, B'], Float64]
 ComplexDiagonalVectorOperator = NDArray[Shape['A, B'], Complex128]
 GenericDiagonalVectorOperator = Union[RealDiagonalVectorOperator, ComplexDiagonalVectorOperator]
 
+# for surface hopping
 ActiveSurface = NDArray[Shape['1'], Int]
+
+
+# for typing generic scalar types
+AnyNumber: TypeAlias = Union[int, float, complex]
+RealNumber: TypeAlias = Union[int, float]

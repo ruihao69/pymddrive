@@ -1,15 +1,15 @@
 import numpy as np
 from numba import njit
+from nptyping import NDArray, Shape
 # import scipy.sparse as sp
 
 from pymddrive.my_types import RealVector, GenericOperator, GenericVectorOperator, GenericDiagonalVectorOperator
 from pymddrive.models.nonadiabatic_hamiltonian.hamiltonian_base import HamiltonianBase as Hamiltonian
-from pymddrive.models.nonadiabatic_hamiltonian.math_utils import diabatic_to_adiabatic, diagonalization 
 
-from typing import Tuple, Union, Optional
+from typing import Tuple, Any
 
 
-def evaluate_hamiltonain(
+def evaluate_hamiltonian(
     t: float, 
     R: RealVector, 
     hamiltonian: Hamiltonian
@@ -23,7 +23,7 @@ def evaluate_nonadiabatic_couplings(
     dHdR: GenericVectorOperator,
     evals: RealVector,
     evecs: GenericOperator,
-) -> Tuple:
+) -> Tuple[NDArray[Shape['A, A, B'], Any], NDArray[Shape['A, B'], Any]]:
     d = np.zeros_like(dHdR)
     F = np.zeros((dHdR.shape[1], dHdR.shape[2]), dtype=dHdR.dtype)
     
@@ -39,3 +39,9 @@ def evaluate_nonadiabatic_couplings(
             d[ii, jj, :] = d[ii, jj, :] / (evals[jj] - evals[ii])
             d[jj, ii, :] = -d[ii, jj, :].conjugate() 
     return d, F
+
+def vectorized_diagonalization(
+    Hv: GenericVectorOperator,
+) -> Tuple[RealVector, GenericOperator]:
+    evals_tmp, evecs_tmp = np.linalg.eigh(Hv.transpose(2, 0, 1))
+    return evals_tmp.T, evecs_tmp.transpose(1, 2, 0)

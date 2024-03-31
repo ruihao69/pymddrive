@@ -4,8 +4,9 @@ from .quasi_floquet_hamiltonian_base import QuasiFloquetHamiltonianBase
 
 from .nonadiabatic_hamiltonian import evaluate_hamiltonian
 from .nonadiabatic_hamiltonian import evaluate_nonadiabatic_couplings
+from .nonadiabatic_hamiltonian import vectorized_diagonalization
 
-from .math_utils import diagonalize_hamiltonian_history
+from .math_utils import diagonalization
 from .math_utils import diabatic_to_adiabatic
 from .math_utils import adiabatic_to_diabatic
 from .math_utils import nac_phase_following
@@ -16,8 +17,9 @@ __all__ = [
     "QuasiFloquetHamiltonianBase",
     "evaluate_hamiltonian",
     "evaluate_nonadiabatic_couplings",
-    "diagonalize_hamiltonian_history",
+    "diagonalization",
     "diabatic_to_adiabatic",
     "adiabatic_to_diabatic",
-    "nac_phase_following"
+    "nac_phase_following",
+    'vectorized_diagonalization'
 ]

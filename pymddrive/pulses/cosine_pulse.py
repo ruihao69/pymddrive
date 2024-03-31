@@ -1,30 +1,22 @@
-# %%
+import attr
+from attrs import define, field
 import numpy as np
 
+from pymddrive.my_types import AnyNumber, RealNumber
 from pymddrive.pulses.pulse_base import PulseBase
 
-from typing import TypeAlias    
-from numbers import Real
 
-
-AnyNumber : TypeAlias = int | float | complex 
-RealNumber : TypeAlias = int | float
-
-
+@define
 class CosinePulse(PulseBase):
-    def __init__(
-        self,
-        A: AnyNumber = 1,         # the amplitude of the cosine pulse
-        Omega: RealNumber = 1,    # the carrier frequency of the pulse
-        cache_length: int = 40
-    ):
-        super().__init__(Omega, cache_length)
-        self.A = A
-        
-        if not isinstance(self.Omega, Real):
-            raise ValueError(f"For CosinePulse, the carrier frequency {self.Omega=} should be a real number, not {type(self.Omega)}.")
+    A: AnyNumber = field(on_setattr=attr.setters.frozen)
+    Omega: RealNumber = field(on_setattr=attr.setters.frozen)
     
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
-        self.Omega: RealNumber
         return self.A * np.cos(self.Omega * time)
-# %%
+    
+if __name__ == "__main__":
+    A = 1.00
+    Omega = 1.00
+    pulse = CosinePulse(A=A, Omega=Omega)
+    time = 1.00
+    print(pulse(time))

@@ -1,40 +1,33 @@
 # %% Use tully one to test the nonadiabatic hamiltonian abc class
+import attr
 import numpy as np
-from numpy.typing import ArrayLike
+from attrs import define, field
 
+from pymddrive.my_types import RealVector, RealOperator, GenericOperator, GenericVectorOperator, RealVectorOperator
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
 from pymddrive.models.landry_spin_boson.math_utils import get_sigma_z, get_sigma_x, get_sigma_y
 
+@define
 class LandrySpinBoson(HamiltonianBase):
-    def __init__(
-        self, 
-        Omega_nuclear: float = 0.021375, # harmonic frequency of the nuclear mode
-        M: float = 1.0, # mass of the nuclear mode
-        V: float = 0.00475, # coupling strength
-        Er: float = 0.00475, # reorganization energy
-        epsilon0: float = 0.00475, # on-site energy
-        gamma: float = 0.04275, # friction coefficient
-        kT: float = 0.00095,  # thermal energy
-    ) -> None:
-        # Initialize the HamiltonianBase
-        super().__init__(dim=2)
-        
-        # Save the parameters as attributes
-        self.lambd: float = np.sqrt(Er * M * Omega_nuclear**2 / 2) # electronic - vibrational mode coupling
-        self.M: float = M
-        self.Omega_nuclear: float = Omega_nuclear
-        self.V: float = V
-        self.Er: float = Er
-        self.epsilon0: float = epsilon0
-        self.gamma: float = gamma
-        self.kT: float = kT
+    Omega_nuclear: float = field(default=0.021375, on_setattr=attr.setters.frozen)
+    M: float = field(default=1.0, on_setattr=attr.setters.frozen)
+    V: float = field(default=0.00475, on_setattr=attr.setters.frozen)
+    Er: float = field(default=0.00475, on_setattr=attr.setters.frozen)
+    epsilon0: float = field(default=0.00475, on_setattr=attr.setters.frozen)
+    gamma: float = field(default=0.04275, on_setattr=attr.setters.frozen)
+    kT: float = field(default=0.00095, on_setattr=attr.setters.frozen)
+    lambd: float = field(init=False)
+    dim: int = field(default=2, init=False)
+    
+    def __attrs_post_init__(self):
+        self.lambd = np.sqrt(self.Er * self.M * self.Omega_nuclear**2 / 2)
         
     @staticmethod
     def U(
         M: float,
         Omega: float,
-        R: float, 
-    ) -> ArrayLike:
+        R: RealVector,
+    ) -> RealOperator:
         """The nuclear potential.
 
         Args:
@@ -45,14 +38,14 @@ class LandrySpinBoson(HamiltonianBase):
         Returns:
             ArrayLike: The nuclear potential part of the Hamiltonian
         """
-        return 0.5 * M * Omega**2 * R**2 * np.eye(2)
+        return  np.sum(0.5 * M * Omega**2 * R**2) * np.eye(2)
     
     @staticmethod
     def dUdR(
         M: float,
         Omega: float,
-        R: float, 
-    ) -> ArrayLike:
+        R: RealVector,
+    ) -> RealVectorOperator: 
         """The nuclear potential.
 
         Args:
@@ -63,26 +56,26 @@ class LandrySpinBoson(HamiltonianBase):
         Returns:
             ArrayLike: The nuclear potential part of the Hamiltonian
         """
-        return M * Omega**2 * R * np.eye(2)
+        return np.sum(M * Omega**2 * R) * np.eye(2)[:, :, np.newaxis]
     
     @staticmethod
     def Vz(
         lambd: float,
         epsilon0: float,
-        R: float,
-    ) -> ArrayLike:
-        return (lambd * R + 0.5 * epsilon0) * get_sigma_z() 
+        R: RealVector,
+    ) -> RealOperator:
+        return np.sum(lambd * R + 0.5 * epsilon0) * get_sigma_z()
     
     @staticmethod
     def dVzdR(
         lambd: float,
-    ) -> ArrayLike:
-        return lambd * get_sigma_z()
+    ) -> GenericVectorOperator:
+        return lambd * get_sigma_z()[:, :, np.newaxis]
     
     @staticmethod
     def Vx(
         V: float,
-    ) -> ArrayLike:
+    ) -> GenericOperator:
         return V * get_sigma_x()
     
     def __repr__(self) -> str:
@@ -91,8 +84,8 @@ class LandrySpinBoson(HamiltonianBase):
     def H(
         self,
         t: float,
-        R: float,
-    ) -> ArrayLike:
+        R: RealVector,
+    ) -> GenericOperator:
         U = self.U(self.M, self.Omega_nuclear, R)
         Vz = self.Vz(self.lambd, self.epsilon0, R)
         return U + Vz + self.Vx(self.V)
@@ -100,8 +93,8 @@ class LandrySpinBoson(HamiltonianBase):
     def dHdR(
         self,
         t: float,
-        R: float,
-    ) -> ArrayLike:
+        R: RealVector,
+    ) -> GenericOperator:
         dUdR = self.dUdR(self.M, self.Omega_nuclear, R)
         dVzdR = self.dVzdR(self.lambd)
         return dUdR + dVzdR 
@@ -141,8 +134,8 @@ def _test_landry_spin_boson():
     E = np.zeros((2, nsamples)) 
     d12 = np.zeros(nsamples)
     for ii, rr in enumerate(R):
-        H[:, :, ii] = model.H(0, rr)
-        dHdR[:, :, ii] = model.dHdR(0, rr)
+        H[:, :, ii] = model.H(0, np.array([rr]))
+        dHdR[:, :, ii] = model.dHdR(0, np.array([rr]))[:, :, 0]
         evals, evecs = LA.eigh(H[:, :, ii])
         E[:, ii] = evals
         V = evecs.conjugate().T @ dHdR[:, :, ii] @ evecs

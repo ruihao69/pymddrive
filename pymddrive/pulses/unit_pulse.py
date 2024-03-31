@@ -1,16 +1,16 @@
+import attr
+from attrs import define, field
+import numpy as np
+
+from pymddrive.my_types import AnyNumber, RealNumber
 from pymddrive.pulses.pulse_base import PulseBase
-from pymddrive.pulses.cosine_pulse import CosinePulse
 from pymddrive.pulses.sine_pulse import SinePulse
+from pymddrive.pulses.cosine_pulse import CosinePulse
 
-from typing import TypeAlias
-
-AnyNumber : TypeAlias = int | float | complex 
-RealNumber : TypeAlias = int | float
-
+@define
 class UnitPulse(PulseBase):
-    def __init__(self, A: AnyNumber=1.0, cache_length: int = 1000):
-        super().__init__(None, cache_length)
-        self.A = A
+    A: AnyNumber = field(default=float('nan'), on_setattr=attr.setters.frozen)
+    
         
     def _pulse_func(self, t: RealNumber) -> AnyNumber:
         return self.A
