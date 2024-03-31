@@ -12,5 +12,4 @@ joblib
 
 # static typing / module compilation
 mypy
-mypyc
 nptyping

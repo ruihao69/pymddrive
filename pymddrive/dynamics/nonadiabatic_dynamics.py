@@ -9,7 +9,7 @@ from pymddrive.dynamics import ehrenfest
 from pymddrive.dynamics import fssh
 from pymddrive.dynamics.dynamics import Dynamics
 from pymddrive.dynamics.options import (
-    BasisRepresentation, QunatumRepresentation,
+    BasisRepresentation, QuantumRepresentation,
     NonadiabaticDynamicsMethods, NumericalIntegrators
 )
 from pymddrive.dynamics.misc_utils import estimate_scatter_dt, assert_valid_real_positive_value, eval_nonadiabatic_hamiltonian
@@ -37,7 +37,7 @@ class NonadiabaticDynamics(Dynamics):
         rtol: float=1e-6, 
         safety: float=0.9, 
         save_every: int = 10,
-        qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
+        qm_rep: QuantumRepresentation = QuantumRepresentation.DensityMatrix,
         basis_rep: BasisRepresentation = BasisRepresentation.Adiabatic,
         solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST, 
         numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
@@ -55,7 +55,7 @@ class NonadiabaticDynamics(Dynamics):
         else:
             self.langevin: LangevinBase = Langevin(kT=hamiltonian.get_kT(), mass=s0.get_mass(), gamma=hamiltonian.get_friction())
         
-        if qm_rep != QunatumRepresentation.DensityMatrix:
+        if qm_rep != QuantumRepresentation.DensityMatrix:
             raise NotImplementedError(f"At this time, NonadiabaticDynamics class only supports the Density Matrix representation for quantum system.")
         
         self.qm_rep = qm_rep
@@ -232,7 +232,7 @@ class NonadiabaticDynamics(Dynamics):
     
     def get_deriv(
         self, 
-        quatum_representation: QunatumRepresentation,
+        quatum_representation: QuantumRepresentation,
         method: NonadiabaticDynamicsMethods,
         basis_representation: BasisRepresentation,
         numerical_integrator: NumericalIntegrators,

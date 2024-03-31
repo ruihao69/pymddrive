@@ -35,16 +35,21 @@ void bind_state(py::module& m) {
             },
             [](py::tuple tuple) {  // __setstate__
                 // Reconstruct the State object from the tuple
-                State state(tuple[0].cast<Eigen::VectorXd>(), tuple[1].cast<Eigen::VectorXd>(), tuple[4].cast<double>(), tuple[2].cast<Eigen::VectorXcd>(), tuple[3].cast<Eigen::MatrixXcd>());
+                State state(tuple[0].cast<Eigen::VectorXd>(), tuple[1].cast<Eigen::VectorXd>(), tuple[4].cast<double>(), tuple[2].cast<Eigen::VectorXcd>(), tuple[3].cast<RowMatrixXcd>());
                 state.set_state_type(tuple[5].cast<StateType>());
                 state.set_representation(tuple[6].cast<QuantumStateRepresentation>());
                 return state;
             }))
-        .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double>())
-                .def(py::init<const Eigen::VectorXcd&>())
-                .def(py::init<const Eigen::MatrixXcd&>())
-                .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double, const Eigen::VectorXcd&>())
-                .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double, const Eigen::MatrixXcd&>())
+            .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double>())
+                .def(py::init<Eigen::Ref<const Eigen::VectorXcd>>())
+                .def(py::init<Eigen::Ref<const RowMatrixXcd>>())
+                .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double, Eigen::Ref<const Eigen::VectorXcd>>())
+                .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double, Eigen::Ref<const RowMatrixXcd>>())
+                // .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double>())
+                // .def(py::init<const Eigen::VectorXcd&>())
+                // .def(py::init<const RowMatrixXcd&>())
+                // .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double, const Eigen::VectorXcd&>())
+                // .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double, const RowMatrixXcd&>())
                 .def("flatten", &State::flatten)
                 .def("get_R", &State::get_R)
                 .def("set_R", &State::set_R)

@@ -8,7 +8,7 @@ from pymddrive.models.nonadiabatic_hamiltonian import diabatic_to_adiabatic, adi
 from pymddrive.low_level.states import State
 from pymddrive.integrators.rk4 import rk4
 from pymddrive.integrators.state_rk4 import state_rk4
-from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NumericalIntegrators
+from pymddrive.dynamics.options import BasisRepresentation, QuantumRepresentation, NumericalIntegrators
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian, HamiltonianRetureType
 from pymddrive.dynamics.math_utils import commutator, rhs_density_matrix, v_dot_d, expected_value
 from pymddrive.dynamics.floquet.ehrenfest import get_rho_and_populations
@@ -42,11 +42,11 @@ def choose_ehrenfest_stepper(
         raise NotImplementedError
     
 def choose_ehrenfest_deriv(
-    quantum_representation: QunatumRepresentation
+    quantum_representation: QuantumRepresentation
 ) -> Callable:
-    if quantum_representation == QunatumRepresentation.DensityMatrix:
+    if quantum_representation == QuantumRepresentation.DensityMatrix:
         return _deriv_ehrenfest_dm
-    elif quantum_representation == QunatumRepresentation.Wavefunction:
+    elif quantum_representation == QuantumRepresentation.Wavefunction:
         raise NotImplementedError(f"Quantum representation Wavefunction is not implemented for Ehrenfest dynamics.")
     else:
         raise NotImplementedError(f"Quantum representation {quantum_representation} is not implemented for Ehrenfest dynamics.")

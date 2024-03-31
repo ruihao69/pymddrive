@@ -7,7 +7,7 @@ from pymddrive.low_level.states import State
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase
 from pymddrive.integrators.rk4 import rk4
 from pymddrive.integrators.state_rk4 import state_rk4
-from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NumericalIntegrators
+from pymddrive.dynamics.options import BasisRepresentation, QuantumRepresentation, NumericalIntegrators
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian, HamiltonianRetureType
 from pymddrive.dynamics.math_utils import rhs_density_matrix, v_dot_d
 from pymddrive.dynamics.floquet.fssh import get_rho_and_populations
@@ -33,11 +33,11 @@ def choose_fssh_stepper(numerical_integrator: NumericalIntegrators) -> Callable:
         raise NotImplemented(f"FSSH is not implemented for {numerical_integrator=} at this time.")
 
 def choose_fssh_deriv(
-    quantum_representation: QunatumRepresentation
+    quantum_representation: QuantumRepresentation
 ) -> Callable:
-    if quantum_representation == QunatumRepresentation.DensityMatrix:
+    if quantum_representation == QuantumRepresentation.DensityMatrix:
         return _deriv_fssh_dm
-    elif quantum_representation == QunatumRepresentation.Wavefunction:
+    elif quantum_representation == QuantumRepresentation.Wavefunction:
         raise NotImplementedError(f"Quantum representation Wavefunction is not implemented for Ehrenfest dynamics.")
     else:
         raise NotImplementedError(f"Quantum representation {quantum_representation} is not implemented for Ehrenfest dynamics.")

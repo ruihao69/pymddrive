@@ -3,14 +3,12 @@ import numpy as np
 from attrs import define, field
 
 from pymddrive.my_types import RealVector, GenericOperator, GenericVectorOperator
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
 
 from abc import ABC, abstractmethod
 
 @define
-class TD_HamiltonianBase(ABC):
-    dim: int = field(on_setattr=attr.setters.frozen)
-    _last_evecs: GenericOperator = field(default=np.zeros((0, 0)))
-    _last_deriv_couplings: GenericVectorOperator = field(default=np.zeros((0, 0, 0)))
+class TD_HamiltonianBase(HamiltonianBase):
     
     def update_last_evecs(self, evecs: GenericOperator) -> None:
         if self._last_evecs.size == 0:

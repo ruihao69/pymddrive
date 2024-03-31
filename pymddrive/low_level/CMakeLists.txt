@@ -9,3 +9,8 @@ set(SOURCES
 pybind11_add_module(_low_level ${SOURCES})
 target_include_directories(_low_level PRIVATE ${LIB_LOW_LEVEL_INCLUDE_DIR})
 target_link_libraries(_low_level PRIVATE liblowlevel)
+
+# Install destination
+install(TARGETS _low_level
+    LIBRARY DESTINATION ${SKBUILD_PROJECT_NAME}/low_level
+)

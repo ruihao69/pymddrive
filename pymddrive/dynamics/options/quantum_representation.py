@@ -1,6 +1,6 @@
-from enum import Enum, unique
+from enum import Enum, unique, auto
  
 @unique
 class QuantumRepresentation(Enum):
-    Wavefunction = 'WaveFunction'
-    DensityMatrix = 'DensityMatrix'
+    WAVEFUNCTION = auto()
+    DENSITY_MATRIX = auto()

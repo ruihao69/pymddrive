@@ -1,0 +1,18 @@
+[build-system]
+requires = ["scikit-build-core", "pybind11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "pymddrive"
+version = "0.0.1"
+authors = [
+  { name="Rui-Hao Bi", email="biruihao@westlake.edu.cn"},
+]
+description="A convenient personal package for molecular dynamics simulation."
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Progamming Language :: Python :: 3",
+    "License :: OSI Approved :: BSD 3-Clause License",
+    "Operating System :: OS Independent",
+]

@@ -1,7 +1,7 @@
-from enum import Enum, unique
+from enum import Enum, unique, auto
 
 # use Enum class to define the dynamics options
 @unique
 class BasisRepresentation(Enum):
-    Diabatic = 'Diabatic'
-    Adiabatic = 'Adiabatic'
+    DIABATIC = auto()
+    ADIABATIC = auto()
