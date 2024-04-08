@@ -27,8 +27,19 @@ class Ehrenfest(NonadiabaticSolverBase):
     
     # Implement the abstract methods from NonadiabaticSolverBase
     
-    def callback(self, ) -> None:
-        pass 
+    def callback(self, t: float, state: State) -> None:
+        """ Callback function for the Ehrenfest solver. """
+        # - if the basis representation is adiabatic, we need to update the Hamiltonian, particularly
+        # to update the last eigenvectors for the eigen-vector following algorithm
+        if self.basis_representation == BasisRepresentation.ADIABATIC:
+            R, P, rho = state.variables()
+            H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
+            evals, evecs = diagonalization(H)
+            self.hamiltonian.update_last_evecs(evecs)
+            self.cache.H[:] = H
+            self.cache.dHdR[:] = dHdR
+            self.cache.evals[:] = evals
+            self.cache.evecs[:] = evecs
     
     def derivative(self, t: float, state: State) -> State:
         R, P, rho = state.variables()
@@ -52,7 +63,7 @@ class Ehrenfest(NonadiabaticSolverBase):
         quantum_representation = QuantumRepresentation.WAVEFUNCTION if dim_quantum > 1 else QuantumRepresentation.DENSITY_MATRIX
         
         H, dHdR = evaluate_hamiltonian(0.0, R, hamiltonian)
-        evals, evecs = diagonalization(H)
+        evals, evecs = diagonalization(H, hamiltonian._last_deriv_couplings)
         d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         
         cache = Cache(
@@ -71,7 +82,6 @@ class Ehrenfest(NonadiabaticSolverBase):
             hamiltonian=hamiltonian,
             cache=cache
         )
-        
     
     @staticmethod
     def derivative_diabatic(
@@ -103,4 +113,6 @@ class Ehrenfest(NonadiabaticSolverBase):
         P_dot = mean_force_adiabatic_representation(F, evals, v_dot_d, rho_or_psi)
         rho_or_psi_dot = adiabatic_equations_of_motion(rho_or_psi, evals, v_dot_d)
         return R_dot, P_dot, rho_or_psi_dot
+    
+    # Implement the Ehrenfest specific methods
     

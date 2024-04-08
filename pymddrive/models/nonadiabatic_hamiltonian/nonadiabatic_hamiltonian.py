@@ -3,7 +3,7 @@ from numba import njit
 from nptyping import NDArray, Shape
 # import scipy.sparse as sp
 
-from pymddrive.my_types import RealVector, GenericOperator, GenericVectorOperator, GenericDiagonalVectorOperator
+from pymddrive.my_types import RealVector, GenericOperator, GenericVectorOperator
 from pymddrive.models.nonadiabatic_hamiltonian.hamiltonian_base import HamiltonianBase as Hamiltonian
 
 from typing import Tuple, Any

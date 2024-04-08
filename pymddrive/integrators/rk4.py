@@ -103,6 +103,14 @@ def _debug_test():
     plt.title("Phase space")
     plt.show()
     
+    plt.plot(R_out[:, 0], R_out[:, 1])
+    # plt.plot(R_out[:, 1], P_out[:, 1])
+    # plt.plot(R_out[:, -1], P_out[:, -1])
+    plt.xlabel("R1")
+    plt.ylabel("R2")
+    plt.title("Phase space")
+    plt.show()
+    
     E = R_out**2 + P_out**2
     print(E.shape)
 
