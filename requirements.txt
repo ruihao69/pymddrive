@@ -3,6 +3,7 @@ numpy
 numba
 scipy
 matplotlib
+netCDF4
 
 # third-party dataclasses
 attrs

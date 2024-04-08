@@ -5,10 +5,8 @@ from pymddrive.my_types import RealVector, GenericOperator, GenericVectorOperato
 from pymddrive.models.nonadiabatic_hamiltonian import diabatic_to_adiabatic, adiabatic_to_diabatic
 from pymddrive.dynamics.options import BasisRepresentation
 
-from multiprocessing import Manager
 from typing import Optional, Any
 
-manager = Manager()
 
 def compute_populations_from_rho(rho: GenericOperator, evecs: Optional[GenericOperator]=None) -> RealVector:
     return np.diag(rho).real
@@ -32,7 +30,7 @@ def compute_adibatic_populations_from_diabatic_psi(psi: GenericOperator, evecs: 
 
 # FUNCTION TABLE for computing the populations
 # tuple(ndim, state_basis_representation, target_basis_representation) -> function
-POPULATION_FUNCTIONS = manager.dict({
+POPULATION_FUNCTIONS = {
     (1, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_populations_from_psi,
     (1, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_diabatic_populations_from_adiabatic_psi,
     (1, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_adibatic_populations_from_diabatic_psi,
@@ -41,7 +39,7 @@ POPULATION_FUNCTIONS = manager.dict({
     (2, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_diabatic_populations_from_adiabatic_rho,
     (2, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_adibatic_populations_from_diabatic_rho,
     (2, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC): compute_populations_from_rho,
-})
+}
 
 def compute_populations(
     state: GenericOperator,
@@ -188,7 +186,7 @@ def compute_floquet_populations_from_psi_aaa(psi: GenericOperator, Omega: float,
     raise NotImplementedError("Floquet populations are not implemented yet.")
 
 # FUNCTION TABLE for computing the populations
-FLOQUET_POPULATION_FUNCTIONS = manager.dict({
+FLOQUET_POPULATION_FUNCTIONS = {
     (1, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_psi_ddd,
     (1, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_psi_dda,
     (1, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_psi_add,
@@ -204,7 +202,7 @@ FLOQUET_POPULATION_FUNCTIONS = manager.dict({
     (2, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_rho_daa,
     (2, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_rho_aad,
     (2, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_rho_aaa,
-})
+}
 
 def compute_floquet_populations(
     state: GenericOperator,

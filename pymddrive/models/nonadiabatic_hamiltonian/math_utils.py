@@ -126,7 +126,7 @@ def adjust_nac_phase(d_prev: GenericVectorOperator, d_curr: GenericVectorOperato
                 
 def diagonalization(hamiltonian: GenericOperator, prev_evecs: Optional[GenericOperator]=None) -> Tuple[RealVector, GenericOperator]:
     evals, evecs = LA.eigh(hamiltonian)
-    evecs = align_phase(prev_evecs, evecs) if prev_evecs is not None else evecs
+    evecs = align_phase(prev_evecs, evecs) if np.sum(np.shape(prev_evecs)) > 0 else evecs
     return evals, evecs
 
 

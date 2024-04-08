@@ -10,18 +10,6 @@ from abc import ABC, abstractmethod
 @define
 class TD_HamiltonianBase(HamiltonianBase):
     
-    def update_last_evecs(self, evecs: GenericOperator) -> None:
-        if self._last_evecs.size == 0:
-            self._last_evecs = np.copy(evecs)
-        else:
-            np.copyto(self._last_evecs, evecs)
-            
-    def update_last_deriv_couplings(self, deriv_couplings: GenericVectorOperator) -> None:
-        if self._last_deriv_couplings.size == 0:
-            self._last_deriv_couplings = np.copy(deriv_couplings)
-        else:
-            np.copyto(self._last_deriv_couplings, deriv_couplings)
-        
     def H(self, t: float, R: RealVector) -> GenericOperator:
         return self.H0(R) + self.H1(t, R)
     

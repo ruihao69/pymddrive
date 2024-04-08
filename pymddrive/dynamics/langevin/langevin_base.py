@@ -7,8 +7,6 @@ from typing import Union
 
 
 class LangevinBase(ABC):
-    def __repr__(self) -> str:
-        return f"LangevinBase(kT={self.get_kT()})"
     
     @abstractmethod
     def get_gamma(self, t: float, R: RealVector) -> Union[float, RealVector]:

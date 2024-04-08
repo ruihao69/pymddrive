@@ -5,10 +5,11 @@ from attrs import define, field
 from pymddrive.my_types import RealVector, ComplexVector, ComplexOperator, GenericOperator, GenericDiagonalVectorOperator, GenericVectorOperator
 from pymddrive.dynamics.cache import Cache
 from pymddrive.dynamics.options import BasisRepresentation, QuantumRepresentation
-from pymddrive.dynamics.nonadiabatic_solvers.nonadiabatic_solver_base import NonadiabaticSolverBase
+from pymddrive.dynamics.nonadiabatic_solvers.nonadiabatic_solver_base import NonadiabaticSolverBase, NonadiabaticProperties
 from pymddrive.dynamics.nonadiabatic_solvers.math_utils import expected_value, diabatic_equations_of_motion, adiabatic_equations_of_motion, compute_v_dot_d
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.ehrenfest_math_utils import mean_force_adiabatic_representation
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization
+from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations, compute_populations
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization
 from pymddrive.low_level.states import State
 
 
@@ -27,26 +28,26 @@ class Ehrenfest(NonadiabaticSolverBase):
     
     # Implement the abstract methods from NonadiabaticSolverBase
     
-    def callback(self, t: float, state: State) -> None:
+    def callback(self, t: float, state: State) -> Tuple[State, bool]:
         """ Callback function for the Ehrenfest solver. """
-        # - if the basis representation is adiabatic, we need to update the Hamiltonian, particularly
-        # to update the last eigenvectors for the eigen-vector following algorithm
-        if self.basis_representation == BasisRepresentation.ADIABATIC:
-            R, P, rho = state.variables()
-            H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
-            evals, evecs = diagonalization(H)
-            self.hamiltonian.update_last_evecs(evecs)
-            self.cache.H[:] = H
-            self.cache.dHdR[:] = dHdR
-            self.cache.evals[:] = evals
-            self.cache.evecs[:] = evecs
+        R, P, rho = state.get_variables()
+        H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
+        evals, evecs = diagonalization(H)
+        self.hamiltonian.update_last_evecs(evecs)
+        self.cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR)
+        return state, False
     
     def derivative(self, t: float, state: State) -> State:
-        R, P, rho = state.variables()
+        R, P, rho = state.get_variables()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
         v = state.get_v()
         if self.basis_representation == BasisRepresentation.DIABATIC:
-            self.derivative_diabatic(v, rho, H, dHdR)
+            dR, dP, drho = self.derivative_diabatic(v, rho, H, dHdR, self.cache.F_langevin)
+        elif self.basis_representation == BasisRepresentation.ADIABATIC:
+            dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin)
+        else:
+            raise ValueError("Unsupported basis representation.")
+        return state.from_unstructured(np.concatenate([dR, dP, drho.flatten(order='F')], dtype=np.complex128))
         
     @classmethod
     def initialize(
@@ -55,7 +56,7 @@ class Ehrenfest(NonadiabaticSolverBase):
         hamiltonian: HamiltonianBase,
         basis_representation: BasisRepresentation
         ) -> 'Ehrenfest':
-        R, P, rho_or_psi = state.variables()
+        R, P, rho_or_psi = state.get_variables()
         
         dim_nuclear = R.shape[0]
         dim_quantum = rho_or_psi.shape[0]
@@ -66,13 +67,8 @@ class Ehrenfest(NonadiabaticSolverBase):
         evals, evecs = diagonalization(H, hamiltonian._last_deriv_couplings)
         d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         
-        cache = Cache(
-            H=H,
-            evals=evals,
-            evecs=evecs,
-            dHdR=dHdR,
-            nac=d
-        )
+        cache = Cache.from_dimensions(dim_elec=dim_quantum, dim_nucl=dim_nuclear)
+        cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR, nac=d)
         
         return cls(
             dim_nuclear=dim_nuclear,
@@ -89,9 +85,10 @@ class Ehrenfest(NonadiabaticSolverBase):
         rho_or_psi: Union[ComplexVector, ComplexOperator],
         H: GenericOperator,
         dHdR: GenericVectorOperator,
+        F_langevin: RealVector,
     ) -> Tuple[RealVector, RealVector, Union[ComplexVector, ComplexOperator]]:
         R_dot = v
-        P_dot = -expected_value(dHdR, rho_or_psi)
+        P_dot = -expected_value(dHdR, rho_or_psi) + F_langevin
         rho_or_psi_dot = diabatic_equations_of_motion(rho_or_psi, H)
         return R_dot, P_dot, rho_or_psi_dot
     
@@ -101,6 +98,7 @@ class Ehrenfest(NonadiabaticSolverBase):
         rho_or_psi: Union[ComplexVector, ComplexOperator],
         H: GenericOperator,
         dHdR: GenericVectorOperator,
+        F_langevin: RealVector,
     ) -> Tuple[RealVector, RealVector, Union[ComplexVector, ComplexOperator]]:
         # diagonalize the Hamiltonian
         evals, evecs = diagonalization(H)
@@ -110,9 +108,27 @@ class Ehrenfest(NonadiabaticSolverBase):
         v_dot_d = compute_v_dot_d(v, d)
         
         R_dot = v
-        P_dot = mean_force_adiabatic_representation(F, evals, v_dot_d, rho_or_psi)
+        P_dot = mean_force_adiabatic_representation(F, evals, v_dot_d, rho_or_psi) + F_langevin
         rho_or_psi_dot = adiabatic_equations_of_motion(rho_or_psi, evals, v_dot_d)
         return R_dot, P_dot, rho_or_psi_dot
     
     # Implement the Ehrenfest specific methods
+    def calculate_properties(self, s: State) -> Tuple[float, float]:
+        R, P, rho_or_psi = s.get_variables()
+        
+        KE = NonadiabaticSolverBase.calculate_KE(P, s.get_mass())
+        if self.basis_representation == BasisRepresentation.ADIABATIC:
+            PE = expected_value(self.cache.evals, rho_or_psi)
+        else:
+            PE = expected_value(self.cache.H, rho_or_psi)
+        
+        if isinstance(self.hamiltonian, QuasiFloquetHamiltonianBase):
+            raise NotImplementedError
+        else:
+            adiabatic_populations = compute_populations(rho_or_psi, self.basis_representation, BasisRepresentation.ADIABATIC, self.cache.evecs)
+            # diabatic_populations = compute_populations(rho_or_psi, self.basis_representation, BasisRepresentation.DIABATIC, self.cache.evecs)
+            diabatic_populations = rho_or_psi.diagonal().real
+            
+        return NonadiabaticProperties(R=R, P=P, adiabatic_populations=adiabatic_populations, diabatic_populations=diabatic_populations, KE=KE, PE=PE) 
+            
     

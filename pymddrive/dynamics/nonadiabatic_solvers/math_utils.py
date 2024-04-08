@@ -5,10 +5,10 @@ from numba import njit
 from pymddrive.my_types import RealVector, ComplexVector, ComplexOperator, GenericOperator, GenericVectorOperator, GenericVector
 
 from typing import Union
-from multiprocessing import Manager
+# from multiprocessing import Manager
 
 # create a manager to make global tables accessible to all processes
-manager = Manager()
+# manager = Manager()
 
 # Expected values implementation
 def expected_value_diagonal_operator_wavefunction(operator: GenericVector, wavefunction: ComplexVector) -> float:
@@ -38,17 +38,17 @@ def expected_value_vector_operator_wavefunction(v_operator: GenericVectorOperato
 def expected_value_vector_operator_density_matrix(v_operator: GenericVectorOperator, density_matrix: ComplexOperator) -> RealVector:
     # note numpy functions like dots are faster on contiguous arrays
     # hence we take the hustle to copy the operator to a temporary contiguous array
-    _op = np.zeros((v_operator.shape[0], v_operator.shape[1]), dtype=v_operator.dtype)
+    _op = np.zeros((v_operator.shape[0], v_operator.shape[1]), dtype=np.complex128)
     result = np.zeros((v_operator.shape[2],), dtype=np.float64)
     for inuc in range(v_operator.shape[2]):
-        _op = np.ascontiguousarray(v_operator[..., inuc])
+        _op[:] = np.ascontiguousarray(v_operator[..., inuc])
         result[inuc] = np.trace(np.dot(density_matrix, _op)).real
     return result
 
 # generic expected value function
 
 # define a table of expected value functions
-EXPECTED_VALUE_FUNCTION_TABLE = manager.dict({
+EXPECTED_VALUE_FUNCTION_TABLE = {
     # (operator_dim, quantum_state_dim): expected_value_function
     (1, 1): expected_value_diagonal_operator_wavefunction,
     (1, 2): expected_value_diagonal_operator_density_matrix,
@@ -56,7 +56,7 @@ EXPECTED_VALUE_FUNCTION_TABLE = manager.dict({
     (2, 2): expected_value_operator_density_matrix,
     (3, 1): expected_value_vector_operator_wavefunction,
     (3, 2): expected_value_vector_operator_density_matrix,
-})
+}
 
 
 def expected_value(
@@ -97,15 +97,15 @@ def shrodinger_adiabatic(psi: ComplexVector, evals: RealVector, v_dot_d: Generic
 def von_neumann_adiabatic(rho: ComplexOperator, evals: RealVector, v_dot_d: GenericOperator) -> ComplexOperator:
     return -1.j * commutator_diagA_B(evals, rho) - commutator(v_dot_d, rho)
 
-DIABATIC_EQUATIONS = manager.dict({
+DIABATIC_EQUATIONS = {
     1: schrodinger_diabatic,
     2: von_neumann_diabatic,
-})
+}
 
-ADIABATIC_EQUATIONS = manager.dict({
+ADIABATIC_EQUATIONS = {
     1: shrodinger_adiabatic,
     2: von_neumann_adiabatic,
-})
+}
 
 def diabatic_equations_of_motion(
     quantum_state: Union[ComplexVector, ComplexOperator],

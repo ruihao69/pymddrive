@@ -18,11 +18,11 @@ HamiltonianRetureType = namedtuple('HamiltonianRetureType', 'H, dHdR, evals, eve
 
 def eval_nonadiabatic_hamiltonian(
     t: float, R: ArrayLike, hamiltonian: HamiltonianBase, 
-    basis_rep: BasisRepresentation=BasisRepresentation.Adiabatic,
+    basis_rep: BasisRepresentation=BasisRepresentation.ADIABATIC,
     eval_deriv_cp: bool=False,
 ) -> HamiltonianRetureType: 
     flag_reshape = False
-    flag_evec_following = True if basis_rep == BasisRepresentation.Adiabatic else False
+    flag_evec_following = True if basis_rep == BasisRepresentation.ADIABATIC else False
     # flag_evec_following = False
     if R.shape[0] == 1:
         H, dHdR, evals, evecs = evaluate_hamiltonian(t, R[0], hamiltonian, enable_evec_following=flag_evec_following)

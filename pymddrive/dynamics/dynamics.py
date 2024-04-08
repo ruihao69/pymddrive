@@ -1,82 +1,56 @@
-# %% The package code
-import numpy as np
+# %%
+import attr
+from attrs import define, field
 
-from typing import Union, Tuple, Type, Callable, NamedTuple
-    
-from numpy.typing import ArrayLike, NDArray
-
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
-# from pymddrive.integrators.state import State
+from pymddrive.my_types import GenericVector
 from pymddrive.low_level.states import State
-
-from abc import ABC
-
-from pymddrive.dynamics.options import NumericalIntegrators
 from pymddrive.dynamics.cache import Cache
+from pymddrive.dynamics.options import BasisRepresentation, NonadiabaticDynamicsMethods, BasisRepresentation
+from pymddrive.dynamics.nonadiabatic_solvers import NonadiabaticSolverBase
+from pymddrive.dynamics.langevin import LangevinBase, NullLangevin
+
+@define
+class Dynamics:
+    t0: float = field(on_setattr=attr.setters.frozen)
+    s0: State = field(on_setattr=attr.setters.frozen)
+    dt: float = field(on_setattr=attr.setters.frozen)
+    solver: NonadiabaticSolverBase = field(on_setattr=attr.setters.frozen)
+    langevin: LangevinBase = field(default=NullLangevin(), on_setattr=attr.setters.frozen)
+    atol: float = 1e-8
+    rtol: float = 1e-8
     
-class Dynamics(ABC):
-    def __init__(
-        self,
-        hamiltonian: HamiltonianBase,
-        t0: float, 
-        s0: State, 
-        dt: Union[float, None]=None, 
-        atol: float=1e-8, 
-        rtol: float=1e-8, 
-        safety: float=0.9, 
-        save_every: int=10,
-        numerical_integrator: NumericalIntegrators=NumericalIntegrators.ZVODE,
-    ) -> None:
-        self.hamiltonian = hamiltonian
-        self.t0 = t0    
-        self.s0 = s0    
-        self.dt = dt
-        self.safty = safety
-        self.save_every = save_every
-        self.atol = atol
-        self.rtol = rtol
+    def deriv_wrapper(self, t: float, y: GenericVector) -> GenericVector:
+        s = self.s0.from_unstructured(y)
+        return self.solver.derivative(t, s).flatten()
         
-        self.ode_solver = None
-        # self.dtype = s0.data.dtype
-        # self.stype = s0.stype
-        
-        # the stepper design: takes time, state, and cache, returns time, state, and cache
-        self.step: Callable[[float, State, Cache], Tuple[float, State, Cache]] = None
-        
-        # the derivative function: takes time and state, returns the derivative of the state
-        self.deriv: Callable[[float, State], State] = None
-        
-        # the properties calculator: takes the current time and state, returns the properties as a namedtuple
-        self.calculate_properties: Callable[[float, State], NamedTuple] = None
-        
-        # the callback function: takes the current time, state, cache, and langevin forces, returns the updated state and cache
-        self.callback: Callable[[float, State, Cache], Tuple[State, Cache]] = None
-        
-        # the cache calculator: takes the current time, state, and cache, returns the updated cache
-        self.cache_initializer: Callable[[float, State, ArrayLike], Cache] = None
-        
-        self.properties_type: Type = None 
-        
-        self.numerical_integrator: NumericalIntegrators = numerical_integrator
-            
-    # @staticmethod 
-    # def _process_mass(
-    #     s0: State, mass: Union[Real, None, ArrayLike],
-    # ) -> Union[float, ArrayLike]:
-    #     if mass is None:
-    #         return 1.0
-    #     elif isinstance(mass, Real):
-    #         if mass < 0:
-    #             raise ValueError("The mass should be positive.")
-    #         return mass
-    #     elif isinstance(mass, np.ndarray, list, tuple):
-    #         r, _, _ = s0.get_variables()
-    #         if len(mass) != len(r):
-    #             raise ValueError("The length of mass should be the same as the length of r.")
-    #         if all(m < 0 for m in mass):
-    #             raise ValueError("The mass should be positive.")
-    #         if all(m == mass[0] for m in mass):
-    #             return mass[0]
-    #         else:
-    #             return mass
-    #     raise ValueError("The mass should be a float, int, list, tuple or numpy.ndarray.") 
+    
+def main():
+    import numpy as np
+    from pymddrive.integrators.state import get_state
+    from pymddrive.models.tullyone import get_tullyone
+    from pymddrive.dynamics.nonadiabatic_solvers import Ehrenfest
+    
+    t0 = 0.0 
+    
+    n_particle = 1
+    R = np.random.normal(0, 1, n_particle)
+    P = np.random.normal(0, 1, n_particle)
+    rho_dummy = np.array([[0.5, 0], [0, 0.5]], dtype=np.complex128)
+    mass = 1.0
+    
+    s0 = get_state(mass, R, P, rho_dummy)
+    dt = 0.01
+    hamiltonian = get_tullyone()
+    solver = Ehrenfest.initialize(
+        state=s0,
+        hamiltonian=hamiltonian,
+        basis_representation=BasisRepresentation.DIABATIC, 
+    )
+    
+    dyn = Dynamics(t0=t0, s0=s0, solver=solver, dt=dt)
+    print(dyn)
+
+# %%
+if __name__ == "__main__":
+    main()
+# %%

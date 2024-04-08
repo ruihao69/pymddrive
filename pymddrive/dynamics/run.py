@@ -1,298 +1,273 @@
-# %% This file contains the main function to run the nonadiabatic dynamics simulation.
-import numpy as np
-from numpy.typing import DTypeLike
+# %%
+from scipy.integrate import ode
 
-from pymddrive.integrators.state import get_state
-from pymddrive.dynamics.nonadiabatic_dynamics import NonadiabaticDynamics
-from pymddrive.utils import get_ncpus   
+from pymddrive.my_types import GenericVector
+from pymddrive.dynamics.dynamics import Dynamics
+from pymddrive.dynamics.misc_utils import assert_valid_real_positive_value
+from pymddrive.low_level.states import State
+from pymddrive.integrators.state_rk4 import state_rk4
+from pymddrive.dynamics.output_writer import PropertiesWriter
 
+from typing import Optional, Dict, Any, Tuple, Callable
 import warnings
-from typing import NamedTuple, Iterable, Generator, Dict
 
-from joblib import Parallel, delayed
+MAX_STEPS = int(1e8)
 
-def reduce_ensemble_output(output: Generator[Dict, None, None]) -> Dict:
-    ntraj: int = 0
-    time_cached = None
-    output_reduced = {}
-    keys_cache = None
-    for output_ in output:
-        if time_cached is None:
-            time_cached = output_['time']
+def get_ode_solver_options(
+    dynamics: Dynamics,
+    max_step: Optional[float]=None, 
+    min_step: Optional[float]=None
+) -> Dict[str, Any]:
+    ode_integrator_options = {
+        'name': 'zvode',
+        'method': 'bdf',
+        'atol': dynamics.atol, 
+        'rtol': dynamics.rtol,
+        'nsteps': MAX_STEPS
+    }
+    
+    if max_step is not None:
+        assert_valid_real_positive_value(max_step)
+        ode_integrator_options['max_step'] = max_step
+    if min_step is not None:
+        assert_valid_real_positive_value(min_step)
+        if max_step is not None and max_step < min_step:
+            raise ValueError(f"The {max_step=} is smaller than the {min_step=}.")
         else:
-            if not np.allclose(time_cached, output_['time'], rtol=1e-5, atol=1e-5):
-                raise ValueError(f"Expect identical time arrays for all trajectories in the ensemble, but got {time_cached} and {output_['time']}.")
-        if keys_cache is None:
-            keys_cache = output_.keys()
-        else: 
-            # assert that the 'time' and 'states' are in the output_ dict
-            assert ('time' in output_) and ('states' in output_), f"A successful simulation should have 'time' and 'states' in the output_ dict. Got {output_.keys()}."
-            for key in keys_cache:
-                if key == 'time':
-                    pass
-                else:
-                    if key not in output_reduced:
-                        output_reduced[key] = output_[key] 
-                    elif output_reduced[key] is np.nan:
-                        pass
-                    else:
-                        try:
-                            if key == 'states':
-                                for field in output_reduced['states'].dtype.names:
-                                    output_reduced['states'][field] += output_['states'][field]
-                            else:
-                                output_reduced[key] += output_[key]
-                            
-                        except TypeError:
-                            if np.any(output_[key] == None):
-                                warnings.warn(f"Got None in the output for key {key}.")
-                                output_reduced[key] = np.nan
-                            else:
-                                raise ValueError(f"Expect the output_ to be a number or an array, but got {output_[key]}.")
-        ntraj += 1
-    for key in output_reduced:
-        if key == 'states':
-            for field in output_reduced['states'].dtype.names:
-                output_reduced['states'][field] /= ntraj
-        elif key == 'active_surf':
-            continue
-        else:
-            output_reduced[key] /= ntraj
-    output_reduced.pop('active_surf', None)
+            ode_integrator_options['min_step'] = min_step
+    return ode_integrator_options
+
+def run_dynamics_zvode(
+    dynamics: Dynamics,
+    save_every: int = 10,
+    break_condition: Callable[[State], bool] = lambda x: False,
+    filename: Optional[str] = None
+):
+    # the initial dynamic variables
+    t: float = dynamics.t0
+    y: GenericVector = dynamics.s0.flatten()
+    s: State = dynamics.s0.from_unstructured(y)
+    
+    # the ODE solver: scipy's ZVODE wrapper
+    ode_solver = ode(dynamics.deriv_wrapper).set_integrator(**get_ode_solver_options(dynamics))
+    ode_solver.set_initial_value(y, t)
+    
+    # integration step wrapper
+    def step_zvode(t) -> Tuple[float, State]:
+        ########
+        # Integration using the zvode solver (call the fortran code)
+        ########
+        if not ode_solver.successful():
+            raise RuntimeError("The ode solver is not successful.")
         
-    return {'time': time_cached, **output_reduced}
-
-def reduce_ensemble_output_inhomogeneous(output: Generator[Dict, None, None]) -> Dict:
-    EXPLODE_TOL = 1e2
-    ensemble_tuples = tuple(output_ for output_ in output)
-    ntraj: int = len(ensemble_tuples)
-    shortest_time = None
-    for output_ in ensemble_tuples:
-        if shortest_time is None:
-            shortest_time = output_['time']
-        else:
-            shortest_time = output_['time'] if output_['time'][-1] < shortest_time[-1] else shortest_time
-    output_reduced = {}
-    for output_ in ensemble_tuples:
-        for key in output_:
-            if key == 'time':
-                continue
-            elif key not in output_reduced:
-                mask = output_['time'] <= shortest_time[-1]
-                if key == 'states':
-                    output_reduced['states'] = output_['states'][mask]
-                    for field in output_reduced['states'].dtype.names:
-                        output_reduced['states'][field] /= ntraj
-                else:
-                    try:
-                        output_reduced[key] = output_[key][mask] / ntraj
-                    except TypeError:
-                        raise ValueError(f"Expect the output_ to be a number or an array, but got {output_[key]}.")
-            else:
-                mask = output_['time'] <= shortest_time[-1]
-                if key == 'states':
-                    if output_['states']['P'].max() > EXPLODE_TOL:
-                        warnings.warn(f"The momentum of the states in the ensemble is too large, which may indicate that the simulation is not converged. The maximum momentum is {output_['states']['P'].max()}.")
-                        import os 
-                        work_dir = os.getcwd()
-                        time = output_['time']
-                        R = output_['states']['R']
-                        P = output_['states']['P']
-                        rho = output_['states']['rho']
-                        active_surface = output_['active_surf']
-                        
-                        np.savez(f"{work_dir}/dumpped_trajectory.npz", time=time, R=R, P=P, rho=rho, active_surface=active_surface)
-                        
-                        raise RuntimeError("The momentum of the states in the ensemble is too large, which may indicate that the simulation is not converged, dumpping the specific trajectory.")
-
-                    for field in output_reduced['states'].dtype.names:
-                        output_reduced['states'][field] += output_['states'][field][mask] / ntraj
-                else:
-                    output_reduced[key] += output_[key][mask] / ntraj
-    return {'time': shortest_time, **output_reduced}
-                        
-
-def run_nonadiabatic_dynamics_ensembles(
-    dyn: Iterable[NonadiabaticDynamics],
-    stop_condition: callable,
-    break_condition: callable,
-    max_iters: int=int(1e8),
-    save_traj: bool=True,
-    inhomogeneous: bool=False,
-):
-    ensemble_output = Parallel(n_jobs=get_ncpus(), return_as='generator', verbose=10)(
-        delayed(run_nonadiabatic_dynamics)(
-            dyn_, stop_condition, break_condition, max_iters, save_traj
-        ) for dyn_ in dyn
-    )
-    if not inhomogeneous:
-        return reduce_ensemble_output(ensemble_output)
+        ode_solver.integrate(ode_solver.t + dynamics.dt) 
+        t += dynamics.dt
+        
+        ########
+        # Callback step for the post-step
+        ######## 
+        current_state = dynamics.s0.from_unstructured(ode_solver.y)
+        current_state_after_callback, update_integrator = dynamics.solver.callback(t, current_state)
+        if update_integrator:
+            ode_solver.set_initial_value(current_state_after_callback.flatten(), t)
+        
+        ########
+        # Langevin dynamics step    
+        ########
+        R, P, rho = current_state_after_callback.get_variables()
+        F_langevin = dynamics.langevin.evaluate_langevin(t, R, P, dynamics.dt)
+        dynamics.solver.cache.F_langevin[:] = F_langevin
+        return t, current_state_after_callback
+   
+    _R, _, _rho = dynamics.s0.get_variables()
+    writer = PropertiesWriter(dim_elec=_rho.shape[0], dim_nucl=_R.shape[0])
+        
+    # the main loop 
+    for istep in range(MAX_STEPS):
+        if (istep % save_every) == 0:
+            properties = dynamics.solver.calculate_properties(s)
+            # print(f"{t}, {R}, {P}, {rho[0, 0]}, {rho[1, 1]}")
+            writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE)
+            if break_condition(s):
+                print(f"Break condition is satisfied at {t=}.")
+                break
+        t, s = step_zvode(t)
+    if filename is None:
+        warnings.warn(f"You haven't provided an directory for the output file, you'll get nothing. Nonetheless, you can find the temperary data file at {writer.fn}.")
     else:
-        return reduce_ensemble_output_inhomogeneous(ensemble_output)
+        writer.save(filename)
 
-
-def run_nonadiabatic_dynamics(
-    dyn: NonadiabaticDynamics,
-    stop_condition: callable,
-    break_condition: callable,
-    max_iters: int=int(1e8),
-    save_traj: bool=True,
+        
+def run_dynamics_rk4(
+    dynamics: Dynamics,
+    save_every: int = 10,
+    break_condition: Callable[[State], bool] = lambda x: False,
+    filename: Optional[str] = None
 ):
-    check_stop_every = dyn.save_every * 30
-    check_break_every = dyn.save_every * 30
-    time_array = np.array([])
-    traj_array = None
-    properties_dict = {field: [] for field in dyn.properties_type._fields}
+    # the initial dynamic variables
+    t: float = dynamics.t0
+    y: GenericVector = dynamics.s0.flatten()
+    s: State = dynamics.s0.from_unstructured(y)
     
-    t, s = dyn.t0, dyn.s0
-    # cache = None
-    R0, P0, rho0 = s.get_variables()
-    struct_array_dtype: DtypeLike = [
-        ('R', np.float64, R0.shape[0]),
-        ('P', np.float64, P0.shape[0]),
-        ('rho', np.complex128, rho0.shape),
-    ]
+    # integration step wrapper
+    def step_rk4(t, s) -> Tuple[float, State]:
+        ########
+        # Integration using the Runge-Kutta 4th order method
+        ########
+        t, s = state_rk4(t, s, dynamics.solver.derivative, dt=dynamics.dt)
+        
+        ########
+        # Callback step for the post-step
+        ######## 
+        s, update_integrator = dynamics.solver.callback(t, s)
+        
+        ########
+        # Langevin dynamics step    
+        ########
+        R, P, rho = s.get_variables()
+        F_langevin = dynamics.langevin.evaluate_langevin(t, R, P, dynamics.dt)
+        dynamics.solver.cache.F_langevin[:] = F_langevin
+        return t, s
+       
+    _R, _, _rho = dynamics.s0.get_variables()
+    writer = PropertiesWriter(dim_elec=_rho.shape[0], dim_nucl=_R.shape[0])
     
-    def get_struct_array(R, P, rho):
-        return np.array([(R, P, rho)], dtype=struct_array_dtype)
+    # the main loop 
+    for istep in range(MAX_STEPS):
+        if (istep % save_every) == 0:
+            properties = dynamics.solver.calculate_properties(s)
+            writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE) 
+            if break_condition(s):
+                print(f"Break condition is satisfied at {t=}.")
+                break
+        t, s = step_rk4(t, s) 
     
-    F_langevin = dyn.langevin.evaluate_langevin(t, R0, P0, dyn.dt)
-    cache = dyn.cache_initializer(t, s, F_langevin)
-    
-    for istep in range(max_iters):
-        if istep % dyn.save_every == 0:
-            properties = dyn.calculate_properties(t, s, cache)
-            properties_dict = _append_properties(properties_dict, properties)
-            time_array = np.append(time_array, t)
-            data = get_struct_array(*s.get_variables())
-            traj_array = np.array([data]) if traj_array is None else np.append(traj_array, data)
-            # print(f"{s.data['R']=}")
-            if istep % check_stop_every == 0:
-                if stop_condition(t, s, traj_array):
-                    break
-            if istep % check_break_every == 0:
-                if break_condition(t, s, traj_array):
-                    warnings.warn("The break condition is met.")
-                    break
-        t, s, cache = dyn.step(t, s, cache)
-    properties_dict = {field: np.array(value) for field, value in properties_dict.items()}
-    if save_traj:
-        output = {'time': time_array, 'states': traj_array, **properties_dict}
+    if filename is None:
+        warnings.warn(f"You haven't provided an directory for the output file, you'll get nothing. Nonetheless, you can find the temperary data file at {writer.fn}.")
     else:
-        output = {'time': time_array, **properties_dict}
-    return output
+        writer.save(filename)
 
-# helper functions
-def _append_properties(properties_dict: dict, properties: NamedTuple) -> dict:
-    for (field, value) in zip(properties._fields, properties):
-        properties_dict[field].append(value)
-    return properties_dict
+def main():
+    import numpy as np
+    from pymddrive.integrators.state import get_state
+    from pymddrive.models.tullyone import get_tullyone
+    from pymddrive.dynamics.nonadiabatic_solvers import Ehrenfest
+    from pymddrive.dynamics.options import BasisRepresentation
     
-# %% The temporary test code
-def _debug_test():
-    import time
-    from pymddrive.models.tullyone import TullyOnePulseTypes, get_tullyone
-    from pymddrive.dynamics.options import (
-        BasisRepresentation, QunatumRepresentation, 
-        NonadiabaticDynamicsMethods, NumericalIntegrators
-    )
-    import matplotlib.pyplot as plt
+    t0 = 0.0 
     
-    # get a convenient model for testing
-    hamiltonian = get_tullyone(
-        pulse_type=TullyOnePulseTypes.NO_PULSE, 
-    )
+    R = -10.0
+    P = 30
+    rho_dummy = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
     mass = 2000.0
     
-    # initial conditions
-    t0 = 0.0; r0 = -10.0; p0 = 30.0
-    rho0 = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
-    s0 = get_state(mass=mass, R=r0, P=p0, rho_or_psi=rho0)
-    
-    # prepare the dynamics object
-    dyn = NonadiabaticDynamics( 
+    s0 = get_state(mass, R, P, rho_dummy)
+    dt = 0.03
+    hamiltonian = get_tullyone()
+    solver = Ehrenfest.initialize(
+        state=s0,
         hamiltonian=hamiltonian,
-        t0=t0, s0=s0,
-        qm_rep=QunatumRepresentation.DensityMatrix,
-        basis_rep=BasisRepresentation.Diabatic,
-        solver=NonadiabaticDynamicsMethods.EHRENFEST,
-        numerical_integrator=NumericalIntegrators.RK4,
-        r_bounds=(-10.0, 10.0),
+        basis_representation=BasisRepresentation.DIABATIC,
     )
     
-    def stop_condition(t, s, states):
-        r, _, _ = s.get_variables()
-        return (r>10.0) or (r<-10.0)
+    dyn1 = Dynamics(t0=t0, s0=s0, solver=solver, dt=dt)
     
-    def break_condition(t, s, states):
-        r = np.array(states['R'])
-        def count_re_crossings(r, r_TST=0.0):
-            r_sign = np.sign(r - r_TST)
-            r_sign_diff = np.diff(r_sign)
-            n = np.sum(r_sign_diff != 0) - 1
-            n_re_crossings = 0 if n < 0 else n
-            return n_re_crossings
-        return (count_re_crossings(r) > 10)
+    def break_condition(s: State) -> bool:
+        R, P, rho = s.get_variables()
+        return (R[0] > 10.0) or (R[0] < -10.0)
     
-    start = time.perf_counter() 
-    output = run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
-    print(f"The time for the simulation is {time.perf_counter()-start} s.")
+    import time
     
+    filename = "test_ehrenfest.nc"
     
-    # initial conditions
-    t0 = 0.0; r0 = -10.0; p0 = 30.0
-    rho0 = np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.complex128)
-    s0 = get_state(mass=mass, R=r0, P=p0, rho_or_psi=rho0)
+    # start = time.perf_counter()
+    # run_dynamics_zvode(dyn1, save_every=30, break_condition=break_condition, filename=filename)
+    # end = time.perf_counter()
+    # print(f"Elapsed time for zvode is: {end - start}")
     
-    # prepare the dynamics object
-    dyn = NonadiabaticDynamics( 
+    hamiltonian = get_tullyone()
+    solver = Ehrenfest.initialize(
+        state=s0,
         hamiltonian=hamiltonian,
-        t0=t0, s0=s0,
-        qm_rep=QunatumRepresentation.DensityMatrix,
-        basis_rep=BasisRepresentation.Diabatic,
-        solver=NonadiabaticDynamicsMethods.EHRENFEST,
-        numerical_integrator=NumericalIntegrators.ZVODE,
-        r_bounds=(-10.0, 10.0)
-    ) 
-    start = time.perf_counter() 
-    output_zvode = run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
-    print(f"The time for the simulation using scipy zode is {time.perf_counter()-start} s.")
+        basis_representation=BasisRepresentation.DIABATIC,
+    )
     
-    t0, t1 = output['time'], output_zvode['time']
-    r0, r1 = output['states']['R'], output_zvode['states']['R']
-    p0, p1 = output['states']['P'], output_zvode['states']['P']
-    # rho0, rho1= output['states']['rho'], output_zvode['states']['rho']
-    pop0, pop1 = output['adiab_populations'], output_zvode['adiab_populations']
+    dyn2 = Dynamics(t0=t0, s0=s0, solver=solver, dt=dt)
     
-    plt.plot(t0, r0, ls='-', label='home-made RK4')
-    plt.plot(t1, r1, ls='-.', label='scipy zvode')
-    plt.xlabel('Time')
-    plt.ylabel('R')
-    plt.legend()
-    plt.title('Position') 
-    plt.show()
-    plt.plot(t0, p0, ls='-', label='home-made RK4')
-    plt.plot(t1, p1, ls='-.', label='scipy zvode')
-    plt.legend()
-    plt.xlabel('Time')
-    plt.ylabel('P')
-    plt.title('Momentum')
-    plt.show()
-    plt.plot(t0, pop0[:, 0].real, ls='-', label='pop0: home-made RK4') 
-    plt.plot(t0, pop0[:, 1].real, ls='-', label='pop1: home-made RK4') 
-    plt.plot(t1, pop1[:, 0].real, ls='-.', label='pop0: scipy zvode')
-    plt.plot(t1, pop1[:, 1].real, ls='-.', label='pop1: scipy zvode')
-    plt.legend()
-    plt.xlabel('Time')
-    plt.ylabel('Population')
+    start = time.perf_counter()
+    run_dynamics_rk4(dyn2, save_every=10, break_condition=break_condition, filename=filename)
+    end = time.perf_counter()
+    print(f"Elapsed time for rk4 is: {end - start}")
+    
+    from netCDF4 import Dataset 
+    import matplotlib.pyplot as plt
+    
+    nc = Dataset(filename, 'r')
+    t = np.array(nc.variables['time'])
+    R = np.array(nc.variables['R']) 
+    P = np.array(nc.variables['P']) 
+    adiabatic_populations = np.array(nc.variables['adiabatic_populations']) 
+    diabatic_populations = np.array(nc.variables['diabatic_populations']) 
+    KE = np.array(nc.variables['KE'])  
+    PE = np.array(nc.variables['PE']) 
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, R)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("R")
     plt.show()
     
-     
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, P)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("P")
+    plt.show()
     
-# %% the __main__ code
-if __name__ == "__main__":
-    _debug_test()
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    for ii in range(adiabatic_populations.shape[1]):
+        ax.plot(t, adiabatic_populations[:, ii], label=rf"$P_{ii}$")
+    ax.legend() 
+    ax.set_xlabel("Time")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    for ii in range(diabatic_populations.shape[1]):
+        ax.plot(t, diabatic_populations[:, ii], label=rf"$P_{ii}$")
+    ax.legend() 
+    ax.set_xlabel("Time")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, KE)
+    ax.legend() 
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Kinetic energy")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, PE)
+    ax.legend() 
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Potential energy")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, KE+PE)
+    ax.legend() 
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Total energy")
+    plt.show()
+    
+    
     
 # %%
-
-
+if __name__ == "__main__":
+    main()
+# %%
