@@ -30,4 +30,11 @@ class NonadiabaticSolverBase(ABC):
     @abstractmethod 
     def calculate_properties(self, s: State) -> NonadiabaticProperties:
         pass
-   
+    
+    @abstractmethod
+    def get_dim_nuclear(self) -> int:
+        pass
+    
+    @abstractmethod
+    def get_dim_electronic(self) -> int:
+        pass

@@ -16,15 +16,17 @@ def compute_populations_from_psi(psi: GenericOperator, evecs: Optional[GenericOp
 
 def compute_diabatic_populations_from_adiabatic_rho(rho_adiabatic: GenericOperator, evecs: GenericOperator) -> RealVector:
     return diabatic_to_adiabatic(rho_adiabatic, evecs).diagonal().real
+    # return adiabatic_to_diabatic(rho_adiabatic, evecs).diagonal().real
 
 def compute_diabatic_populations_from_adiabatic_psi(psi_adiabatic: GenericOperator, evecs: GenericOperator) -> RealVector:
     psi_diabatic = np.dot(evecs, psi_adiabatic)
     return np.abs(psi_diabatic)**2
 
-def compute_adibatic_populations_from_diabatic_rho(rho: GenericOperator, evecs: GenericOperator) -> RealVector:
+def compute_adiabatic_populations_from_diabatic_rho(rho: GenericOperator, evecs: GenericOperator) -> RealVector:
     return adiabatic_to_diabatic(rho, evecs).diagonal().real
+    # return diabatic_to_adiabatic(rho, evecs).diagonal().real
 
-def compute_adibatic_populations_from_diabatic_psi(psi: GenericOperator, evecs: GenericOperator) -> RealVector:
+def compute_adiabatic_populations_from_diabatic_psi(psi: GenericOperator, evecs: GenericOperator) -> RealVector:
     psi_adiabatic = np.dot(evecs.T.conjugate(), psi)
     return np.abs(psi_adiabatic)**2
 
@@ -32,12 +34,12 @@ def compute_adibatic_populations_from_diabatic_psi(psi: GenericOperator, evecs: 
 # tuple(ndim, state_basis_representation, target_basis_representation) -> function
 POPULATION_FUNCTIONS = {
     (1, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_populations_from_psi,
-    (1, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_diabatic_populations_from_adiabatic_psi,
-    (1, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_adibatic_populations_from_diabatic_psi,
+    (1, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_adiabatic_populations_from_diabatic_psi,
+    (1, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_diabatic_populations_from_adiabatic_psi,
     (1, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC): compute_populations_from_psi,
     (2, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_populations_from_rho,
-    (2, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_diabatic_populations_from_adiabatic_rho,
-    (2, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_adibatic_populations_from_diabatic_rho,
+    (2, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_adiabatic_populations_from_diabatic_rho,
+    (2, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_diabatic_populations_from_adiabatic_rho,
     (2, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC): compute_populations_from_rho,
 }
 
@@ -57,9 +59,8 @@ def compute_floquet_populations_from_rho_ddd(
     t: float, 
     NF: int, 
     dim: int,
-    *args,
-    # evecs_F: Optional[GenericOperator] = None,
-    # evecs_0: Optional[GenericOperator] = None
+    evecs_0: GenericOperator,
+    evecs_F: GenericOperator,
 ) -> RealVector:
     populations = np.zeros(dim, dtype=np.float64)
     for ii in range(dim):
@@ -76,10 +77,10 @@ def compute_floquet_populations_from_rho_dda(
     t: float, 
     NF: int, 
     dim: int,
-    *args: Any,
-    evecs_0: GenericOperator
+    evecs_0: GenericOperator,
+    evecs_F: GenericOperator,
 ) -> RealVector:
-    populations = compute_floquet_populations_from_rho_ddd(rho, Omega, t, NF, dim, evecs_0)
+    populations = compute_floquet_populations_from_rho_ddd(rho, Omega, t, NF, dim, evecs_0, evecs_F)
     return np.dot(evecs_0, populations)
 
 def compute_floquet_populations_from_rho_add(
@@ -88,11 +89,11 @@ def compute_floquet_populations_from_rho_add(
     t: float, 
     NF: int, 
     dim: int,
+    evecs_0: GenericOperator,
     evecs_F: GenericOperator,
-    evecs_0: Optional[GenericOperator]=None
 ) -> RealVector:
     rho_F_diab = adiabatic_to_diabatic(rho, evecs_F)
-    return compute_floquet_populations_from_rho_ddd(rho_F_diab, Omega, t, NF, dim)
+    return compute_floquet_populations_from_rho_ddd(rho_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
 
 def compute_floquet_populations_from_rho_ada(
     rho: GenericOperator, 
@@ -100,23 +101,23 @@ def compute_floquet_populations_from_rho_ada(
     t: float, 
     NF: int, 
     dim: int,
+    evecs_0: GenericOperator,
     evecs_F: GenericOperator,
-    evecs_0: GenericOperator
 ) -> RealVector:
     rho_F_diab = adiabatic_to_diabatic(rho, evecs_F)
-    return compute_floquet_populations_from_rho_dda(rho_F_diab, Omega, t, NF, dim, evecs_0=evecs_0)
+    return compute_floquet_populations_from_rho_dda(rho_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
 
 def compute_floquet_populations_from_rho_dad(rho: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:    
-    raise NotImplementedError("Floquet populations are not implemented yet.")
+    raise NotImplementedError("Floquet populations are not implemented yet for dad.")
 
 def compute_floquet_populations_from_rho_daa(rho: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:
-    raise NotImplementedError("Floquet populations are not implemented yet.")
+    raise NotImplementedError("Floquet populations are not implemented yet for daa.")
 
 def compute_floquet_populations_from_rho_aad(rho: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:
-    raise NotImplementedError("Floquet populations are not implemented yet.")
+    raise NotImplementedError("Floquet populations are not implemented yet for aad.")
 
 def compute_floquet_populations_from_rho_aaa(rho: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:
-    raise NotImplementedError("Floquet populations are not implemented yet.")
+    raise NotImplementedError("Floquet populations are not implemented yet for aaa.")
 
 @njit
 def compute_floquet_populations_from_psi_ddd(
@@ -125,9 +126,8 @@ def compute_floquet_populations_from_psi_ddd(
     t: float, 
     NF: int, 
     dim: int,
-    *args: Any,
-    # evecs_F: Optional[GenericOperator] = None,
-    # evecs_0: Optional[GenericOperator] = None
+    evecs_0: GenericOperator,
+    evecs_F: GenericOperator,
 ) -> RealVector:
     populations = np.zeros(dim, dtype=np.float64)
     for ii in range(dim):
@@ -143,10 +143,10 @@ def compute_floquet_populations_from_psi_dda(
     t: float, 
     NF: int, 
     dim: int,
-    *args: Any,
-    evecs_0: GenericOperator
+    evecs_0: GenericOperator,
+    evecs_F: GenericOperator,
 ) -> RealVector:
-    populations = compute_floquet_populations_from_psi_ddd(psi, Omega, t, NF, dim, evecs_0)
+    populations = compute_floquet_populations_from_psi_ddd(psi, Omega, t, NF, dim, evecs_0, evecs_F)
     return np.dot(evecs_0, populations)
 
 def compute_floquet_populations_from_psi_add(
@@ -155,11 +155,11 @@ def compute_floquet_populations_from_psi_add(
     t: float, 
     NF: int, 
     dim: int,
+    evecs_0: GenericOperator,
     evecs_F: GenericOperator,
-    evecs_0: Optional[GenericOperator]=None
 ) -> RealVector:
     psi_F_diab = adiabatic_to_diabatic(psi, evecs_F)
-    return compute_floquet_populations_from_psi_ddd(psi_F_diab, Omega, t, NF, dim)
+    return compute_floquet_populations_from_psi_ddd(psi_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
 
 def compute_floquet_populations_from_psi_ada(
     psi: GenericOperator, 
@@ -167,39 +167,39 @@ def compute_floquet_populations_from_psi_ada(
     t: float, 
     NF: int, 
     dim: int,
+    evecs_0: GenericOperator,
     evecs_F: GenericOperator,
-    evecs_0: GenericOperator
 ) -> RealVector:
     psi_F_diab = adiabatic_to_diabatic(psi, evecs_F)
-    return compute_floquet_populations_from_psi_dda(psi_F_diab, Omega, t, NF, dim, evecs_0=evecs_0)
+    return compute_floquet_populations_from_psi_dda(psi_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
 
-def compute_floquet_populations_from_psi_dad(psi: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:
-    raise NotImplementedError("Floquet populations are not implemented yet.")
+def compute_floquet_populations_from_psi_dad(psi: GenericOperator, Omega: float, t: float, NF: int, dim: int, evecs_0: GenericOperator, evecs_F: GenericOperator,) -> RealVector:
+    raise NotImplementedError("Floquet populations are not implemented yet for dad.")
 
-def compute_floquet_populations_from_psi_daa(psi: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:
-    raise NotImplementedError("Floquet populations are not implemented yet.")
+def compute_floquet_populations_from_psi_daa(psi: GenericOperator, Omega: float, t: float, NF: int, dim: int, evecs_0: GenericOperator, evecs_F: GenericOperator,) -> RealVector:
+    raise NotImplementedError("Floquet populations are not implemented yet for daa.")
 
-def compute_floquet_populations_from_psi_aad(psi: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:
-    raise NotImplementedError("Floquet populations are not implemented yet.")
+def compute_floquet_populations_from_psi_aad(psi: GenericOperator, Omega: float, t: float, NF: int, dim: int, evecs_0: GenericOperator, evecs_F: GenericOperator,) -> RealVector:
+    raise NotImplementedError("Floquet populations are not implemented yet for aad.")
 
-def compute_floquet_populations_from_psi_aaa(psi: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:
-    raise NotImplementedError("Floquet populations are not implemented yet.")
+def compute_floquet_populations_from_psi_aaa(psi: GenericOperator, Omega: float, t: float, NF: int, dim: int, evecs_0: GenericOperator, evecs_F: GenericOperator,) -> RealVector:
+    raise NotImplementedError("Floquet populations are not implemented yet for aaa.")
 
 # FUNCTION TABLE for computing the populations
 FLOQUET_POPULATION_FUNCTIONS = {
     (1, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_psi_ddd,
     (1, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_psi_dda,
-    (1, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_psi_add,
-    (1, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_psi_ada,
-    (1, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_psi_dad,
-    (1, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_psi_daa,
+    (1, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_psi_dad,
+    (1, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_psi_daa,
+    (1, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_psi_add,
+    (1, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_psi_ada,
     (1, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_psi_aad,
     (2, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_rho_ddd,
     (2, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_rho_dda,
-    (2, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_rho_add,
-    (2, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_rho_ada,
-    (2, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_rho_dad,
-    (2, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_rho_daa,
+    (2, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_rho_dad,
+    (2, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_rho_daa,
+    (2, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_rho_add,
+    (2, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_rho_ada,
     (2, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.DIABATIC): compute_floquet_populations_from_rho_aad,
     (2, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC, BasisRepresentation.ADIABATIC): compute_floquet_populations_from_rho_aaa,
 }
@@ -211,7 +211,9 @@ def compute_floquet_populations(
     target_state_basis: BasisRepresentation,
     Omega: float,
     t: float,
-    evecs_F: Optional[GenericOperator],
-    evecs_0: Optional[GenericOperator],
+    NF: int, 
+    dim: int,
+    evecs_0: GenericOperator, 
+    evecs_F: GenericOperator,
 ) -> RealVector:
-    return FLOQUET_POPULATION_FUNCTIONS[(state.ndim, dynamics_basis, floquet_basis, target_state_basis)](state, Omega, t, evecs_F, evecs_0)
+    return FLOQUET_POPULATION_FUNCTIONS[(state.ndim, dynamics_basis, floquet_basis, target_state_basis)](state, Omega, t, NF, dim, evecs_0, evecs_F)

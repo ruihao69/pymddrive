@@ -36,7 +36,7 @@ def mean_force_adiabatic_representation_density_matrix(
         for ii in range(F.shape[0]):
             meanF[kk] += np.real(F[ii, kk] * rho[ii, ii])
             for jj in range(ii+1, F.shape[0]):
-                dE: float = evals[jj] - evals[ii]
+                dE: np.float64 = evals[jj] - evals[ii]
                 rho_ij_dc_ji: np.complex128 = rho[ii, jj] * dc[jj, ii, kk] 
                 meanF[kk] += 2.0 * dE * np.real(rho_ij_dc_ji)
     return meanF

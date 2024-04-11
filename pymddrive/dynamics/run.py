@@ -80,12 +80,12 @@ def run_dynamics_zvode(
         return t, current_state_after_callback
    
     _R, _, _rho = dynamics.s0.get_variables()
-    writer = PropertiesWriter(dim_elec=_rho.shape[0], dim_nucl=_R.shape[0])
+    writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
         
     # the main loop 
     for istep in range(MAX_STEPS):
         if (istep % save_every) == 0:
-            properties = dynamics.solver.calculate_properties(s)
+            properties = dynamics.solver.calculate_properties(t, s)
             # print(f"{t}, {R}, {P}, {rho[0, 0]}, {rho[1, 1]}")
             writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE)
             if break_condition(s):
@@ -130,12 +130,12 @@ def run_dynamics_rk4(
         return t, s
        
     _R, _, _rho = dynamics.s0.get_variables()
-    writer = PropertiesWriter(dim_elec=_rho.shape[0], dim_nucl=_R.shape[0])
+    writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
     
     # the main loop 
     for istep in range(MAX_STEPS):
         if (istep % save_every) == 0:
-            properties = dynamics.solver.calculate_properties(s)
+            properties = dynamics.solver.calculate_properties(t, s)
             writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE) 
             if break_condition(s):
                 print(f"Break condition is satisfied at {t=}.")
@@ -150,7 +150,7 @@ def run_dynamics_rk4(
 def main():
     import numpy as np
     from pymddrive.integrators.state import get_state
-    from pymddrive.models.tullyone import get_tullyone
+    from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
     from pymddrive.dynamics.nonadiabatic_solvers import Ehrenfest
     from pymddrive.dynamics.options import BasisRepresentation
     
@@ -160,45 +160,73 @@ def main():
     P = 30
     rho_dummy = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
     mass = 2000.0
+    dt = 0.02
     
-    s0 = get_state(mass, R, P, rho_dummy)
-    dt = 0.03
-    hamiltonian = get_tullyone()
-    solver = Ehrenfest.initialize(
-        state=s0,
-        hamiltonian=hamiltonian,
-        basis_representation=BasisRepresentation.DIABATIC,
-    )
+    def run_one_dynamics(runner: Callable, basis_representation: BasisRepresentation, filename: str):
+        s0 = get_state(mass, R, P, rho_dummy)
+        hamiltonian = get_tullyone()
+        solver = Ehrenfest.initialize(
+            state=s0,
+            hamiltonian=hamiltonian,
+            basis_representation=basis_representation,
+        )
     
-    dyn1 = Dynamics(t0=t0, s0=s0, solver=solver, dt=dt)
+        dyn = Dynamics(t0=t0, s0=s0, solver=solver, dt=dt)
     
-    def break_condition(s: State) -> bool:
-        R, P, rho = s.get_variables()
-        return (R[0] > 10.0) or (R[0] < -10.0)
+        def break_condition(s: State) -> bool:
+            R, P, rho = s.get_variables()
+            return (R[0] > 10.0) or (R[0] < -10.0)
     
-    import time
+        import time
     
+    
+        start = time.perf_counter()
+        runner(dyn, save_every=30, break_condition=break_condition, filename=filename)
+        end = time.perf_counter()
+        print(f"Elapsed time for runner {runner.__name__} is: {end - start}")
+    
+    def run_one_floquet_dynamics(runner: Callable, basis_representation: BasisRepresentation, filename: str, Omega: float, tau: float, delay: float):
+        import scipy.sparse as sp
+        rho_floquet = sp.block_diag([np.zeros_like(rho_dummy), rho_dummy, np.zeros_like(rho_dummy)]).toarray()
+        s0 = get_state(mass, R, P, rho_floquet)
+        hamiltonian = get_tullyone(
+            Omega=Omega, 
+            tau=tau, 
+            t0=delay,
+            pulse_type=TullyOnePulseTypes.PULSE_TYPE3, 
+            NF=1,
+        )
+        
+        solver = Ehrenfest.initialize(
+            state=s0,
+            hamiltonian=hamiltonian,
+            basis_representation=basis_representation
+        )
+    
+        dyn = Dynamics(t0=t0, s0=s0, solver=solver, dt=dt)
+    
+        def break_condition(s: State) -> bool:
+            R, P, rho = s.get_variables()
+            return (R[0] > 10.0) or (R[0] < -10.0)
+    
+        import time
+    
+    
+        start = time.perf_counter()
+        runner(dyn, save_every=30, break_condition=break_condition, filename=filename)
+        end = time.perf_counter()
+        print(f"Elapsed time for runner {runner.__name__} is: {end - start}") 
+    
+    
+    
+    dynamics_basis = BasisRepresentation.ADIABATIC
     filename = "test_ehrenfest.nc"
-    
-    # start = time.perf_counter()
-    # run_dynamics_zvode(dyn1, save_every=30, break_condition=break_condition, filename=filename)
-    # end = time.perf_counter()
-    # print(f"Elapsed time for zvode is: {end - start}")
-    
-    hamiltonian = get_tullyone()
-    solver = Ehrenfest.initialize(
-        state=s0,
-        hamiltonian=hamiltonian,
-        basis_representation=BasisRepresentation.DIABATIC,
-    )
-    
-    dyn2 = Dynamics(t0=t0, s0=s0, solver=solver, dt=dt)
-    
-    start = time.perf_counter()
-    run_dynamics_rk4(dyn2, save_every=10, break_condition=break_condition, filename=filename)
-    end = time.perf_counter()
-    print(f"Elapsed time for rk4 is: {end - start}")
-    
+    Omega = 0.1
+    tau = 100.0
+    run_one_floquet_dynamics(runner=run_dynamics_zvode, basis_representation=dynamics_basis, filename=filename, Omega=Omega, tau=tau, delay=600)
+    # run_one_dynamics(runner=run_dynamics_zvode, basis_representation=dynamics_basis, filename=filename)
+    # run_one_dynamics(runner=run_dynamics_rk4, basis_representation=dynamics_basis, filename=filename)
+     
     from netCDF4 import Dataset 
     import matplotlib.pyplot as plt
     
@@ -231,6 +259,7 @@ def main():
         ax.plot(t, adiabatic_populations[:, ii], label=rf"$P_{ii}$")
     ax.legend() 
     ax.set_xlabel("Time")
+    ax.set_title("Adiabatic populations")
     plt.show()
     
     fig = plt.figure(dpi=300)
@@ -239,6 +268,7 @@ def main():
         ax.plot(t, diabatic_populations[:, ii], label=rf"$P_{ii}$")
     ax.legend() 
     ax.set_xlabel("Time")
+    ax.set_title("Diabatic populations")
     plt.show()
     
     fig = plt.figure(dpi=300)
