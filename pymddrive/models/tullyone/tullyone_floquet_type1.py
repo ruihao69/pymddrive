@@ -117,10 +117,14 @@ if __name__ == "__main__":
     fig = plt.figure()
     ax = fig.add_subplot(111)
     
-    for kk in range(dimF):
-        ax.plot(R, H[kk, kk, :], lw=.5, label=rf"$H_{kk}{kk}$")
+    # for kk in range(dimF):
+        # ax.plot(R, H[kk, kk, :], lw=.5, label=rf"$H_{kk}{kk}$")
+    # for kk in range(2*NF+1):
+    #     ax.plot(R, H[kk*2, kk*2, :], lw=.5, label=rf"$H_{kk}{kk}$")
+    for kk in range(2*NF+1):
+        ax.plot(R, H[kk*2+1, kk*2+1, :], lw=.5, label=rf"$H_{kk}{kk}$")
         ax.set_xlabel("R")
-        ax.set_ylabel("Eigenvector")
+        ax.set_ylabel("diabatic H")
     ax.legend()
    
     fig = plt.figure()

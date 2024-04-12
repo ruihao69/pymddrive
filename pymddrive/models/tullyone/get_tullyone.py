@@ -88,3 +88,5 @@ def get_tullyone(
     else:
         raise ValueError(f"Invalid pulse type: {pulse_type}")
 
+
+# %%

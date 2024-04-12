@@ -35,7 +35,7 @@ class Ehrenfest(NonadiabaticSolverBase):
         """ Callback function for the Ehrenfest solver. """
         R, P, rho = state.get_variables()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
-        evals, evecs = diagonalization(H)
+        evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
         self.hamiltonian.update_last_evecs(evecs)
         self.cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR)
         return state, False
@@ -47,7 +47,7 @@ class Ehrenfest(NonadiabaticSolverBase):
         if self.basis_representation == BasisRepresentation.DIABATIC:
             dR, dP, drho = self.derivative_diabatic(v, rho, H, dHdR, self.cache.F_langevin)
         elif self.basis_representation == BasisRepresentation.ADIABATIC:
-            dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin)
+            dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.hamiltonian._last_evecs)
         else:
             raise ValueError("Unsupported basis representation.")
         return state.from_unstructured(np.concatenate([dR, dP, drho.flatten(order='F')], dtype=np.complex128))
@@ -68,7 +68,7 @@ class Ehrenfest(NonadiabaticSolverBase):
         quantum_representation = QuantumRepresentation.WAVEFUNCTION if rho_or_psi.ndim > 1 else QuantumRepresentation.DENSITY_MATRIX
         
         H, dHdR = evaluate_hamiltonian(0.0, R, hamiltonian)
-        evals, evecs = diagonalization(H, hamiltonian._last_deriv_couplings)
+        evals, evecs = diagonalization(H, hamiltonian._last_evecs)
         d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         
         cache = Cache.from_dimensions(dim_elec=dim_hamiltonian, dim_nucl=dim_nuclear)
@@ -104,9 +104,10 @@ class Ehrenfest(NonadiabaticSolverBase):
         H: GenericOperator,
         dHdR: GenericVectorOperator,
         F_langevin: RealVector,
+        last_evecs: GenericOperator
     ) -> Tuple[RealVector, RealVector, Union[ComplexVector, ComplexOperator]]:
         # diagonalize the Hamiltonian
-        evals, evecs = diagonalization(H)
+        evals, evecs = diagonalization(H, last_evecs)
         # compute the nonadiabatic couplings
         d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         # evaluate the v_dot_d term
@@ -128,7 +129,7 @@ class Ehrenfest(NonadiabaticSolverBase):
             PE = expected_value(self.cache.H, rho_or_psi)
         
         if isinstance(self.hamiltonian, QuasiFloquetHamiltonianBase):
-            H0 = self.hamiltonian.H0(R=R)
+            H0 = self.hamiltonian.H0(R=R) 
             _, evecs_0 = diagonalization(H0, prev_evecs=self.evecs_0)
             if self.evecs_0 is None:
                 self.evecs_0 = np.copy(evecs_0)

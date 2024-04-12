@@ -147,7 +147,7 @@ def run_dynamics_rk4(
     else:
         writer.save(filename)
 
-def main():
+def test_main_tullyone():
     import numpy as np
     from pymddrive.integrators.state import get_state
     from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
@@ -193,7 +193,7 @@ def main():
             Omega=Omega, 
             tau=tau, 
             t0=delay,
-            pulse_type=TullyOnePulseTypes.PULSE_TYPE3, 
+            pulse_type=TullyOnePulseTypes.PULSE_TYPE2, 
             NF=1,
         )
         
@@ -220,8 +220,9 @@ def main():
     
     
     dynamics_basis = BasisRepresentation.ADIABATIC
+    # dynamics_basis = BasisRepresentation.DIABATIC
     filename = "test_ehrenfest.nc"
-    Omega = 0.1
+    Omega = 0.3
     tau = 100.0
     run_one_floquet_dynamics(runner=run_dynamics_zvode, basis_representation=dynamics_basis, filename=filename, Omega=Omega, tau=tau, delay=600)
     # run_one_dynamics(runner=run_dynamics_zvode, basis_representation=dynamics_basis, filename=filename)
@@ -295,9 +296,17 @@ def main():
     ax.set_ylabel("Total energy")
     plt.show()
     
+def test_main_landry_spin_boson():
+    from pymddrive.dynamics.options import BasisRepresentation
+    from pymddrive.models.landry_spin_boson import LandrySpinBoson
+    
+    dynamics_basis = BasisRepresentation.ADIABATIC
+    
+    
     
     
 # %%
 if __name__ == "__main__":
-    main()
+    test_main_tullyone()
+    test_main_landry_spin_boson()
 # %%
