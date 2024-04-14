@@ -38,3 +38,6 @@ class HamiltonianBase(ABC):
     
     def get_kT(self, ) -> Optional[float]:
         return None
+    
+    def get_dim_electronic(self, ) -> int:
+        return self.dim

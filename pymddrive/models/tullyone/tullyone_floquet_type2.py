@@ -44,7 +44,7 @@ class TullyOneFloquet_type2(QuasiFloquetHamiltonianBase):
         return np.sum(self._H0_vector(R), axis=-1)
     
     def _H1_vector(self, t: float, R: RealVector) -> GenericVectorOperator:
-        V12 = self.envelope_pulse(t) * np.ones_like(R)
+        V12 = self.envelope_pulse(t) * TullyOne.V12(R=R, C=self.C, D=self.D)
         _zeros = np.zeros_like(V12)
         return np.array([[_zeros, V12], [V12, _zeros]])
      

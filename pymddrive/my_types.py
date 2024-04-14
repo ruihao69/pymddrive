@@ -1,9 +1,11 @@
-from nptyping import NDArray, Int, Shape, Complex128, Float64
+from nptyping import NDArray, Int64, Shape, Complex128, Float64
 from typing import Union, TypeAlias
 from typing import TypeVar
 
 A = TypeVar('A')
 B = TypeVar('B')
+M = TypeVar('M')
+N = TypeVar('N')
 
 # Shape types
 ShapeOperator = Shape['A, A']
@@ -29,8 +31,10 @@ ComplexDiagonalVectorOperator = NDArray[Shape['A, B'], Complex128]
 GenericDiagonalVectorOperator = Union[RealDiagonalVectorOperator, ComplexDiagonalVectorOperator]
 
 # for surface hopping
-ActiveSurface = NDArray[Shape['1'], Int]
+ActiveSurface = NDArray[Shape['1'], Int64]
 
+# for floquet
+BlockFloquetOperator = NDArray[Shape['M, M, N, N'], Complex128]
 
 # for typing generic scalar types
 AnyNumber: TypeAlias = Union[int, float, complex]

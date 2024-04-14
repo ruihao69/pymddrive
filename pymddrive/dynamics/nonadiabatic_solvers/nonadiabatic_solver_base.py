@@ -28,7 +28,7 @@ class NonadiabaticSolverBase(ABC):
         return np.sum(0.5 * P**2 / mass)
    
     @abstractmethod 
-    def calculate_properties(self, s: State) -> NonadiabaticProperties:
+    def calculate_properties(self, t: float, s: State) -> NonadiabaticProperties:
         pass
     
     @abstractmethod
@@ -37,4 +37,8 @@ class NonadiabaticSolverBase(ABC):
     
     @abstractmethod
     def get_dim_electronic(self) -> int:
+        pass
+    
+    @abstractmethod
+    def update_F_langevin(self, F_langevin: RealVector) -> None:
         pass

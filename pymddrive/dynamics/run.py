@@ -40,7 +40,7 @@ def get_ode_solver_options(
 def run_dynamics_zvode(
     dynamics: Dynamics,
     save_every: int = 10,
-    break_condition: Callable[[State], bool] = lambda x: False,
+    break_condition: Callable[[float, State], bool] = lambda t, s: False,
     filename: Optional[str] = None
 ):
     # the initial dynamic variables
@@ -76,7 +76,7 @@ def run_dynamics_zvode(
         ########
         R, P, rho = current_state_after_callback.get_variables()
         F_langevin = dynamics.langevin.evaluate_langevin(t, R, P, dynamics.dt)
-        dynamics.solver.cache.F_langevin[:] = F_langevin
+        dynamics.solver.update_F_langevin(F_langevin)
         return t, current_state_after_callback
    
     _R, _, _rho = dynamics.s0.get_variables()
@@ -88,7 +88,7 @@ def run_dynamics_zvode(
             properties = dynamics.solver.calculate_properties(t, s)
             # print(f"{t}, {R}, {P}, {rho[0, 0]}, {rho[1, 1]}")
             writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE)
-            if break_condition(s):
+            if break_condition(t, s):
                 print(f"Break condition is satisfied at {t=}.")
                 break
         t, s = step_zvode(t)
@@ -101,7 +101,7 @@ def run_dynamics_zvode(
 def run_dynamics_rk4(
     dynamics: Dynamics,
     save_every: int = 10,
-    break_condition: Callable[[State], bool] = lambda x: False,
+    break_condition: Callable[[float, State], bool] = lambda t, x: False,
     filename: Optional[str] = None
 ):
     # the initial dynamic variables
@@ -126,7 +126,7 @@ def run_dynamics_rk4(
         ########
         R, P, rho = s.get_variables()
         F_langevin = dynamics.langevin.evaluate_langevin(t, R, P, dynamics.dt)
-        dynamics.solver.cache.F_langevin[:] = F_langevin
+        dynamics.solver.update_F_langevin(F_langevin)
         return t, s
        
     _R, _, _rho = dynamics.s0.get_variables()
@@ -137,7 +137,7 @@ def run_dynamics_rk4(
         if (istep % save_every) == 0:
             properties = dynamics.solver.calculate_properties(t, s)
             writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE) 
-            if break_condition(s):
+            if break_condition(t, s):
                 print(f"Break condition is satisfied at {t=}.")
                 break
         t, s = step_rk4(t, s) 
@@ -152,6 +152,7 @@ def test_main_tullyone():
     from pymddrive.integrators.state import get_state
     from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
     from pymddrive.dynamics.nonadiabatic_solvers import Ehrenfest
+    from pymddrive.dynamics.nonadiabatic_solvers import FSSH
     from pymddrive.dynamics.options import BasisRepresentation
     
     t0 = 0.0 
@@ -165,15 +166,21 @@ def test_main_tullyone():
     def run_one_dynamics(runner: Callable, basis_representation: BasisRepresentation, filename: str):
         s0 = get_state(mass, R, P, rho_dummy)
         hamiltonian = get_tullyone()
-        solver = Ehrenfest.initialize(
+        # solver = Ehrenfest.initialize(
+        #     state=s0,
+        #     hamiltonian=hamiltonian,
+        #     basis_representation=basis_representation,
+        # )
+        solver = FSSH.initialize(
             state=s0,
             hamiltonian=hamiltonian,
             basis_representation=basis_representation,
+            dt=dt
         )
     
         dyn = Dynamics(t0=t0, s0=s0, solver=solver, dt=dt)
     
-        def break_condition(s: State) -> bool:
+        def break_condition(t:float , s: State) -> bool:
             R, P, rho = s.get_variables()
             return (R[0] > 10.0) or (R[0] < -10.0)
     
@@ -205,7 +212,7 @@ def test_main_tullyone():
     
         dyn = Dynamics(t0=t0, s0=s0, solver=solver, dt=dt)
     
-        def break_condition(s: State) -> bool:
+        def break_condition(t: float, s: State) -> bool:
             R, P, rho = s.get_variables()
             return (R[0] > 10.0) or (R[0] < -10.0)
     
@@ -224,8 +231,8 @@ def test_main_tullyone():
     filename = "test_ehrenfest.nc"
     Omega = 0.3
     tau = 100.0
-    run_one_floquet_dynamics(runner=run_dynamics_zvode, basis_representation=dynamics_basis, filename=filename, Omega=Omega, tau=tau, delay=600)
-    # run_one_dynamics(runner=run_dynamics_zvode, basis_representation=dynamics_basis, filename=filename)
+    # run_one_floquet_dynamics(runner=run_dynamics_zvode, basis_representation=dynamics_basis, filename=filename, Omega=Omega, tau=tau, delay=600)
+    run_one_dynamics(runner=run_dynamics_zvode, basis_representation=dynamics_basis, filename=filename)
     # run_one_dynamics(runner=run_dynamics_rk4, basis_representation=dynamics_basis, filename=filename)
      
     from netCDF4 import Dataset 
@@ -297,16 +304,134 @@ def test_main_tullyone():
     plt.show()
     
 def test_main_landry_spin_boson():
+    import numpy as np
     from pymddrive.dynamics.options import BasisRepresentation
     from pymddrive.models.landry_spin_boson import LandrySpinBoson
+    from pymddrive.integrators.state import get_state
+    from pymddrive.dynamics.nonadiabatic_solvers import Ehrenfest
+    from pymddrive.dynamics.langevin import Langevin
     
+    def stop_condition(t, s):
+        return t > 3000
+    
+    def sample_lsb_boltzmann(
+        n_samples: int, 
+        lsb_hamiltonian: LandrySpinBoson,
+        initialize_from_donor: bool =True
+    ):
+        # constants
+        kT: float = lsb_hamiltonian.kT
+        mass: float = lsb_hamiltonian.M
+        beta: float = 1.0 / kT
+        Omega_nuclear: float = lsb_hamiltonian.Omega_nuclear
+
+        # sample the momentum
+        sigma_momentum = np.sqrt(mass / beta)
+        momentum_samples = np.random.normal(0, sigma_momentum, n_samples)
+
+        R0 = lsb_hamiltonian.get_donor_R() if initialize_from_donor else lsb_hamiltonian.get_acceptor_R()
+        sigma_R = 1.0 / np.sqrt(beta * mass) / Omega_nuclear
+        position_samples = np.random.normal(R0, sigma_R, n_samples)
+        return position_samples, momentum_samples
+    
+    hamiltonian = LandrySpinBoson() 
+    dim = hamiltonian.dim
+    rho_diabatic = np.zeros((dim, dim), dtype=np.complex128)
+    rho_diabatic[0, 0] = 1.0
     dynamics_basis = BasisRepresentation.ADIABATIC
+    mass = 1.0
     
+    t0 = 0.0
+    R, P = sample_lsb_boltzmann(1, hamiltonian)
+    s0 = get_state(mass, R, P, rho_diabatic)
     
+    ehrenfest = Ehrenfest.initialize(
+        state=s0,
+        hamiltonian=hamiltonian,
+        basis_representation=dynamics_basis
+    )
+    langevin = Langevin(kT=hamiltonian.get_kT(), mass=s0.get_mass(), gamma=hamiltonian.get_friction())
+    dynamics = Dynamics(t0=t0, s0=s0, solver=ehrenfest, dt=0.03, langevin=langevin)
+    
+    filename = "test_landry_spin_boson.nc" 
+    import time
+    start = time.perf_counter()
+    # run_dynamics_zvode(dynamics, save_every=10, break_condition=stop_condition, filename=filename)
+    run_dynamics_rk4(dynamics, save_every=10, break_condition=stop_condition, filename=filename)
+    end = time.perf_counter()
+    print(f"Elapsed time for runner run_dynamics_zvode is: {end - start}")
+    
+    from netCDF4 import Dataset 
+    import matplotlib.pyplot as plt
+    
+    nc = Dataset(filename, 'r')
+    t = np.array(nc.variables['time'])
+    R = np.array(nc.variables['R']) 
+    P = np.array(nc.variables['P']) 
+    adiabatic_populations = np.array(nc.variables['adiabatic_populations']) 
+    diabatic_populations = np.array(nc.variables['diabatic_populations']) 
+    KE = np.array(nc.variables['KE'])  
+    PE = np.array(nc.variables['PE']) 
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, R)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("R")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, P)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("P")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    for ii in range(adiabatic_populations.shape[1]):
+        ax.plot(t, adiabatic_populations[:, ii], label=rf"$P_{ii}$")
+    ax.legend() 
+    ax.set_xlabel("Time")
+    ax.set_title("Adiabatic populations")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    for ii in range(diabatic_populations.shape[1]):
+        ax.plot(t, diabatic_populations[:, ii], label=rf"$P_{ii}$")
+    ax.legend() 
+    ax.set_xlabel("Time")
+    ax.set_title("Diabatic populations")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, KE)
+    ax.legend() 
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Kinetic energy")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, PE)
+    ax.legend() 
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Potential energy")
+    plt.show()
+    
+    fig = plt.figure(dpi=300)
+    ax = fig.add_subplot(111)
+    ax.plot(t, KE+PE)
+    ax.legend() 
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Total energy")
+    plt.show()
     
     
 # %%
 if __name__ == "__main__":
     test_main_tullyone()
-    test_main_landry_spin_boson()
+    # test_main_landry_spin_boson()
 # %%

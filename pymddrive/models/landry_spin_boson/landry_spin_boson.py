@@ -119,6 +119,9 @@ class LandrySpinBoson(HamiltonianBase):
     def get_kT(self, ) -> float:
         return self.kT
     
+    def get_dim_nuclear(self, ) -> int:
+        return 1
+    
 # %% 
 def _test_landry_spin_boson():
     import scipy.linalg as LA

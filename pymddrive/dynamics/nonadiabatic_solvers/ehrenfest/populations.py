@@ -1,16 +1,12 @@
 import numpy as np
 from numba import njit
-from nptyping import NDArray, Shape, Complex128
 
-from pymddrive.my_types import RealVector, GenericOperator, GenericVector
+from pymddrive.my_types import RealVector, GenericOperator, GenericVector, BlockFloquetOperator
 from pymddrive.models.nonadiabatic_hamiltonian import diabatic_to_adiabatic, adiabatic_to_diabatic
 from pymddrive.dynamics.options import BasisRepresentation
+from pymddrive.models.floquet import get_rhoF
 
-from typing import Optional, Any, Union, TypeVar
-
-M = TypeVar('M')
-N = TypeVar('N')
-BlockFloquetOperator = NDArray[Shape['M, M, N, N'], Complex128]
+from typing import Optional, Any, Union
 
 
 def compute_populations_from_rho(rho: GenericOperator, evecs: Optional[GenericOperator]=None) -> RealVector:
@@ -57,9 +53,6 @@ def compute_populations(
     return POPULATION_FUNCTIONS[(state.ndim, basis_representation, target_basis_representation)](state, evecs)
 
 # Floquet theory version of the population calculators
-def get_rhoF(rho: GenericOperator, NF: int, dim: int) -> BlockFloquetOperator:
-    return rho.reshape((2 * NF + 1, dim, 2 * NF + 1, dim)).swapaxes(1, 2)
-
 @njit
 def compute_populations_from_rhoF_ddd_impl(
     rhoF: BlockFloquetOperator, 
@@ -122,7 +115,7 @@ def compute_floquet_populations_from_rho_dda(
     rhoF = get_rhoF(rho, NF, dim)
     rho = compute_rho_from_rhoF_ddd_impl(rhoF, Omega, t, NF, dim, evecs_0, evecs_F)
     rho_adiabatic = diabatic_to_adiabatic(rho, evecs_0)
-    return rho_adiabatic.diagonal().real
+    return np.real(np.diagonal(rho_adiabatic))
     
 
 def compute_floquet_populations_from_rho_add(

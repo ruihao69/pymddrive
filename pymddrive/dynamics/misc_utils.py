@@ -77,7 +77,7 @@ def valid_real_positive_value(value: Real) -> bool:
     else:
         return False, flag_pos, flag_real
     
-def assert_valid_real_positive_value(value: Real) -> None:
+def assert_valid_real_positive_value(value: float) -> None:
     flag, flag_pos, flag_real = valid_real_positive_value(value)
     if not flag:
         raise ValueError(f"The value {value} is not a valid real positive number. The flags are {flag_pos=}, {flag_real=}.")
