@@ -1,25 +1,29 @@
 # %%
 import numpy as np
 
-from pymddrive.models.tullyone import get_tullyone
+from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
 from pymddrive.low_level.states import State
 from pymddrive.integrators.state import get_state
 from pymddrive.dynamics.options import BasisRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators  
 from pymddrive.dynamics.get_dynamics import get_dynamics
 from pymddrive.dynamics.run import run_ensemble
 
-from tullyone_utils import outside_boundary
+from tullyone_utils import outside_boundary, get_tully_one_p0_list
+from scatter_postprocess import post_process
+
+import os
 
 def stop_condition(t, s):
     r, _, _ = s.get_variables()
-    return outside_boundary(r, (-5, 5))
+    return outside_boundary(r, (-10, 10))
 
-def run_tullyone_fssh(
+def run_tullyone(
     r0: float, 
     p0: float, 
     n_ensemble: int=100,
     mass: float=2000, 
     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.FSSH,
+    data_dir: str='./',
     filename: str="fssh.nc",
     basis_rep: BasisRepresentation = BasisRepresentation.ADIABATIC,
     integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
@@ -46,120 +50,56 @@ def run_tullyone_fssh(
         dynamic_list.append(dyn)
     
     # use run ensemble to run the dynamics
+    momentum_signature = f"P0-{p0:.6f}"
+    filename = os.path.join(data_dir, momentum_signature, filename)
+    data_files_dir = os.path.dirname(filename)
+    if not os.path.isdir(data_files_dir):
+        os.makedirs(data_files_dir)
+        
     run_ensemble(
         dynamics_list=dynamic_list,
         break_condition=stop_condition,
         filename=filename,
         numerical_integrator=integrator,
+        save_every=10
     )
-       
-
-def main(r0: float, p0: float, ntraj: int=100):
-    run_tullyone_fssh(r0=r0, p0=p0, n_ensemble=ntraj)
-    run_tullyone_fssh(r0=r0, p0=p0, n_ensemble=1, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, filename="ehrenfest.nc")
     
-# def generate_ensembles(
-#     R0_samples: ArrayLike,
-#     P0_samples: ArrayLike,
-#     mass: float=2000,
-#     qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
-#     basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
-#     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
-#     # integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-#     integrator: NumericalIntegrators = NumericalIntegrators.RK4,
-# ) -> Tuple[NonadiabaticDynamics]:
-#     # initialize the electronic states
-#     rho0_diabatic = np.zeros((2, 2), dtype=np.complex128)
-#     rho0_diabatic[0, 0] = 1.0
-#     
-#     assert (n_samples := len(R0_samples)) == len(P0_samples), "The number of R0 and P0 samples should be the same."
-#     ensemble = ()
-#     for ii, (R0, P0) in enumerate(zip(R0_samples, P0_samples)):
-#         hamiltonian = get_tullyone(
-#             pulse_type=TullyOnePulseTypes.NO_PULSE
-#         )
-#         if basis_rep == BasisRepresentation.Diabatic:
-#             s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_diabatic)
-#         else:
-#             hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
-#             evecs = hami_return.evecs
-#             rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
-#             s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_adiabatic)
-#         dyn = NonadiabaticDynamics(
-#             hamiltonian=hamiltonian,
-#             t0=0.0,
-#             s0=s0,
-#             basis_rep=basis_rep,
-#             qm_rep=qm_rep,
-#             solver=solver,
-#             numerical_integrator=integrator,
-#             dt=0.1,
-#             save_every=10,
-#         )
-#         ensemble += (dyn,)
-#     return ensemble
+    post_process(data_files_dir)
+    
 
-   
+def main(
+    n_initial_momentum_samples: int=40,
+    fssh_ensemble_size: int=10,
+    sim_signature: str= "data_tullyone"
+):
+    r0 = -10.0
+    p0_list = get_tully_one_p0_list(nsamples=n_initial_momentum_samples, pulse_type=TullyOnePulseTypes.NO_PULSE)
+    
+    # fssh_sim_signature = f'{sim_signature}_fssh'
+    # run_tullyone(r0=r0, p0=p0_list[5], n_ensemble=fssh_ensemble_size, data_dir=fssh_sim_signature, filename='fssh.nc')
+    # ehrenfest_sim_signature_a = f'{sim_signature}_ehrenfest_adiabatic'
+    # run_tullyone(r0=r0, p0=p0_list[5], n_ensemble=1, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.ADIABATIC, filename="ehrenfest.nc", data_dir=ehrenfest_sim_signature_a)
+    
+    for p0 in p0_list:
+        # FSSH simulations
+        fssh_sim_signature = f'{sim_signature}_fssh'
+        run_tullyone(r0=r0, p0=p0, n_ensemble=fssh_ensemble_size, data_dir=fssh_sim_signature, filename='fssh.nc')
+    
+        # Ehrenfest dynamics diabatic
+        ehrenfest_sim_signature_d = f'{sim_signature}_ehrenfest_diabatic'
+        run_tullyone(r0=r0, p0=p0, n_ensemble=1, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, filename="ehrenfest.nc", data_dir=ehrenfest_sim_signature_d)
+    
+        # Ehrenfest dynamics adiabatic
+        ehrenfest_sim_signature_a = f'{sim_signature}_ehrenfest_adiabatic'
+        run_tullyone(r0=r0, p0=p0, n_ensemble=1, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.ADIABATIC, filename="ehrenfest.nc", data_dir=ehrenfest_sim_signature_a)
+    
 
-# %%
-# if __name__ == "__main__": 
-#     from pymddrive.models.tullyone import TullyOnePulseTypes
-#     sim_signature = "data_tullyone"
-#     nsamples = 10
-#     
-#     main(sim_signature, nsamples)
-#     p0_list, sr_list = load_data_for_plotting(os.path.join(sim_signature, 'scatter.dat'))
 # %%
 
 if __name__ == "__main__": 
+    n_initial_k_samples = 40
+    n_fssh_ensemble = 2000
     sim_signature = "data_tullyone"
     
-    r0 = -5.0
-    p0 = 30.0
-    main(r0, p0, 250)
-    # ouput_ehrenfest = run_tullyone(r0, p0, solver=NonadiabaticDynamicsMethods.EHRENFEST)
-    # ouput_fssh = run_tullyone(r0, p0, solver=NonadiabaticDynamicsMethods.FSSH) 
-    
-    # nsamples = 100
-    # R0_samples = np.array([r0]*nsamples)
-    # P0_samples = np.array([p0]*nsamples)
-    # dyn_ensemble = generate_ensembles(R0_samples, P0_samples, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.Adiabatic)
-    # output_fssh = run_nonadiabatic_dynamics_ensembles(dyn_ensemble, stop_condition, break_condition, inhomogeneous=True)
-# %%
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    time_e = ouput_ehrenfest['time']
-    time_fssh = output_fssh['time']
-    adiab_population_e = ouput_ehrenfest['adiab_populations']
-    adiab_population_fssh = output_fssh['adiab_populations']
-    plt.plot(time_e, adiab_population_e[:, 0], label="state 1")
-    plt.plot(time_e, adiab_population_e[:, 1], label="state 2")
-    plt.plot(time_fssh, adiab_population_fssh[:, 0], label="state 1", ls='--')
-    plt.plot(time_fssh, adiab_population_fssh[:, 1], label="state 2", ls='--')
-    plt.axhline(0.28, ls='-.', color='k', label='state 1 final')
-    plt.axhline(0.72, ls='-.', color='k', label='state 2 final')
-    plt.legend()
-    plt.show()
-    
-    KE_e = ouput_ehrenfest['KE']
-    PE_e = ouput_ehrenfest['PE']
-    KE_fssh = output_fssh['KE']
-    PE_fssh = output_fssh['PE']
-    plt.plot(time_e, KE_e, label="KE")
-    plt.plot(time_fssh, KE_fssh, label="KE", ls='--')
-    plt.show()
-    plt.plot(time_e, PE_e, label="PE")
-    plt.plot(time_fssh, PE_fssh, label="PE", ls='--')
-    plt.show()
-    
-    TE_e = KE_e + PE_e
-    TE_fssh = KE_fssh + PE_fssh
-    
-    plt.plot(time_e, TE_e-TE_e[0], label="TE")
-    plt.plot(time_fssh, TE_fssh-TE_e[0], label="TE", ls='--')
-    plt.show()
-    
-    
-
-
+    main(n_initial_momentum_samples=n_initial_k_samples, fssh_ensemble_size=n_fssh_ensemble, sim_signature=sim_signature)
 # %%
