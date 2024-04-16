@@ -81,4 +81,12 @@ def assert_valid_real_positive_value(value: float) -> None:
     flag, flag_pos, flag_real = valid_real_positive_value(value)
     if not flag:
         raise ValueError(f"The value {value} is not a valid real positive number. The flags are {flag_pos=}, {flag_real=}.")
+    
+def numerate_file_name(file_name: str, n: int) -> str:
+    splited_name = file_name.split('.') 
+    extention = splited_name[-1]
+    file_name = '.'.join(splited_name[:-1])
+    numbers = f"{n:05d}"
+    return ".".join([file_name, numbers, extention])
+    
 # %%

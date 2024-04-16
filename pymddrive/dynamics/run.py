@@ -1,14 +1,17 @@
 # %%
 from scipy.integrate import ode
+from joblib import delayed, Parallel
 
 from pymddrive.my_types import GenericVector
 from pymddrive.dynamics.dynamics import Dynamics
-from pymddrive.dynamics.misc_utils import assert_valid_real_positive_value
+from pymddrive.dynamics.misc_utils import assert_valid_real_positive_value, numerate_file_name
+from pymddrive.dynamics.options import NumericalIntegrators, NonadiabaticDynamicsMethods
 from pymddrive.low_level.states import State
 from pymddrive.integrators.state_rk4 import state_rk4
 from pymddrive.dynamics.output_writer import PropertiesWriter
+from pymddrive.utils import get_ncpus
 
-from typing import Optional, Dict, Any, Tuple, Callable
+from typing import Optional, Dict, Any, Tuple, Callable, List
 import warnings
 
 MAX_STEPS = int(1e8)
@@ -69,6 +72,7 @@ def run_dynamics_zvode(
         current_state = dynamics.s0.from_unstructured(ode_solver.y)
         current_state_after_callback, update_integrator = dynamics.solver.callback(t, current_state)
         if update_integrator:
+            # print(f"Hopping happed. Change the integrator.")
             ode_solver.set_initial_value(current_state_after_callback.flatten(), t)
         
         ########
@@ -86,10 +90,8 @@ def run_dynamics_zvode(
     for istep in range(MAX_STEPS):
         if (istep % save_every) == 0:
             properties = dynamics.solver.calculate_properties(t, s)
-            # print(f"{t}, {R}, {P}, {rho[0, 0]}, {rho[1, 1]}")
             writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE)
             if break_condition(t, s):
-                print(f"Break condition is satisfied at {t=}.")
                 break
         t, s = step_zvode(t)
     if filename is None:
@@ -138,7 +140,7 @@ def run_dynamics_rk4(
             properties = dynamics.solver.calculate_properties(t, s)
             writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE) 
             if break_condition(t, s):
-                print(f"Break condition is satisfied at {t=}.")
+                # print(f"Break condition is satisfied at {t=}.")
                 break
         t, s = step_rk4(t, s) 
     
@@ -146,6 +148,27 @@ def run_dynamics_rk4(
         warnings.warn(f"You haven't provided an directory for the output file, you'll get nothing. Nonetheless, you can find the temperary data file at {writer.fn}.")
     else:
         writer.save(filename)
+        
+def run_ensemble(
+    dynamics_list: List[Dynamics],
+    save_every: int = 10,
+    break_condition: Callable[[float, State], bool] = lambda t, x: False,
+    filename: Optional[str] = None,
+    numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+) -> None:
+    if numerical_integrator == NumericalIntegrators.ZVODE:
+        runner = run_dynamics_zvode
+    elif numerical_integrator == NumericalIntegrators.RK4:
+        runner = run_dynamics_rk4
+    else:
+        raise ValueError(f"Numerical integrator {numerical_integrator.name} has not been implemented yet.")
+    
+    ntrajectories = len(dynamics_list) 
+    filename_list = [numerate_file_name(filename, i) for i in range(ntrajectories)]
+    
+    Parallel(n_jobs=get_ncpus(), verbose=5)(delayed(runner)(dynamics, save_every, break_condition, filename) for dynamics, filename in zip(dynamics_list, filename_list))
+    
+    
 
 def test_main_tullyone():
     import numpy as np
@@ -200,7 +223,7 @@ def test_main_tullyone():
             Omega=Omega, 
             tau=tau, 
             t0=delay,
-            pulse_type=TullyOnePulseTypes.PULSE_TYPE2, 
+            pulse_type=TullyOnePulseTypes.PULSE_TYPE3, 
             NF=1,
         )
         
@@ -434,4 +457,6 @@ def test_main_landry_spin_boson():
 if __name__ == "__main__":
     test_main_tullyone()
     # test_main_landry_spin_boson()
+    
+
 # %%

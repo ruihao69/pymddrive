@@ -50,7 +50,7 @@ class Ehrenfest(NonadiabaticSolverBase):
             dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.hamiltonian._last_evecs)
         else:
             raise ValueError("Unsupported basis representation.")
-        return state.from_unstructured(np.concatenate([dR, dP, drho.flatten(order='F')], dtype=np.complex128))
+        return state.from_unstructured(np.concatenate([dR, dP, drho.flatten()], dtype=np.complex128))
         
     @classmethod
     def initialize(

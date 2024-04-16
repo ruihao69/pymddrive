@@ -96,6 +96,7 @@ def shrodinger_adiabatic(psi: ComplexVector, evals: RealVector, v_dot_d: Generic
 
 def von_neumann_adiabatic(rho: ComplexOperator, evals: RealVector, v_dot_d: GenericOperator) -> ComplexOperator:
     return -1.j * commutator_diagA_B(evals, rho) - commutator(v_dot_d, rho)
+    # return -1.j * commutator(np.diagflat(evals), rho) - commutator(v_dot_d, rho)
 
 DIABATIC_EQUATIONS = {
     1: schrodinger_diabatic,

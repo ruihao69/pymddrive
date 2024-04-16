@@ -46,7 +46,7 @@ namespace rhbi {
         double dt,
         Eigen::Ref<const v_dot_d_t> v_dot_d,
         Eigen::Ref<const RowMatrixXcd> rho) {
-        double probability = 2.0 * dt * std::real(rho(active_surface, target_surface) * v_dot_d(target_surface, active_surface) / rho(active_surface, active_surface));
+        double probability = 2.0 * dt * std::real(v_dot_d(active_surface, target_surface) * rho(target_surface, active_surface) / rho(active_surface, active_surface));
         return probability > 0.0 ? probability : 0.0;
     }
 
@@ -91,8 +91,9 @@ namespace rhbi {
             return std::make_pair(false, P_current);
         }
         else {
-            double gamma = (b < 0.0) ? (b - std::sqrt(discriminant)) / a * 0.5 : (b + std::sqrt(discriminant)) / a * 0.5;
-            return std::make_pair(true, P_current - gamma * mass * direction);
+            double gamma = (b < 0.0) ? (b + std::sqrt(discriminant)) / a * 0.5 : (b - std::sqrt(discriminant)) / a * 0.5;
+            // return std::make_pair(true, P_current - gamma * mass * direction);
+            return std::make_pair(true, P_current - gamma * direction);
         }
     }
 
@@ -113,7 +114,8 @@ namespace rhbi {
         }
         else {
             double dE = eig_vals(target_surface) - eig_vals(active_surface);
-            Eigen::RowVectorXd direction = get_dc_component_at_ij(target_surface, active_surface, dc);
+            // Eigen::RowVectorXd direction = get_dc_component_at_ij(target_surface, active_surface, dc);
+            Eigen::RowVectorXd direction = get_dc_component_at_ij(active_surface, target_surface, dc);
             auto [success, P_new] = momentum_rescale(dE, direction, P_current, mass);
             if (success) {
                 return std::make_tuple(true, target_surface, P_new);

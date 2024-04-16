@@ -35,7 +35,7 @@ State::State(
 
 State::State(
     Eigen::Ref<const Eigen::VectorXcd> psi  //
-    ) : flatten_view(psi.size()) {
+    ) : flatten_view(Eigen::VectorXcd::Zero(psi.size())) {
   state_data.psi = psi;
   state_type = StateType::QUANTUM;
   representation = QuantumStateRepresentation::WAVE_FUNCTION;
@@ -43,7 +43,7 @@ State::State(
 
 State::State(
     Eigen::Ref<const RowMatrixXcd> rho  //
-    ) : flatten_view(rho.size()) {
+    ) : flatten_view(Eigen::VectorXcd::Zero(rho.size())) {
   state_data.rho = rho;
   state_type = StateType::QUANTUM;
   representation = QuantumStateRepresentation::DENSITY_MATRIX;
@@ -54,7 +54,7 @@ State::State(
       Eigen::Ref<const Eigen::VectorXd> P,    // P are the momenta of the vibrational mode
       double mass,                 //
       Eigen::Ref<const Eigen::VectorXcd> psi  //
-    ) : flatten_view(R.size() + P.size() + psi.size()) {
+    ) : flatten_view(Eigen::VectorXcd::Zero(R.size() + P.size() + psi.size())) {
   state_data.R = R;
   state_data.P = P;
   state_data.mass = mass;
@@ -68,7 +68,7 @@ State::State(
       Eigen::Ref<const Eigen::VectorXd> P,    // P are the momenta of the vibrational mode
       double mass,                 //
       Eigen::Ref<const RowMatrixXcd> rho  //
-    ) : flatten_view(R.size() + P.size() + rho.size()) {
+    ) : flatten_view(Eigen::VectorXcd::Zero(R.size() + P.size() + rho.size())) {
   state_data.R = R;
   state_data.P = P;
   state_data.mass = mass;
@@ -80,19 +80,19 @@ State::State(
 State::State(StateData state_data, QuantumStateRepresentation representation, StateType state_type, const Eigen::VectorXcd& flatten_view)
     : state_data(state_data), representation(representation), state_type(state_type), flatten_view(flatten_view) {}
 
-State::State(
-    Eigen::Ref<const Eigen::VectorXd> R,    // R are the
-    Eigen::Ref<const Eigen::VectorXd> P,    // P are the momenta of the vibrational mode
-    double mass,                 //
-    Eigen::Ref<const Eigen::VectorXcd> psi, // wave function
-    Eigen::Ref<const RowMatrixXcd> rho // density matrix
-  ) :  flatten_view(R.size() + P.size() + psi.size() + rho.size()) {
-  state_data.R = R;
-  state_data.P = P;
-  state_data.mass = mass;
-  state_data.psi = psi;
-  state_data.rho = rho;
-  }
+// State::State(
+//     Eigen::Ref<const Eigen::VectorXd> R,    // R are the
+//     Eigen::Ref<const Eigen::VectorXd> P,    // P are the momenta of the vibrational mode
+//     double mass,                 //
+//     Eigen::Ref<const Eigen::VectorXcd> psi, // wave function
+//     Eigen::Ref<const RowMatrixXcd> rho // density matrix
+//   ) :  flatten_view(R.size() + P.size() + psi.size() + rho.size()) {
+//   state_data.R = R;
+//   state_data.P = P;
+//   state_data.mass = mass;
+//   state_data.psi = psi;
+//   state_data.rho = rho;
+//   }
 
 
 const Eigen::VectorXcd& State::flatten() {
@@ -115,23 +115,23 @@ const Eigen::VectorXcd& State::flatten() {
 }
 
 // non-static factory methods #1: from an flattened array
-State State::from_unstructured(Eigen::Ref<const Eigen::VectorXcd> ) const {
+State State::from_unstructured(Eigen::Ref<const Eigen::VectorXcd> unstructured_array) const {
   // copy construct the state data
   StateData new_state_data = state_data;
 
   if (state_type == StateType::CLASSICAL) {
-    flat_to_RP(flatten_view, new_state_data.R, new_state_data.P);
+    flat_to_RP(unstructured_array, new_state_data.R, new_state_data.P);
   } else if (state_type == StateType::QUANTUM) {
     if (representation == QuantumStateRepresentation::WAVE_FUNCTION) {
-      new_state_data.psi = flatten_view;
+      new_state_data.psi = unstructured_array;
     } else {
-      new_state_data.rho = Eigen::Map<const RowMatrixXcd>(flatten_view.data(), new_state_data.rho.rows(), new_state_data.rho.cols());
+      new_state_data.rho = Eigen::Map<const RowMatrixXcd>(unstructured_array.data(), new_state_data.rho.rows(), new_state_data.rho.cols());
     }
   } else {
     if (representation == QuantumStateRepresentation::WAVE_FUNCTION) {
-      flat_to_RPPsi(flatten_view, new_state_data.R, new_state_data.P, new_state_data.psi);
+      flat_to_RPPsi(unstructured_array, new_state_data.R, new_state_data.P, new_state_data.psi);
     } else {
-      flat_to_RPRho(flatten_view, new_state_data.R, new_state_data.P, new_state_data.rho);
+      flat_to_RPRho(unstructured_array, new_state_data.R, new_state_data.P, new_state_data.rho);
     }
   }
   return State(new_state_data, representation, state_type, flatten_view);

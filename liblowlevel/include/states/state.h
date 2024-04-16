@@ -56,15 +56,6 @@ class State {
       Eigen::Ref<const RowMatrixXcd> rho  //
   );
 
-  // constructor for pickle
-  State(
-    Eigen::Ref<const Eigen::VectorXd> R,    // R are the
-    Eigen::Ref<const Eigen::VectorXd> P,    // P are the momenta of the vibrational mode
-    double mass,                 //
-    Eigen::Ref<const Eigen::VectorXcd> psi, // wave function
-    Eigen::Ref<const RowMatrixXcd> rho // density matrix
-  );
-
   // straight forward constructor (directly construction from private data)
   State(StateData state_data, QuantumStateRepresentation representation, StateType state_type, const Eigen::VectorXcd& flatten_view);
 
@@ -91,7 +82,7 @@ class State {
   const Eigen::VectorXcd& flatten();
 
   // non-static factory methods #1: from an flattened array
-  State from_unstructured(Eigen::Ref<const Eigen::VectorXcd> flatten_view) const;
+  State from_unstructured(Eigen::Ref<const Eigen::VectorXcd> unstructured_array) const;
 
   // non-static factory methods #2: rk4_step inplace
   void rk4_step_inplace(double dt, const State& k1, const State& k2, const State& k3, const State& k4);

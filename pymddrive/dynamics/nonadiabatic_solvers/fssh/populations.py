@@ -17,10 +17,10 @@ def compute_diabatic_populations_from_adiabatic_rho(
     active_state: int = active_surface[0]
     populations = np.zeros(dim, dtype=np.float64)
     for istate in range(dim):
-        populations[istate] = np.abs(evecs[istate, active_state])**2
+        populations[istate] += np.abs(evecs[istate, active_state])**2
         for jj in range(dim):
             for kk in range(jj+1, dim):
-                populations[istate] += 2.0 * np.real(evecs[istate, jj] * evecs[istate, kk] * np.conj(rho[jj, kk]))
+                populations[istate] += 2.0 * np.real(evecs[istate, jj] * rho[jj, kk] * np.conjugate(evecs[istate, kk]))
     return populations
 
 def compute_diabatic_populations_from_adiabatic_psi(

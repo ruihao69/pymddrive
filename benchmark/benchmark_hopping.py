@@ -1,12 +1,138 @@
 # %%
 import numpy as np
+from numba import njit
+from numpy.typing import NDArray
 
 # from _low_level.surface_hopping import fssh_surface_hopping
+from pymddrive.my_types import ActiveSurface
 from pymddrive.low_level._low_level.surface_hopping import fssh_surface_hopping
-from pymddrive.dynamics.fssh import hopping
+# from pymddrive.dynamics.tmp.fssh import hopping
 from pymddrive.dynamics.misc_utils import HamiltonianRetureType
 
+from typing import Optional, Tuple
+
 # %%
+
+def v_dot_d(v, d,):
+    return np.tensordot(v, d, axes=(0, 0))
+
+def momentum_rescale(
+    from_: int,
+    to_: int,
+    evals: NDArray[np.float64],
+    d: NDArray[np.complex128],
+    P_current: NDArray[np.float64],
+    mass: Optional[NDArray[np.float64]],
+) -> Tuple[bool, NDArray[np.float64]]:
+    # determine the rescaling direction
+    d_component = d[:, to_, from_] # I use the convention (i, j, k) for the index
+                                   # i: the index of the classical degree of freedom
+                                   # j, k: the index of the electronic states
+                                   
+    normalized_direction = d_component 
+    M_inv = 1.0 / mass 
+    dE = evals[to_] - evals[from_]
+    
+    # solve the quadratic equation
+    a = 0.5 * np.sum(M_inv * normalized_direction**2)
+    b = np.vdot(P_current * M_inv, normalized_direction)
+    c = dE
+    b2_4ac = b**2 - 4 * a * c
+    if b2_4ac < 0:
+        return False, P_current
+    elif b < 0:
+        gamma: float = (b + np.sqrt(b2_4ac)) / (2 * a)
+        P_rescaled = P_current - gamma * normalized_direction
+        # dPE = np.sum((P_rescaled**2 - P_current**2) * M_inv) / 2
+        # print(f"{dE=}, {dPE=}, {mass=}")
+        return True, P_rescaled
+    elif b >= 0:
+        # print(f"the gamma is {gamma}")
+        gamma: float = (b - np.sqrt(b2_4ac)) / (2 * a)
+        P_rescaled = P_current - gamma * normalized_direction
+        # dPE = np.sum((P_rescaled**2 - P_current**2) * M_inv) / 2
+        # print(f"{dE=}, {dPE=}, {mass=}")
+        return True, P_rescaled
+    else:
+        return False, P_current
+
+
+def hopping(
+    dt: float,
+    rho: NDArray[np.complex128],
+    hami_return: HamiltonianRetureType,
+    P: NDArray[np.float64],
+    mass: Optional[NDArray[np.float64]],
+    active_surf: ActiveSurface,
+) -> Tuple[bool, ActiveSurface, NDArray[np.float64]]:
+    ############################
+    # The surface hopping algorithm
+    ############################
+    
+    # compute the hopping probabilities
+    v = P / mass
+    vdotd = v_dot_d(v, hami_return.d)
+    prob_vec = np.zeros(rho.shape[0])
+    prob_vec[active_surf[0]] = 1.0
+    prob_vec = _evaluate_hopping_prob(dt, active_surf[0], rho, vdotd, prob_vec)
+    
+    # use random number to determine the hopping 
+    to = _hopping(prob_vec)
+    
+    # if hopping happens, update the active surface, rescale the momentum
+    if to == active_surf[0]:
+        return False, active_surf, P
+    else:
+        evals, d = hami_return.evals, hami_return.d
+        allowed_hopping, P_rescaled = momentum_rescale(active_surf[0], to, evals, d, P, mass)
+        return allowed_hopping, np.array([to]), P_rescaled
+
+@njit
+def _hopping_prob(
+    from_: int,
+    to_: int, 
+    dt: float,
+    vdotd: NDArray[np.complex128],
+    rho: NDArray[np.complex128],
+) -> float:
+    # prob: float = -2.0 * dt * np.real(rho[to_, from_] * vdotd[from_, to_] / rho[from_, from_])
+    prob: float = 2.0 * dt * np.real(rho[to_, from_] * vdotd[from_, to_] / rho[from_, from_])
+    # prob: float = 2.0 * dt * np.real(rho[to_, from_] * vdotd[to_, from_] / rho[from_, from_])
+    return prob if prob > 0 else 0.0
+
+@njit
+def _evaluate_hopping_prob(
+    dt: float, 
+    from_: int,
+    rho: NDArray[np.complex128],
+    v_dot_d: NDArray[np.complex128],
+    prob_vec: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    # tr_rho: float = np.trace(rho).real
+    for to_ in range(prob_vec.shape[0]): 
+        if from_ == to_:
+            continue
+        # prob_vec[to_] = _hopping_prob(from_, to_, dt, v_dot_d, rho) / tr_rho
+        prob_vec[to_] = _hopping_prob(from_, to_, dt, v_dot_d, rho)
+        prob_vec[from_] -= prob_vec[to_]
+    return prob_vec
+
+@njit
+def _hopping(
+    prob_vec: NDArray[np.float64]
+) -> int:
+    # prepare the variables
+    accumulative_prob: float = 0.0
+    to: int = 0
+    
+    # generate a random number
+    random_number = np.random.rand()
+    while (to < prob_vec.shape[0]):
+        accumulative_prob += prob_vec[to]
+        if accumulative_prob > random_number:
+            break
+        to += 1
+    return to
 
 def get_random_H(dim, is_complex=False):
     H = np.random.rand(dim, dim)
@@ -72,8 +198,7 @@ def randomize_surface_hopping_inpts_py(n_nuc, n_elec, is_complex):
     F = np.zeros((n_elec, n_nuc))
     dc = dc.transpose(2, 0, 1)
     hami_return: HamiltonianRetureType = HamiltonianRetureType(H=H, dHdR=dHdR, evals=evals, evecs=np.zeros_like(H), d=dc, F=F)
-    from pymddrive.dynamics.fssh import ActiveSurface
-    return dt, rho, hami_return, P_current, mass, ActiveSurface(active_surface)
+    return dt, rho, hami_return, P_current, mass, np.array([active_surface])
     
 def benchmark(n_nuc=3, n_elec=2, is_complex=False, n_repeats=10000):
     python_input_tuples = randomize_surface_hopping_inpts_py(n_nuc, n_elec, is_complex) 

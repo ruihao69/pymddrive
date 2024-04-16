@@ -6,7 +6,7 @@ from pymddrive.my_types import RealVector, ComplexVector, ComplexOperator, Gener
 from pymddrive.dynamics.cache import Cache
 from pymddrive.dynamics.options import BasisRepresentation, QuantumRepresentation
 from pymddrive.dynamics.nonadiabatic_solvers.nonadiabatic_solver_base import NonadiabaticSolverBase, NonadiabaticProperties
-from pymddrive.dynamics.nonadiabatic_solvers.math_utils import expected_value, diabatic_equations_of_motion, adiabatic_equations_of_motion, compute_v_dot_d
+from pymddrive.dynamics.nonadiabatic_solvers.math_utils import adiabatic_equations_of_motion, compute_v_dot_d
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.fssh_math_utils import initialize_active_surface
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.populations import compute_floquet_populations, compute_populations
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization
@@ -53,7 +53,7 @@ class FSSH(NonadiabaticSolverBase):
         
         # return the state after callback, as well as the update flag for the numerical integrator
         if hop_flag:
-            new_state = state.from_unstructured(np.concatenate([R, P_new, rho_or_psi.flatten(order='F')], dtype=np.complex128))
+            new_state = state.from_unstructured(np.concatenate([R, P_new, rho_or_psi.flatten()], dtype=np.complex128))
             return new_state, True
         else:
             return state, False
@@ -68,7 +68,7 @@ class FSSH(NonadiabaticSolverBase):
             dR, dP, drho = self.derivative_adiabatic(v, rho_or_psi, H, dHdR, self.cache.F_langevin, self.hamiltonian._last_evecs, self.cache.active_surface)
         else:
             raise ValueError("Unsupported basis representation.")
-        return state.from_unstructured(np.concatenate([dR, dP, drho.flatten(order='F')], dtype=np.complex128))
+        return state.from_unstructured(np.concatenate([dR, dP, drho.flatten()], dtype=np.complex128))
         
     @staticmethod
     def derivative_diabatic(
@@ -99,8 +99,8 @@ class FSSH(NonadiabaticSolverBase):
         v_dot_d = compute_v_dot_d(v, d)
         
         R_dot = v
-        _active_surface = active_surface[0]
-        P_dot = F[_active_surface, ...] + F_langevin
+        active_state = active_surface[0]
+        P_dot = F[active_state, ...] + F_langevin
         rho_or_psi_dot = adiabatic_equations_of_motion(rho_or_psi, evals, v_dot_d)
         return R_dot, P_dot, rho_or_psi_dot
     

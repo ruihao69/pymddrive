@@ -1,114 +1,103 @@
 # %%
-import os 
 import numpy as np
-from numpy.typing import ArrayLike
-from typing import Tuple
-from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
+
+from pymddrive.models.tullyone import get_tullyone
 from pymddrive.low_level.states import State
 from pymddrive.integrators.state import get_state
-from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
-from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics, run_nonadiabatic_dynamics_ensembles
-from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian
+from pymddrive.dynamics.options import BasisRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators  
+from pymddrive.dynamics.get_dynamics import get_dynamics
+from pymddrive.dynamics.run import run_ensemble
 
-from tullyone_utils import *
+from tullyone_utils import outside_boundary
 
-def stop_condition(t, s, states):
+def stop_condition(t, s):
     r, _, _ = s.get_variables()
-    return outside_boundary(r, (-10, 10))
+    return outside_boundary(r, (-5, 5))
 
-def break_condition(t, s, states):
-    return False
-
-def run_tullyone(
+def run_tullyone_fssh(
     r0: float, 
     p0: float, 
+    n_ensemble: int=100,
     mass: float=2000, 
-    qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
-    basis_rep: BasisRepresentation = BasisRepresentation.Adiabatic,
-    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
+    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.FSSH,
+    filename: str="fssh.nc",
+    basis_rep: BasisRepresentation = BasisRepresentation.ADIABATIC,
     integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-):
-    # intialize the model
-    hamiltonian = get_tullyone(pulse_type=TullyOnePulseTypes.NO_PULSE)
-    
-    # initialize the states
-    rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
+    dt: float = 0.1,
+) -> None:
+    # get the initial time and state object
+    t0 = 0.0
+    rho0 = np.zeros((2, 2), dtype=np.complex128)
+    rho0[0, 0] = 1
     s0 = get_state(mass=mass, R=r0, P=p0, rho_or_psi=rho0)
     
-    dyn = NonadiabaticDynamics(
-        hamiltonian=hamiltonian,
-        t0=0.0,
-        s0=s0,
-        basis_rep=basis_rep,
-        qm_rep=qm_rep,
-        solver=solver,
+    # intialize the model
+    hamiltonian = get_tullyone()
+    if basis_rep == BasisRepresentation.ADIABATIC:
+        H = hamiltonian.H(t0, np.array([r0]))
+        evals, evecs = np.linalg.eigh(H)
+        rho0_adiabatic = evecs.T.conj() @ rho0 @ evecs
+        s0 = get_state(mass=mass, R=r0, P=p0, rho_or_psi=rho0_adiabatic)
+    
+    # get the dynamics object
+    dynamic_list = []
+    for _ in range(n_ensemble):
+        dyn = get_dynamics(t0=t0, s0=s0, dt=dt, hamiltonian=hamiltonian, dynamics_basis=basis_rep, method=solver)
+        dynamic_list.append(dyn)
+    
+    # use run ensemble to run the dynamics
+    run_ensemble(
+        dynamics_list=dynamic_list,
+        break_condition=stop_condition,
+        filename=filename,
         numerical_integrator=integrator,
-        dt=0.03,
-        save_every=30
     )
-    
-    return run_nonadiabatic_dynamics(dyn, stop_condition, break_condition) 
+       
 
-def main(sim_signature: str, n_samples: int, solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST):
-    import os
-    from pararun import ParaRunScatter, get_ncpus
+def main(r0: float, p0: float, ntraj: int=100):
+    run_tullyone_fssh(r0=r0, p0=p0, n_ensemble=ntraj)
+    run_tullyone_fssh(r0=r0, p0=p0, n_ensemble=1, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, filename="ehrenfest.nc")
     
-    ncpus = get_ncpus()
-    if not os.path.exists(sim_signature):
-        os.makedirs(sim_signature)
-        
-    r0 = -10.0
-    _r0_list = np.array([r0]*n_samples)
-    _p0_list = get_tully_one_p0_list(n_samples, pulse_type=TullyOnePulseTypes.NO_PULSE)
-    
-    runner = ParaRunScatter(n_jobs=ncpus, r0=_r0_list, p0=_p0_list)
-    
-    res_gen = runner.run(run_tullyone, accumulate_output, sim_signature)
-    traj_dict, pulses = accumulate_output(_p0_list, res_gen)
-    
-    post_process_output(sim_signature, traj_dict, pulse_list=pulses)
-    
-
-def generate_ensembles(
-    R0_samples: ArrayLike,
-    P0_samples: ArrayLike,
-    mass: float=2000,
-    qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
-    basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
-    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
-    # integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-    integrator: NumericalIntegrators = NumericalIntegrators.RK4,
-) -> Tuple[NonadiabaticDynamics]:
-    # initialize the electronic states
-    rho0_diabatic = np.zeros((2, 2), dtype=np.complex128)
-    rho0_diabatic[0, 0] = 1.0
-    
-    assert (n_samples := len(R0_samples)) == len(P0_samples), "The number of R0 and P0 samples should be the same."
-    ensemble = ()
-    for ii, (R0, P0) in enumerate(zip(R0_samples, P0_samples)):
-        hamiltonian = get_tullyone(
-            pulse_type=TullyOnePulseTypes.NO_PULSE
-        )
-        if basis_rep == BasisRepresentation.Diabatic:
-            s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_diabatic)
-        else:
-            hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
-            evecs = hami_return.evecs
-            rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
-            s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_adiabatic)
-        dyn = NonadiabaticDynamics(
-            hamiltonian=hamiltonian,
-            t0=0.0,
-            s0=s0,
-            basis_rep=basis_rep,
-            qm_rep=qm_rep,
-            solver=solver,
-            numerical_integrator=integrator,
-            dt=0.1,
-            save_every=10,
-        )
-        ensemble += (dyn,)
-    return ensemble
+# def generate_ensembles(
+#     R0_samples: ArrayLike,
+#     P0_samples: ArrayLike,
+#     mass: float=2000,
+#     qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
+#     basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
+#     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
+#     # integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+#     integrator: NumericalIntegrators = NumericalIntegrators.RK4,
+# ) -> Tuple[NonadiabaticDynamics]:
+#     # initialize the electronic states
+#     rho0_diabatic = np.zeros((2, 2), dtype=np.complex128)
+#     rho0_diabatic[0, 0] = 1.0
+#     
+#     assert (n_samples := len(R0_samples)) == len(P0_samples), "The number of R0 and P0 samples should be the same."
+#     ensemble = ()
+#     for ii, (R0, P0) in enumerate(zip(R0_samples, P0_samples)):
+#         hamiltonian = get_tullyone(
+#             pulse_type=TullyOnePulseTypes.NO_PULSE
+#         )
+#         if basis_rep == BasisRepresentation.Diabatic:
+#             s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_diabatic)
+#         else:
+#             hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
+#             evecs = hami_return.evecs
+#             rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
+#             s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_adiabatic)
+#         dyn = NonadiabaticDynamics(
+#             hamiltonian=hamiltonian,
+#             t0=0.0,
+#             s0=s0,
+#             basis_rep=basis_rep,
+#             qm_rep=qm_rep,
+#             solver=solver,
+#             numerical_integrator=integrator,
+#             dt=0.1,
+#             save_every=10,
+#         )
+#         ensemble += (dyn,)
+#     return ensemble
 
    
 
@@ -127,14 +116,15 @@ if __name__ == "__main__":
     
     r0 = -5.0
     p0 = 30.0
-    ouput_ehrenfest = run_tullyone(r0, p0, solver=NonadiabaticDynamicsMethods.EHRENFEST)
+    main(r0, p0, 250)
+    # ouput_ehrenfest = run_tullyone(r0, p0, solver=NonadiabaticDynamicsMethods.EHRENFEST)
     # ouput_fssh = run_tullyone(r0, p0, solver=NonadiabaticDynamicsMethods.FSSH) 
     
-    nsamples = 100
-    R0_samples = np.array([r0]*nsamples)
-    P0_samples = np.array([p0]*nsamples)
-    dyn_ensemble = generate_ensembles(R0_samples, P0_samples, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.Adiabatic)
-    output_fssh = run_nonadiabatic_dynamics_ensembles(dyn_ensemble, stop_condition, break_condition, inhomogeneous=True)
+    # nsamples = 100
+    # R0_samples = np.array([r0]*nsamples)
+    # P0_samples = np.array([p0]*nsamples)
+    # dyn_ensemble = generate_ensembles(R0_samples, P0_samples, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.Adiabatic)
+    # output_fssh = run_nonadiabatic_dynamics_ensembles(dyn_ensemble, stop_condition, break_condition, inhomogeneous=True)
 # %%
 if __name__ == "__main__":
     import matplotlib.pyplot as plt

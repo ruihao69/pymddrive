@@ -9,10 +9,7 @@ class PropertiesWriter:
         # create a randomized filename
         self.fn = tempfile.NamedTemporaryFile().name
         # create a netCDF file
-        self.nc = Dataset(self.fn, 'a', format='NETCDF4')
-        
-        # create groups 
-        self.data = self.nc.createGroup('data')
+        self.nc = Dataset(self.fn, 'a', format='NETCDF4_CLASSIC')
         
         # create dimensions
         self.frame = self.nc.createDimension('frame', None)

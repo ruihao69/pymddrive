@@ -4,8 +4,7 @@ from attrs import define, field
 
 from pymddrive.my_types import GenericVector
 from pymddrive.low_level.states import State
-from pymddrive.dynamics.cache import Cache
-from pymddrive.dynamics.options import BasisRepresentation, NonadiabaticDynamicsMethods, BasisRepresentation
+from pymddrive.dynamics.options import BasisRepresentation, BasisRepresentation
 from pymddrive.dynamics.nonadiabatic_solvers import NonadiabaticSolverBase
 from pymddrive.dynamics.langevin import LangevinBase, NullLangevin
 
