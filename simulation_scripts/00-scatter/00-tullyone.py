@@ -2,7 +2,6 @@
 import numpy as np
 
 from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
-from pymddrive.low_level.states import State
 from pymddrive.integrators.state import get_state
 from pymddrive.dynamics.options import BasisRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators  
 from pymddrive.dynamics.get_dynamics import get_dynamics

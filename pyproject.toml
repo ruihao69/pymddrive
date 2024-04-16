@@ -16,3 +16,6 @@ classifiers = [
     "License :: OSI Approved :: BSD 3-Clause License",
     "Operating System :: OS Independent",
 ]
+
+[tool.setuptools.packages.find]
+where = ["tabulate"]
