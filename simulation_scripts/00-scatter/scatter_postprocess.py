@@ -1,3 +1,4 @@
+# %%
 import numpy as np
 from scipy.io import netcdf_file
 from joblib import Parallel, delayed
@@ -87,30 +88,29 @@ def get_t_longest_len(all_data: List[Tuple[np.ndarray]]) -> Tuple[int, np.ndarra
         return t
     len_list = np.array([len(get_t_single_traj(data)) for data in all_data])
     argmax = np.argmax(len_list)
-    t_longest = all_data[argmax]
+    t_longest = all_data[argmax][0]
     return len_list[argmax], t_longest
 
 def ensemble_avg(all_data: List[Tuple[np.ndarray]]) -> Tuple[np.ndarray]:
-    ntrajs = len(all_data)
     dim = all_data[0][3].shape[1]
     n_longest, t_longest = get_t_longest_len(all_data)
     
     def get_output_array(n_longest: int, dim: int) -> Tuple[np.ndarray]:
-        R_out = np.zeros((n_longest, 1))
-        P_out = np.zeros((n_longest, 1))
+        R_out = np.zeros((n_longest))
+        P_out = np.zeros((n_longest))
         apop_out = np.zeros((n_longest, dim))
         dpop_out = np.zeros((n_longest, dim))
-        KE_out = np.zeros((n_longest, 1))
-        PE_out = np.zeros((n_longest, 1))
+        KE_out = np.zeros((n_longest))
+        PE_out = np.zeros((n_longest))
         return R_out, P_out, apop_out, dpop_out, KE_out, PE_out
     
     def fill_R_or_P_one_traj(X_out: np.ndarray, X: np.ndarray) -> None:
-        X_out[:X.shape[0], ...] = X
-        X_out[X.shape[0]:, ...] = np.nan
+        X_out[:X.shape[0]] = X[:, 0] # caveat: only the first column is used, thus assuming 1D nuclear coordinate
+        X_out[X.shape[0]:] = np.nan
         
     def fill_pop_or_E_one_traj(X_out: np.ndarray, X: np.ndarray) -> None:
-        X_out[:X.shape[0], :] = X
-        X_out[X.shape[0]:, :] = X[-1]
+        X_out[:X.shape[0]] = X
+        X_out[X.shape[0]:] = X[-1]
     
     def load_one_ensemble(one_data: Tuple[np.ndarray]) -> Tuple[np.ndarray]:
         _, R, P, apop, dpop, KE, PE = one_data
@@ -121,20 +121,23 @@ def ensemble_avg(all_data: List[Tuple[np.ndarray]]) -> Tuple[np.ndarray]:
         fill_pop_or_E_one_traj(dpop_out, dpop)
         fill_pop_or_E_one_traj(KE_out, KE)
         fill_pop_or_E_one_traj(PE_out, PE)
-        return R_out, P_out, apop_out, dpop_out, KE_out, PE_out
+        return np.column_stack((R_out, P_out, apop_out, dpop_out, KE_out, PE_out))
+        # return R_out, P_out, apop_out, dpop_out, KE_out, PE_out
     
     ensembles = Parallel(n_jobs=get_ncpus())(
         delayed(load_one_ensemble)(data) for data in all_data
     )
-        
     
-    # R_avg = np.nanmean(r_ensemble, axis=0)
-    # P_avg = np.nanmean(p_ensemble, axis=0)    
-    # a_pop_avg = a_pop_ensemble.mean(axis=0)
-    # d_pop_avg = d_pop_ensemble.mean(axis=0)
-    # ke_avg = ke_ensemble.mean(axis=0)
-    # pe_avg = pe_ensemble.mean(axis=0)   
-    # return t_longest, R_avg, P_avg, a_pop_avg, d_pop_avg, ke_avg, pe_avg
+    ensembles = np.array(ensembles)
+    r_ensemble, p_ensemble, a_pop_ensemble, d_pop_ensemble, ke_ensemble, pe_ensemble = ensembles[:, :, 0], ensembles[:, :, 1], ensembles[:, :, 2:2+dim], ensembles[:, :, 2+dim:2+2*dim], ensembles[:, :, 2+2*dim], ensembles[:, :, 2+2*dim+1]
+    
+    R_avg = np.nanmean(r_ensemble, axis=0)
+    P_avg = np.nanmean(p_ensemble, axis=0)    
+    a_pop_avg = a_pop_ensemble.mean(axis=0)
+    d_pop_avg = d_pop_ensemble.mean(axis=0)
+    ke_avg = ke_ensemble.mean(axis=0)
+    pe_avg = pe_ensemble.mean(axis=0)   
+    return t_longest, R_avg, P_avg, a_pop_avg, d_pop_avg, ke_avg, pe_avg
 
 def post_process(project_dir: str) -> Tuple[np.ndarray]:
     traj_ncfiles = find_trajectories(project_dir)
@@ -144,7 +147,7 @@ def post_process(project_dir: str) -> Tuple[np.ndarray]:
     scatter_result = calculate_scatter(all_data)
     
     # compute ensemble average
-    t_longest, R_avg, P_avg, a_pop_avg, d_pop_avg, ke_avg, pe_avg = ensemble_avg(traj_ncfiles)
+    t_longest, R_avg, P_avg, a_pop_avg, d_pop_avg, ke_avg, pe_avg = ensemble_avg(all_data)
     
     scatter_header = "{:>10s} {:>12s} {:>12s} {:>12s}".format("RL", "TL", "RU", "TU")
     scatter_outfile = os.path.join(project_dir, "scatter_result.dat")
@@ -161,6 +164,7 @@ def post_process(project_dir: str) -> Tuple[np.ndarray]:
     traj_outfile = os.path.join(project_dir, "traj.dat")
     np.savetxt(traj_outfile, np.column_stack((t_longest, R_avg, P_avg, a_pop_avg, d_pop_avg, ke_avg, pe_avg)), header=traj_header, fmt="%12.6f")
     
+# %%
 if __name__ == "__main__":
     project_dir = "./"
     post_process(project_dir)
@@ -168,3 +172,4 @@ if __name__ == "__main__":
     
     
     
+# %%

@@ -10,7 +10,7 @@ class PropertiesWriter:
         self.fn = tempfile.NamedTemporaryFile().name
         # create a netCDF file
         # self.nc = Dataset(self.fn, 'a', format='NETCDF4_CLASSIC')
-        self.nc = Dataset(self.fn, 'a', format='NETCDF3_64BIT_OFFSET')
+        self.nc = Dataset(self.fn, 'w', format='NETCDF3_64BIT_OFFSET')
         
         # create dimensions
         self.frame = self.nc.createDimension('frame', None)
