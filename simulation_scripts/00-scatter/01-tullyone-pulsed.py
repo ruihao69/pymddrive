@@ -132,16 +132,19 @@ if __name__ == "__main__":
         # sim_signature = f"data_tullyone_pulsethree-Omega-{Omega}-tau-{tau}"
     else:
         raise ValueError(f"The pulse_type must be 1, 2, or 3. But it is {pulse_num}.")
-    sim_signature = f"data_floquet_ehrenfest_diabatic-Omega-{Omega}-tau-{tau}-pulse-{pulse_num}"
+    sim_signature = f"data_floquet_fssh-Omega-{Omega}-tau-{tau}-pulse-{pulse_num}"
     nsamples = 40
-    n_ensemble = 1
+    # n_ensemble = 1
+    n_ensemble = 100
     main(
         Omega=Omega, 
         tau=tau, 
         pulse_type=pulse_type, 
         sim_signature=sim_signature,
-        dynamics_method=NonadiabaticDynamicsMethods.EHRENFEST,
-        basis_rep=BasisRepresentation.DIABATIC,
+        # dynamics_method=NonadiabaticDynamicsMethods.EHRENFEST,
+        # basis_rep=BasisRepresentation.DIABATIC,
+        dynamics_method=NonadiabaticDynamicsMethods.FSSH,
+        basis_rep=BasisRepresentation.ADIABATIC,
         n_initial_momentum_samples=nsamples,
         ensemble_size=n_ensemble,
         NF=1,

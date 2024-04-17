@@ -19,3 +19,9 @@ classifiers = [
 
 [tool.setuptools.packages.find]
 where = ["tabulate"]
+
+[tool.hatch.build.targets.wheel.hooks.mypyc]
+dependencies = ["hatch-mypyc"]
+
+[build.targets.wheel.hooks.mypyc]
+include = ["/pymddrive/pulses"]

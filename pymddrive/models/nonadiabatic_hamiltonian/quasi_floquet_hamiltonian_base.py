@@ -8,7 +8,7 @@ from pymddrive.models.nonadiabatic_hamiltonian.hamiltonian_base import Hamiltoni
 from pymddrive.models.floquet import FloquetType, ValidEnvolpeFunctions
 from pymddrive.models.floquet import get_floquet_space_dim
 from pymddrive.models.floquet import get_envelope_function_type, get_floquet_type
-from pymddrive.low_level.floquet import get_HF_cos, get_dHF_dR_cos
+from pymddrive.models.floquet import get_HF, get_dHF_dR
 
 from typing import Callable
 from abc import abstractmethod
@@ -21,8 +21,6 @@ class QuasiFloquetHamiltonianBase(HamiltonianBase):
     floquet_type: FloquetType = field(default=None, on_setattr=attr.setters.frozen)
     envelope_function_type: ValidEnvolpeFunctions= field(default=None, on_setattr=attr.setters.frozen)
     NF: int = field(default=None, on_setattr=attr.setters.frozen)
-    _get_HF: Callable = field(default=None, init=False, on_setattr=attr.setters.frozen)
-    _get_dHF_dR: Callable = field(default=None, init=False, on_setattr=attr.setters.frozen)
     
     def __init__(
         self,
@@ -49,16 +47,6 @@ class QuasiFloquetHamiltonianBase(HamiltonianBase):
         object.__setattr__(self, "NF", NF)
         object.__setattr__(self, "ultrafast_pulse", ultrafast_pulse)
         object.__setattr__(self, "envelope_pulse", envelope_pulse)
-        
-        if self.floquet_type == FloquetType.COSINE:
-            object.__setattr__(self, "_get_HF", get_HF_cos)
-            object.__setattr__(self, "_get_dHF_dR", get_dHF_dR_cos)
-        elif self.floquet_type == FloquetType.SINE:
-            raise NotImplementedError("The sine type of Floquet Hamiltonian is not implemented yet.") 
-        elif self.floquet_type == FloquetType.EXPONENTIAL:
-            raise NotImplementedError("The exponential type of Floquet Hamiltonian is not implemented yet.")
-        else:
-            raise NotImplementedError("The Hamiltonian type is not implemented yet.")
         
     @abstractmethod 
     def H0(self, R: RealVector) -> GenericOperator:
@@ -91,3 +79,9 @@ class QuasiFloquetHamiltonianBase(HamiltonianBase):
         
     def get_carrier_frequency(self) -> float:
         return self.Omega
+    
+    def _get_HF(self, H0: GenericOperator, H1: GenericOperator, Omega: float, NF: int) -> GenericOperator:
+        return get_HF(self.floquet_type, H0, H1, Omega, NF)
+    
+    def _get_dHF_dR(self, dH0dR: GenericVectorOperator, dH1dR: GenericVectorOperator, NF: int) -> GenericVectorOperator:
+        return get_dHF_dR(self.floquet_type, dH0dR, dH1dR, NF)

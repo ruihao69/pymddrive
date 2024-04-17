@@ -6,6 +6,7 @@ plt.style.use(['science'])
 
 import os
 import glob
+from typing import List
 
 def load_P0(project_dir: str) -> np.ndarray:
     pattern = "P0-*"
@@ -23,23 +24,30 @@ def load_scatter_data(project_dir: str) -> np.ndarray:
         
     return P0, scatter_out
 
-def plot_scatter(P0: np.ndarray, scatter_out: np.ndarray):
+def plot_scatter(data: List[tuple], labels: List[str] = None):
     fig = plt.figure(dpi=300, figsize=(3*2, 2.25*2), constrained_layout=True)
     gs = fig.add_gridspec(2, 2)
     axs = gs.subplots().flatten()
     
-    for ii, ax in enumerate(axs):
-        ax.plot(P0, scatter_out[:, ii])
-        ax.set_xlabel("initial momentum")
-        ax.set_ylabel("Probability")
-        ax.set_title(["Reflect lower", "Transmission lower", "Reflect upper", "Transmission upper"][ii])
+    for ii, (P0, scatter_out) in enumerate(data):
+        for jj, ax in enumerate(axs):
+            ax.plot(P0, scatter_out[:, jj], label=labels[ii])
+            ax.set_xlabel("initial momentum")
+            ax.set_ylabel("Probability")
+            ax.set_title(["Reflect lower", "Transmission lower", "Reflect upper", "Transmission upper"][jj])
+        ax.legend()
     plt.show()
     
-def main(project_dir: str):
-    P0, scatter_out = load_scatter_data(project_dir)
-    plot_scatter(P0, scatter_out)
+def main(project_dir_list: List[str], labels: List[str]):
+    data = []
+    for project_dir in project_dir_list:
+        P0, scatter_out = load_scatter_data(project_dir)
+        data.append((P0, scatter_out))
+    plot_scatter(data, labels)
     
 if __name__ == "__main__":
     # main("data_tullyone_ehrenfest_adiabatic")
-    main("data_ehrenfest_diabatic-Omega-0.05-tau-100-pulse-3")
+    labels = ['Ehrenfest', 'Floquet Ehrenfest', 'Floquet FSSH']
+    project_dir_list = ["data_ehrenfest_diabatic-Omega-0.05-tau-100-pulse-3", "data_floquet_ehrenfest_diabatic-Omega-0.05-tau-100-pulse-3", "data_floquet_fssh-Omega-0.05-tau-100-pulse-3"]
+    main(project_dir_list, labels)
 # %%

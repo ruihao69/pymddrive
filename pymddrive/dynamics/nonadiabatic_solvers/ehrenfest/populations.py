@@ -113,8 +113,8 @@ def compute_floquet_populations_from_rho_dda(
 ) -> RealVector:
     # populations = compute_floquet_populations_from_rho_ddd(rho, Omega, t, NF, dim, evecs_0, evecs_F)
     rhoF = get_rhoF(rho, NF, dim)
-    rho = compute_rho_from_rhoF_ddd_impl(rhoF, Omega, t, NF, dim, evecs_0, evecs_F)
-    rho_adiabatic = diabatic_to_adiabatic(rho, evecs_0)
+    rho_diabatic = compute_rho_from_rhoF_ddd_impl(rhoF, Omega, t, NF, dim, evecs_0, evecs_F)
+    rho_adiabatic = diabatic_to_adiabatic(rho_diabatic, evecs_0)
     return np.real(np.diagonal(rho_adiabatic))
     
 

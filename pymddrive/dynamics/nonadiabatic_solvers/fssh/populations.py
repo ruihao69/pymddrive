@@ -4,6 +4,7 @@ from numba import njit
 from pymddrive.my_types import RealVector, GenericOperator, GenericVector, ActiveSurface
 from pymddrive.models.nonadiabatic_hamiltonian import diabatic_to_adiabatic, adiabatic_to_diabatic
 from pymddrive.dynamics.options import BasisRepresentation
+from pymddrive.models.floquet import get_rhoF
 
 from typing import Union, Any
 
@@ -75,8 +76,8 @@ def compute_populations(
 
 
 # Floquet version of the populations calculation routines
-from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations_from_rho_ddd
-from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations_from_psi_ddd
+from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations_from_rho_ddd as ehrenfest_compute_floquet_populations_from_rho_ddd
+from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations_from_psi_ddd as ehrenfest_compute_floquet_populations_from_psi_ddd
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_rho_from_rhoF_ddd_impl
 
 def get_coarse_grained_diabatic_rhoF(
@@ -86,7 +87,9 @@ def get_coarse_grained_diabatic_rhoF(
 ):
     active_state_adiabatic = np.zeros(rho.shape[0], dtype=np.float64)
     active_state_adiabatic[active_surface[0]] = 1.0
-    coarse_grain_rho_adiabatic = np.outer(active_state_adiabatic, active_state_adiabatic.conjugate())
+    # Adiabatic to diabatic
+    coarse_grain_psi_adiabatic = np.dot(evecs_F, active_state_adiabatic)
+    coarse_grain_rho_adiabatic = np.outer(coarse_grain_psi_adiabatic, coarse_grain_psi_adiabatic.conjugate())
     rho_F_diab = adiabatic_to_diabatic(coarse_grain_rho_adiabatic, evecs_F)
     return rho_F_diab
 
@@ -125,7 +128,7 @@ def compute_floquet_populations_from_rho_add(
     active_surface: ActiveSurface
 ) -> RealVector:
     rho_F_diab = get_coarse_grained_diabatic_rhoF(rho, evecs_F, active_surface)
-    return compute_floquet_populations_from_rho_ddd(rho_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
+    return ehrenfest_compute_floquet_populations_from_rho_ddd(rho_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
 
 def compute_floquet_populations_from_rho_ada(
     rho: GenericOperator,
@@ -137,7 +140,8 @@ def compute_floquet_populations_from_rho_ada(
     evecs_F: GenericOperator,
     active_surface: ActiveSurface
 ) -> RealVector:
-    rho_F_diab = get_coarse_grained_diabatic_rhoF(rho, evecs_F, active_surface) 
+    rho_diab = get_coarse_grained_diabatic_rhoF(rho, evecs_F, active_surface) 
+    rho_F_diab = get_rhoF(rho_diab, NF, dim)
     rho_diab = compute_rho_from_rhoF_ddd_impl(rho_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
     rho_adiabatic = diabatic_to_adiabatic(rho_diab, evecs_0)
     return np.real(np.diagonal(rho_adiabatic))
