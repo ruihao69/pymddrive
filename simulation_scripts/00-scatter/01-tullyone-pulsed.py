@@ -33,6 +33,7 @@ def run_tullyone_pulsed(
     basis_rep: BasisRepresentation = BasisRepresentation.ADIABATIC,
     integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
     dt: float = 0.1,
+    mode: str = 'normal',
 ) -> None:
     # get the delay time from cubic spline interpolation, and generate hamiltonian
     delay_time = get_tully_one_delay_time(R0=r0, P0=p0)
@@ -83,7 +84,8 @@ def run_tullyone_pulsed(
         break_condition=stop_condition,
         filename=filename,
         numerical_integrator=integrator,
-        save_every=10
+        save_every=10,
+        mode=mode
     )
     
     post_process(data_files_dir)
@@ -98,13 +100,14 @@ def main(
     n_initial_momentum_samples: int=40,
     ensemble_size: int=10,
     NF: Optional[int]=None, 
+    mode: str='normal'
 ):
     r0 = -10.0
     p0_list = get_tully_one_p0_list(n_initial_momentum_samples, pulse_type=pulse_type)
     for p0 in p0_list:
         run_tullyone_pulsed(
             r0=r0, p0=p0, Omega=Omega, tau=tau, pulse_type=pulse_type, 
-            n_ensemble=ensemble_size, solver=dynamics_method, basis_rep=basis_rep, data_dir=sim_signature, NF=NF
+            n_ensemble=ensemble_size, solver=dynamics_method, basis_rep=basis_rep, data_dir=sim_signature, NF=NF, mode=mode
         )
     
     
@@ -135,7 +138,7 @@ if __name__ == "__main__":
     sim_signature = f"data_floquet_fssh-Omega-{Omega}-tau-{tau}-pulse-{pulse_num}"
     nsamples = 40
     # n_ensemble = 1
-    n_ensemble = 100
+    n_ensemble = 8
     main(
         Omega=Omega, 
         tau=tau, 

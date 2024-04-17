@@ -9,8 +9,11 @@ from pymddrive.dynamics.options import NumericalIntegrators, NonadiabaticDynamic
 from pymddrive.low_level.states import State
 from pymddrive.integrators.state_rk4 import state_rk4
 from pymddrive.dynamics.output_writer import PropertiesWriter
-from pymddrive.utils import get_ncpus
+from pymddrive.utils import get_ncpus, is_empty_ncdf
 
+import os
+import re
+import glob
 from typing import Optional, Dict, Any, Tuple, Callable, List
 import warnings
 
@@ -46,6 +49,13 @@ def run_dynamics_zvode(
     break_condition: Callable[[float, State], bool] = lambda t, s: False,
     filename: Optional[str] = None
 ):
+    # check whether the dynamics file already exists
+    if filename is not None:
+        # if the file exists and it's not empty, we skip the calculation
+        if os.path.exists(filename):
+            if not is_empty_ncdf(filename):
+                return None
+            
     # the initial dynamic variables
     t: float = dynamics.t0
     y: GenericVector = dynamics.s0.flatten()
@@ -106,6 +116,13 @@ def run_dynamics_rk4(
     break_condition: Callable[[float, State], bool] = lambda t, x: False,
     filename: Optional[str] = None
 ):
+    # check whether the dynamics file already exists
+    if filename is not None:
+        # if the file exists and it's not empty, we skip the calculation
+        if os.path.exists(filename):
+            if not is_empty_ncdf(filename):
+                return None
+            
     # the initial dynamic variables
     t: float = dynamics.t0
     y: GenericVector = dynamics.s0.flatten()
@@ -155,6 +172,7 @@ def run_ensemble(
     break_condition: Callable[[float, State], bool] = lambda t, x: False,
     filename: Optional[str] = None,
     numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
+    mode: str = 'normal' # normal or append
 ) -> None:
     if numerical_integrator == NumericalIntegrators.ZVODE:
         runner = run_dynamics_zvode
@@ -164,7 +182,17 @@ def run_ensemble(
         raise ValueError(f"Numerical integrator {numerical_integrator.name} has not been implemented yet.")
     
     ntrajectories = len(dynamics_list) 
-    filename_list = [numerate_file_name(filename, i) for i in range(ntrajectories)]
+    if mode == 'normal':
+        filename_list = [numerate_file_name(filename, i) for i in range(ntrajectories)]
+    elif mode == 'append':
+        file_dirname = os.path.dirname(filename)
+        # the file pattern is like "*.*.nc"
+        # where the second * is the index of the trajectory
+        # represented by numers like 000, 001, 002, ...
+        file_pattern = "*.*.nc"
+        current_files = glob.glob(os.path.join(file_dirname, file_pattern))
+        N_current = len(current_files)
+        filename_list = [numerate_file_name(filename, i+N_current) for i in range(ntrajectories)]
     
     Parallel(n_jobs=get_ncpus(), verbose=5)(delayed(runner)(dynamics, save_every, break_condition, filename) for dynamics, filename in zip(dynamics_list, filename_list))
     
