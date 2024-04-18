@@ -88,14 +88,13 @@ def get_coarse_grained_diabatic_rhoF(
     active_state_adiabatic = np.zeros(rho.shape[0], dtype=np.float64)
     active_state_adiabatic[active_surface[0]] = 1.0
     # Adiabatic to diabatic
-    coarse_grain_psi_adiabatic = np.dot(evecs_F, active_state_adiabatic)
-    coarse_grain_rho_adiabatic = np.outer(coarse_grain_psi_adiabatic, coarse_grain_psi_adiabatic.conjugate())
-    rho_F_diab = adiabatic_to_diabatic(coarse_grain_rho_adiabatic, evecs_F)
-    return rho_F_diab
+    coarse_grain_psi_diabatic = np.dot(evecs_F, active_state_adiabatic)
+    coarse_grain_rho_diabatic = np.outer(coarse_grain_psi_diabatic, coarse_grain_psi_diabatic.conjugate())
+    return coarse_grain_rho_diabatic
 
 def compute_floquet_populations_from_rho_ddd(
     rho: GenericOperator,
-    Omega: float, 
+    Omega: float,
     t: float,
     NF: int,
     dim: int,
@@ -107,7 +106,7 @@ def compute_floquet_populations_from_rho_ddd(
 
 def compute_floquet_populations_from_rho_dda(
     rho: GenericOperator,
-    Omega: float, 
+    Omega: float,
     t: float,
     NF: int,
     dim: int,
@@ -119,9 +118,9 @@ def compute_floquet_populations_from_rho_dda(
 
 def compute_floquet_populations_from_rho_add(
     rho: GenericOperator,
-    Omega: float, 
-    t: float, 
-    NF: int, 
+    Omega: float,
+    t: float,
+    NF: int,
     dim: int,
     evecs_0: GenericOperator,
     evecs_F: GenericOperator,
@@ -132,21 +131,21 @@ def compute_floquet_populations_from_rho_add(
 
 def compute_floquet_populations_from_rho_ada(
     rho: GenericOperator,
-    Omega: float, 
-    t: float, 
-    NF: int, 
+    Omega: float,
+    t: float,
+    NF: int,
     dim: int,
     evecs_0: GenericOperator,
     evecs_F: GenericOperator,
     active_surface: ActiveSurface
 ) -> RealVector:
-    rho_diab = get_coarse_grained_diabatic_rhoF(rho, evecs_F, active_surface) 
+    rho_diab = get_coarse_grained_diabatic_rhoF(rho, evecs_F, active_surface)
     rho_F_diab = get_rhoF(rho_diab, NF, dim)
     rho_diab = compute_rho_from_rhoF_ddd_impl(rho_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
     rho_adiabatic = diabatic_to_adiabatic(rho_diab, evecs_0)
     return np.real(np.diagonal(rho_adiabatic))
 
-def compute_floquet_populations_from_rho_dad(rho: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:    
+def compute_floquet_populations_from_rho_dad(rho: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:
     raise NotImplementedError("Floquet populations are not implemented yet for dad.")
 
 def compute_floquet_populations_from_rho_daa(rho: GenericOperator, Omega: float, t: float, NF: int, dim: int, *args: Any) -> RealVector:
@@ -217,4 +216,4 @@ def compute_floquet_populations(
     return FLOQUET_POPULATION_FUNCTIONS[(state.ndim, dynamics_basis, floquet_basis, target_state_basis)](state, Omega, t, NF, dim, evecs_0, evecs_F, active_surface)
 
 
-    
+
