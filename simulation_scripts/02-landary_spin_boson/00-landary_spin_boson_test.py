@@ -2,20 +2,23 @@
 import numpy as np
 from numpy.typing import ArrayLike
 
+from pymddrive.my_types import RealVector
 from pymddrive.models.landry_spin_boson import LandrySpinBoson
-from pymddrive.low_level.states import State
 from pymddrive.integrators.state import get_state
-from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
-from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics, run_nonadiabatic_dynamics_ensembles
+from pymddrive.dynamics.options import BasisRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
+from pymddrive.dynamics.get_dynamics import get_dynamics
+from pymddrive.dynamics.run import run_ensemble
+
 from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian
+from spin_boson_postprocess import post_process
 
 import os 
 from typing import Tuple
 
-def stop_condition(t, s, states):
+def stop_condition(t, s):
     return t > 3000
 
-def break_condition(t, s, states):
+def break_condition(t, s):
     return False
 
 def sample_lsb_boltzmann(
@@ -37,231 +40,85 @@ def sample_lsb_boltzmann(
     sigma_R = 1.0 / np.sqrt(beta * mass) / Omega_nuclear
     position_samples = np.random.normal(R0, sigma_R, n_samples)
     return position_samples, momentum_samples
-    
-def run_one_lsb(
-    R0: float,
-    P0: float,
-    qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
-    basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
-    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
+
+def run_landry_spin_boson(
+    R0: RealVector,
+    P0: RealVector,
+    n_ensemble: int=100,
+    mass: float=1.0,
+    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.FSSH,
+    data_dir: str='./',
+    filename: str="fssh.nc",
+    basis_rep: BasisRepresentation = BasisRepresentation.ADIABATIC,
     integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-):
-    from pymddrive.dynamics.misc_utils import eval_nonadiabatic_hamiltonian
-    hamiltonian = LandrySpinBoson()
-    dim = hamiltonian.dim
-    rho0_diabatic = np.zeros((dim, dim), dtype=np.complex128)
-    rho0_diabatic[0, 0] = 1.0
-    hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
-    evecs = hami_return.evecs
-    rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
-    if basis_rep == BasisRepresentation.Adiabatic:
-        s0 = get_state(mass=hamiltonian.M, R=R0, P=P0, rho_or_psi=rho0_adiabatic)
-    elif basis_rep == BasisRepresentation.Diabatic:
-        s0 = get_state(mass=hamiltonian.M, R=R0, P=P0, rho_or_psi=rho0_diabatic)
-        
-    # dt_max = 0.003
-    mass = hamiltonian.M
+    dt: float = 0.1,
+) -> None:
+    # get the initial time and state object
+    def get_initial_rho():
+        rho0 = np.zeros((2, 2), dtype=np.complex128)
+        rho0[0, 0] = 1
+        return rho0
     
-    dyn = NonadiabaticDynamics(
-        hamiltonian=hamiltonian,
-        t0=0.0,
-        s0=s0,
-        basis_rep=basis_rep,
-        qm_rep=qm_rep,
-        solver=solver,
+    t0 = 0.0
+    rho0 = [get_initial_rho() for _ in range(n_ensemble)]
+    
+    # intialize the model
+    hamiltonian = LandrySpinBoson()
+    if basis_rep == BasisRepresentation.ADIABATIC:
+        for ii in range(n_ensemble):
+            H = hamiltonian.H(t0, np.array([R0[ii]]))
+            evals, evecs = np.linalg.eigh(H)
+            rho0_adiabatic = evecs.T.conj() @ rho0[ii] @ evecs
+            rho0[ii] = rho0_adiabatic
+    
+    s0_list = [get_state(mass=mass, R=R0[ii], P=P0[ii], rho_or_psi=rho0[ii]) for ii in range(n_ensemble)]
+    
+    # get the dynamics object
+    dynamics_list = []
+    for ii in range(n_ensemble):
+        dyn = get_dynamics(t0=t0, s0=s0_list[ii], dt=dt, hamiltonian=hamiltonian, dynamics_basis=basis_rep, method=solver)
+        dynamics_list.append(dyn)
+    
+    filename = os.path.join(data_dir, filename)    
+    data_files_dir = os.path.dirname(filename)
+    if not os.path.isdir(data_files_dir):
+        os.makedirs(data_files_dir)
+    
+    run_ensemble(
+        dynamics_list=dynamics_list,
+        break_condition=stop_condition,
+        filename=filename,
         numerical_integrator=integrator,
-        dt=0.03,
-        save_every=30,
-        # max_step=dt_max,
+        save_every=10,
     )
     
-    return run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
+    post_process(data_files_dir)
 
-def generate_ensembles(
-    initial_diabatic_states: int,
-    R0_samples: ArrayLike,
-    P0_samples: ArrayLike,
-    qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
-    basis_rep: BasisRepresentation = BasisRepresentation.Diabatic,
-    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
-    integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-) -> Tuple[NonadiabaticDynamics]:
-    # initialize the electronic states
-    assert (initial_diabatic_states >= 0) and (initial_diabatic_states < 4), f"Valid states should be between 0 and 3. Got {initial_diabatic_states}."
-    
-    assert (n_samples := len(R0_samples)) == len(P0_samples), "The number of R0 and P0 samples should be the same."
-    ensemble = ()
-    for ii, (R0, P0) in enumerate(zip(R0_samples, P0_samples)):
-        hamiltonian = LandrySpinBoson() 
-        mass = hamiltonian.M
-        dim: int = hamiltonian.dim
-        rho0_diabatic = np.zeros((dim, dim), dtype=np.complex128)
-        rho0_diabatic[initial_diabatic_states, initial_diabatic_states] = 1.0
-        if basis_rep == BasisRepresentation.Diabatic:
-            s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_diabatic)
-        else:
-            hami_return = eval_nonadiabatic_hamiltonian(0, np.array([R0]), hamiltonian, basis_rep=BasisRepresentation.Diabatic)
-            evecs = hami_return.evecs
-            rho0_adiabatic = evecs.T.conj() @ rho0_diabatic @ evecs
-            s0 = get_state(mass=mass, R=R0, P=P0, rho_or_psi=rho0_adiabatic)
-        dyn = NonadiabaticDynamics(
-            hamiltonian=hamiltonian,
-            t0=0.0,
-            s0=s0,
-            basis_rep=basis_rep,
-            qm_rep=qm_rep,
-            solver=solver,
-            numerical_integrator=integrator,
-            dt=0.3,
-            save_every=10,
-        )
-        ensemble += (dyn,)
-    return ensemble
-        
-   
 
-def main(ntrajs: int, basis_rep: BasisRepresentation = BasisRepresentation.Diabatic, solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST, numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE):
+def main(
+    project_prefix: str,
+    ntrajs: int, 
+    basis_rep: BasisRepresentation = BasisRepresentation.DIABATIC, 
+    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST, numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE
+):
     _hamiltonian = LandrySpinBoson()
     position_samples, momentum_samples = sample_lsb_boltzmann(
         n_samples=ntrajs, lsb_hamiltonian=_hamiltonian, initialize_from_donor=True
     )
+    if solver == NonadiabaticDynamicsMethods.FSSH:
+        filename = "fssh.nc"
+    elif solver == NonadiabaticDynamicsMethods.EHRENFEST:
+        filename = "ehrenfest.nc"
+    else:
+        raise ValueError(f"Unknown solver {solver}")
     
-    dyn_ensemble = generate_ensembles(
-        0, position_samples, momentum_samples,
-        qm_rep=QunatumRepresentation.DensityMatrix,
-        basis_rep=basis_rep,
-        # solver=NonadiabaticDynamicsMethods.EHRENFEST,
-        solver=solver,
-        integrator=numerical_integrator,
+    run_landry_spin_boson(
+        R0=position_samples, P0=momentum_samples, n_ensemble=ntrajs, basis_rep=basis_rep, solver=solver, integrator=numerical_integrator, data_dir=project_prefix, filename=filename
     )
     
-    output_ensemble_averaged = run_nonadiabatic_dynamics_ensembles(dyn_ensemble, stop_condition, break_condition)
-    plot_ensembles_averaged(output_ensemble_averaged)
-    return output_ensemble_averaged
-
 
 
 # %%
-def _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh):
-    import matplotlib.pyplot as plt
-    ta, td, tfssh = output_adiabatic['time'], output_diabatic['time'], output_fssh['time']
-    Ra, Rd, Rfssh = output_adiabatic['states']['R'], output_diabatic['states']['R'], output_fssh['states']['R']
-    Pa, Pd, Pfssh = output_adiabatic['states']['P'], output_diabatic['states']['P'], output_fssh['states']['P']
-    popa_diab, popd_diab, popfssh_diab = output_adiabatic['diab_populations'], output_diabatic['diab_populations'], output_fssh['diab_populations']
-    popa_adiab, popd_adiab, popfssh_adiab = output_adiabatic['adiab_populations'], output_diabatic['adiab_populations'], output_fssh['adiab_populations']
-    KE_a, KE_d, KE_fssh = output_adiabatic['KE'], output_diabatic['KE'], output_fssh['KE']
-    PE_a, PE_d, PE_fssh = output_adiabatic['PE'], output_diabatic['PE'], output_fssh['PE']
-    # rhoa, rhod = output_adiabatic['states']['rho'], output_diabatic['states']['rho']
-    # popa, popd = output_adiabatic['populations'], output_diabatic['populations']
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(ta, Ra, ls='-', label='R adiabatic')
-    ax.plot(td, Rd, ls='-.', label='R diabatic')
-    ax.plot(tfssh, Rfssh, ls='--', label='R fssh')
-    ax.legend()
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('R')
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(ta, Pa, ls='-', label='P adiabatic')
-    ax.plot(td, Pd, ls='-.', label='P diabatic')
-    ax.plot(tfssh, Pfssh, ls='--', label='P fssh')
-    ax.legend()
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('P')
-    
-    fig = plt.figure(dpi=300,)
-    gs = fig.add_gridspec(2, 1)
-    axs = gs.subplots(sharex=True).flatten()
-    for ii in range(popa_diab.shape[1]):
-        ax = axs[ii]
-        ax.plot(ta, popa_diab[:, ii], ls='-', label=f'pop{ii+1} adiabatic')
-        ax.plot(td, popd_diab[:, ii], ls='-.', label=f'pop{ii+1} diabatic')
-        ax.plot(tfssh, popfssh_diab[:, ii], ls='--', label=f'pop{ii+1} fssh')
-    ax = axs[0]
-    dat = np.loadtxt("exact.dat", delimiter=',') 
-    timext, pop1 = dat.T
-    ax.plot(timext, pop1, label='pop1 exact', ls=':')
-    ax.set_xlim(0, ta[-1])
-    ax.legend()
-    
-    fig = plt.figure(dpi=300,)
-    gs = fig.add_gridspec(2, 1)
-    axs = gs.subplots(sharex=True).flatten()
-    for ii in range(popa_diab.shape[1]):
-        ax = axs[ii]
-        ax.plot(ta, popa_adiab[:, ii], ls='-', label=f'pop{ii+1} adiabatic')
-        ax.plot(td, popd_adiab[:, ii], ls='-.', label=f'pop{ii+1} diabatic')
-        ax.plot(tfssh, popfssh_adiab[:, ii], ls='--', label=f'pop{ii+1} fssh') 
-    ax.legend()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(ta, KE_a, ls='-', label='KE adiabatic')
-    ax.plot(td, KE_d, ls='-.', label='KE diabatic')
-    ax.plot(tfssh, KE_fssh, ls='--', label='KE fssh')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('Kinetic Energy')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(ta, PE_a, ls='-', label='PE adiabatic')
-    ax.plot(td, PE_d, ls='-.', label='PE diabatic')
-    ax.plot(tfssh, PE_fssh, ls='--', label='PE fssh')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('Potential Energy')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(ta, PE_a+KE_a, ls='-', label='TE adiabatic')
-    ax.plot(td, PE_d+KE_d, ls='-.', label='TE diabatic')
-    ax.plot(tfssh, PE_fssh+KE_fssh, ls='--', label='TE fssh')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('Total Energy')
-    ax.legend()
-    plt.show()
-    
-    
-def plot_ensembles_averaged(output_ensemble_averaged):
-    import matplotlib.pyplot as plt
-    print(output_ensemble_averaged.keys())
-    
-    time = output_ensemble_averaged['time'] 
-    R, P = output_ensemble_averaged['states']['R'], output_ensemble_averaged['states']['P']
-    pop_diab = output_ensemble_averaged['diab_populations']
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time, R, ls='-', label='R')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('R')
-    ax.legend()
-    plt.show()
-    
-    fig = plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    ax.plot(time, P, ls='-', label='P')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('P')
-    ax.legend()
-    plt.show()
-    
-    fig =  plt.figure(dpi=300)
-    ax = fig.add_subplot(111)
-    for ii in range(pop_diab.shape[1]):
-        ax.plot(time, pop_diab[:, ii], label=f'pop{ii+1}')
-    ax.set_xlabel('Time (a.u.)')
-    ax.set_ylabel('Diabatic Population')
-    ax.legend()
-    plt.show()
-    
-
 def _test_sampling(T: float = 300):
     import matplotlib.pyplot as plt
     hamiltonian = LandrySpinBoson()
@@ -298,54 +155,36 @@ def _test_sampling(T: float = 300):
     
 # %%
 if __name__ == "__main__":
-    _test_sampling()
-    # output_fssh = run_one_four_level_morse(
-    #     0.3, -4.0, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH
-    # )
-    # output_adiabatic, output_diabatic = _compare_adiabatic_diabatic(0.3, -4.0)
-    
-    # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
-# %%
-if __name__ == "__main__":
-    ntraj = 48
+    ntraj = 500
+    # numerical_integrator = NumericalIntegrators.ZVODE
     numerical_integrator = NumericalIntegrators.RK4
-    output_diabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Diabatic, numerical_integrator=numerical_integrator)
-    output_adiabatic = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Adiabatic, numerical_integrator=numerical_integrator)
-    output_fssh = main(ntrajs=ntraj, basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH, numerical_integrator=numerical_integrator)
-    # _hamiltonian = LandrySpinBoson()
-    # position_samples, momentum_samples = sample_lsb_boltzmann(
-    #     n_samples=1, lsb_hamiltonian=_hamiltonian, initialize_from_donor=True
-    # )
-    # output_fssh = run_one_lsb(position_samples[0], momentum_samples[0], basis_rep=BasisRepresentation.Adiabatic, solver=NonadiabaticDynamicsMethods.FSSH)
-    # # _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
-    # import matplotlib.pyplot as plt 
+    project_prefix = "data_ehrenfset_diabatic"
+    main(project_prefix=project_prefix, ntrajs=ntraj, basis_rep=BasisRepresentation.DIABATIC, numerical_integrator=numerical_integrator)
     
-    # # P
-    # fig = plt.figure(dpi=300)
-    # ax = fig.add_subplot(111)
-    # ax.plot(output_fssh['time'], output_fssh['states']['P'], ls='-', label='R fssh')
+    project_prefix = "data_ehrenfset_adiabatic" 
+    main(project_prefix=project_prefix, ntrajs=ntraj, basis_rep=BasisRepresentation.ADIABATIC, numerical_integrator=numerical_integrator)
     
-    # # KE
-    # fig = plt.figure(dpi=300)
-    # ax = fig.add_subplot(111)
-    # ax.plot(output_fssh['time'], output_fssh['KE'], ls='-', label='R fssh')
-    # # PE 
-    # fig = plt.figure(dpi=300)
-    # ax = fig.add_subplot(111)
-    # ax.plot(output_fssh['time'], output_fssh['PE'], ls='-', label='R fssh')
-    # # TE 
-    # fig = plt.figure(dpi=300)
-    # ax = fig.add_subplot(111)
-    # ax.plot(output_fssh['time'], output_fssh['KE']+output_fssh['PE'], ls='-', label='R fssh')
-    # # pop
-    # fig = plt.figure(dpi=300)
-    # ax = fig.add_subplot(111)
-    # for ii in range(output_fssh['adiab_populations'].shape[1]):
-    #     ax.plot(output_fssh['time'], output_fssh['adiab_populations'][:, ii], label=f'pop{ii+1} fssh')
+    project_prefix = "data_fssh_diabatic"
+    main(project_prefix=project_prefix, ntrajs=ntraj, basis_rep=BasisRepresentation.ADIABATIC, solver=NonadiabaticDynamicsMethods.FSSH, numerical_integrator=numerical_integrator)
     
     
 
 # %%
 if __name__ == "__main__":
-    _plot_adiabatic_diabatic(output_adiabatic, output_diabatic, output_fssh)
+    data_ehrenfest_diabatic = np.loadtxt("data_ehrenfset_diabatic/traj.dat")
+    data_ehrenfest_adiabatic = np.loadtxt("data_ehrenfset_adiabatic/traj.dat")
+    data_fssh_diabatic = np.loadtxt("data_fssh_diabatic/traj.dat")
+    
+    from plotter import SpinBosonPlotter
+    sbp = SpinBosonPlotter()
+    
+    sbp.plot_all(dim=2, traj_data=data_ehrenfest_diabatic, label_base="Ehrenfest Diabatic")
+    sbp.plot_all(dim=2, traj_data=data_ehrenfest_adiabatic, label_base="Ehrenfest Adiabatic")
+    sbp.plot_all(dim=2, traj_data=data_fssh_diabatic, label_base="FSSH Diabatic")
+    
+    sbp.finalize()
+    
+    
+    
+
 # %%
