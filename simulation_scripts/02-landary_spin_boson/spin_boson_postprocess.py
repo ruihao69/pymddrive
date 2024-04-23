@@ -10,7 +10,7 @@ import glob
 from typing import List, Tuple
 from enum import Enum
 
-def check_filenames(files: List[str]) -> bool:
+def check_filenames(files: List[str]) -> Tuple[bool, List[str]]:
     """The files should be of the form '*.*.nc'. Where the first field is the description, and the second field is the ensemble index.
 
     Args:
@@ -20,21 +20,30 @@ def check_filenames(files: List[str]) -> bool:
         bool: True if all the files are only differing in the second field.
     """
     first_field = set()
-    for file in files:
+    del_files_idx = []
+    for ii, file in enumerate(files):
         fields = os.path.basename(file).split(".")
         if len(fields) != 3:
-            raise ValueError(f"File name {file} does not have the correct format: '*.*.nc'.")
-        if fields[2] != "nc":
-            raise ValueError(f"File name {file} does not have the correct format: '*.*.nc'.")
-        first_field.add(fields[0])
+            # this might be a restart file, delete it in the future
+            del_files_idx.append(ii)
+        else:
+            if fields[2] != "nc":
+                raise ValueError(f"File name {file} does not have the correct format: '*.*.nc'.")
+            first_field.add(fields[0])
+    # delete the restart files from the list
+    output_files_list = []
+    for ii, file in enumerate(files):
+        if ii not in del_files_idx:
+            output_files_list.append(file)
+         
     if len(first_field) > 1:
         raise ValueError(f"Multiple first fields found: {first_field}.")
     else:
-        return True
+        return True, output_files_list
     
 def find_trajectories(project_dir: str) -> Tuple[List[str]]:
     traj_files = glob.glob(os.path.join(project_dir, "*.nc")) 
-    fileflag = check_filenames(traj_files)
+    fileflag, traj_files = check_filenames(traj_files)
     if not fileflag:
         raise ValueError(f"Files do not have the correct format.")
     # return [netcdf_file(file, 'r', version=1) for file in traj_files], scatter_type

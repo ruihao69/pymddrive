@@ -16,7 +16,7 @@ import os
 from typing import Tuple
 
 def stop_condition(t, s):
-    return t > 3000
+    return t > 5000
 
 def break_condition(t, s):
     return False
@@ -155,7 +155,7 @@ def _test_sampling(T: float = 300):
     
 # %%
 if __name__ == "__main__":
-    ntraj = 500
+    ntraj = 16
     # numerical_integrator = NumericalIntegrators.ZVODE
     numerical_integrator = NumericalIntegrators.RK4
     project_prefix = "data_ehrenfset_diabatic"

@@ -9,6 +9,7 @@ from pymddrive.dynamics.options import NumericalIntegrators, NonadiabaticDynamic
 from pymddrive.low_level.states import State
 from pymddrive.integrators.state_rk4 import state_rk4
 from pymddrive.dynamics.output_writer import PropertiesWriter
+from pymddrive.dynamics.restart_writer import RestartWriter
 from pymddrive.utils import get_ncpus, is_empty_ncdf
 
 import os
@@ -47,7 +48,9 @@ def run_dynamics_zvode(
     dynamics: Dynamics,
     save_every: int = 10,
     break_condition: Callable[[float, State], bool] = lambda t, s: False,
-    filename: Optional[str] = None
+    filename: Optional[str] = None,
+    restart: Optional[str] = None,
+    restart_every: Optional[int] = None,
 ):
     # check whether the dynamics file already exists
     if filename is not None:
@@ -94,27 +97,39 @@ def run_dynamics_zvode(
         return t, current_state_after_callback
    
     _R, _, _rho = dynamics.s0.get_variables()
-    writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
-        
+    traj_writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
+    restart_writer = RestartWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
+    if (restart_every is not None) and not isinstance(restart_every, int):
+        raise ValueError(f"The {restart_every=} is not an integer.")
+    elif restart_every is None:
+        restart_every = save_every * 1000 # save one frane of the restart file every 1000 steps
+
     # the main loop 
     for istep in range(MAX_STEPS):
         if (istep % save_every) == 0:
             properties = dynamics.solver.calculate_properties(t, s)
-            writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE)
+            traj_writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE)
             if break_condition(t, s):
+                # write the last frame of the restart file
+                restart_writer.write_frame(t=t, R=s.get_R(), P=s.get_P(), rho=s.get_rho())
                 break
+        if (istep % restart_every) == 0:
+            restart_writer.write_frame(t=t, R=s.get_R(), P=s.get_P(), rho=s.get_rho())
         t, s = step_zvode(t)
     if filename is None:
         warnings.warn(f"You haven't provided an directory for the output file, you'll get nothing. Nonetheless, you can find the temperary data file at {writer.fn}.")
     else:
-        writer.save(filename)
+        traj_writer.save(filename)
+        restart_writer.save(restart)
 
         
 def run_dynamics_rk4(
     dynamics: Dynamics,
     save_every: int = 10,
     break_condition: Callable[[float, State], bool] = lambda t, x: False,
-    filename: Optional[str] = None
+    filename: Optional[str] = None, 
+    restart: Optional[str] = None,
+    restart_every: Optional[int] = None,
 ):
     # check whether the dynamics file already exists
     if filename is not None:
@@ -149,22 +164,32 @@ def run_dynamics_rk4(
         return t, s
        
     _R, _, _rho = dynamics.s0.get_variables()
-    writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
+    traj_writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
+    restart_writer = RestartWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
+    
+    if (restart_every is not None) and not isinstance(restart_every, int):
+        raise ValueError(f"The {restart_every=} is not an integer.")
+    elif restart_every is None:
+        restart_every = save_every * 1000
+    
     
     # the main loop 
     for istep in range(MAX_STEPS):
         if (istep % save_every) == 0:
             properties = dynamics.solver.calculate_properties(t, s)
-            writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE) 
+            traj_writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE) 
             if break_condition(t, s):
-                # print(f"Break condition is satisfied at {t=}.")
+                restart_writer.write_frame(t=t, R=s.get_R(), P=s.get_P(), rho=s.get_rho())
                 break
+        if (istep % restart_every) == 0:
+            restart_writer.write_frame(t=t, R=s.get_R(), P=s.get_P(), rho=s.get_rho())
         t, s = step_rk4(t, s) 
     
     if filename is None:
         warnings.warn(f"You haven't provided an directory for the output file, you'll get nothing. Nonetheless, you can find the temperary data file at {writer.fn}.")
     else:
-        writer.save(filename)
+        traj_writer.save(filename)
+        restart_writer.save(restart)
         
 def run_ensemble(
     dynamics_list: List[Dynamics],
@@ -184,6 +209,7 @@ def run_ensemble(
     ntrajectories = len(dynamics_list) 
     if mode == 'normal':
         filename_list = [numerate_file_name(filename, i) for i in range(ntrajectories)]
+        restart_list = [numerate_file_name(filename, i, suffix='restart') for i in range(ntrajectories)]
     elif mode == 'append':
         file_dirname = os.path.dirname(filename)
         # the file pattern is like "*.*.nc"
@@ -193,8 +219,9 @@ def run_ensemble(
         current_files = glob.glob(os.path.join(file_dirname, file_pattern))
         N_current = len(current_files)
         filename_list = [numerate_file_name(filename, i+N_current) for i in range(ntrajectories)]
+        restart_list = [numerate_file_name(filename, i+N_current, suffix='restart') for i in range(ntrajectories)]
     
-    Parallel(n_jobs=get_ncpus(), verbose=5)(delayed(runner)(dynamics, save_every, break_condition, filename) for dynamics, filename in zip(dynamics_list, filename_list))
+    Parallel(n_jobs=get_ncpus(), verbose=5)(delayed(runner)(dynamics, save_every, break_condition, filename, restart) for dynamics, filename, restart in zip(dynamics_list, filename_list, restart_list))
     
     
 
