@@ -80,16 +80,27 @@ from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import comput
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations_from_psi_ddd as ehrenfest_compute_floquet_populations_from_psi_ddd
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_rho_from_rhoF_ddd_impl
 
+@njit
+def fill_coherence(rho: GenericOperator, rho_coarse_grain: GenericOperator) -> None:
+    dim: int = rho.shape[0]
+    for ii in range(dim):
+        for jj in range(ii+1, dim):
+            rho_coarse_grain[ii, jj] = rho[ii, jj]
+            rho_coarse_grain[jj, ii] = rho[jj, ii]
+
 def get_coarse_grained_diabatic_rhoF(
     rho: GenericOperator,
     evecs_F: GenericOperator,
     active_surface: ActiveSurface
 ):
-    active_state_adiabatic = np.zeros(rho.shape[0], dtype=np.float64)
-    active_state_adiabatic[active_surface[0]] = 1.0
+    rho_coarse_grain = np.zeros((evecs_F.shape[0], evecs_F.shape[0]), dtype=np.complex128)
+    rho_coarse_grain[active_surface[0], active_surface[0]] = 1.0
+    fill_coherence(rho, rho_coarse_grain)
+    # active_state_adiabatic = np.zeros(rho.shape[0], dtype=np.float64)
+    # active_state_adiabatic[active_surface[0]] = 1.0
+    
     # Adiabatic to diabatic
-    coarse_grain_psi_diabatic = np.dot(evecs_F, active_state_adiabatic)
-    coarse_grain_rho_diabatic = np.outer(coarse_grain_psi_diabatic, coarse_grain_psi_diabatic.conjugate())
+    coarse_grain_rho_diabatic = adiabatic_to_diabatic(rho_coarse_grain, evecs_F)
     return coarse_grain_rho_diabatic
 
 def compute_floquet_populations_from_rho_ddd(
