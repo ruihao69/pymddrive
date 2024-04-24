@@ -44,8 +44,16 @@ class FSSH(NonadiabaticSolverBase):
         P_current: RealVector = P
         v_dot_d = compute_v_dot_d(v, d)
         mass = state.get_mass()
+        # print(f"{type(dt)=}")
+        # print(f"{type(current_active_surface)=}, {current_active_surface.dtype=}")
+        # print(f"{type(P_current)=}, {P_current.dtype=} {P_current.shape=}")
+        # print(f"{type(rho_or_psi)=}, {rho_or_psi.dtype=} {rho_or_psi.shape=}")
+        # print(f"{type(evals)=}, {evals.dtype=} {evals.shape=}")
+        # print(f"{type(v_dot_d)=}, {v_dot_d.dtype=} {v_dot_d.shape=}")
+        # print(f"{type(d)=}, {d.dtype=}, {d.shape=}")
+        
         hop_flag, new_active_surface, P_new = fssh_surface_hopping(
-            dt, current_active_surface, P_current, rho_or_psi, evals, v_dot_d, d, mass
+            dt, current_active_surface[0], P_current, rho_or_psi, evals, v_dot_d, d, mass
         )
         
         # update the cache 

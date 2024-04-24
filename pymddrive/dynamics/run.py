@@ -197,7 +197,8 @@ def run_ensemble(
     break_condition: Callable[[float, State], bool] = lambda t, x: False,
     filename: Optional[str] = None,
     numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-    mode: str = 'normal' # normal or append
+    mode: str = 'normal', # normal or append
+    parallel: bool = True,
 ) -> None:
     if numerical_integrator == NumericalIntegrators.ZVODE:
         runner = run_dynamics_zvode
@@ -220,8 +221,11 @@ def run_ensemble(
         N_current = len(current_files)
         filename_list = [numerate_file_name(filename, i+N_current) for i in range(ntrajectories)]
         restart_list = [numerate_file_name(filename, i+N_current, suffix='restart') for i in range(ntrajectories)]
-    
-    Parallel(n_jobs=get_ncpus(), verbose=5)(delayed(runner)(dynamics, save_every, break_condition, filename, restart) for dynamics, filename, restart in zip(dynamics_list, filename_list, restart_list))
+    if parallel: 
+        Parallel(n_jobs=get_ncpus(), verbose=5)(delayed(runner)(dynamics, save_every, break_condition, filename, restart) for dynamics, filename, restart in zip(dynamics_list, filename_list, restart_list))
+    else:
+        for dynamics, filename, restart in zip(dynamics_list, filename_list, restart_list):
+            runner(dynamics, save_every, break_condition, filename, restart)
     
     
 
