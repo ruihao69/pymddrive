@@ -31,6 +31,13 @@ void fill_HF_offdiagonal_cosine(
     size_t NF                 // the Floquet level cutoff
 );
 
+template <typename V_t>
+void fill_HF_offdiagonal_sine(
+    Eigen::Ref<RowMatrixXcd> HF,  // the Floquet Hamiltonian
+    Eigen::Ref<const V_t> V,      // the Floquet perturbation (upper triangular part)
+    size_t NF                     // the Floquet level cutoff
+);
+
 // define the return type for get_HF_cos using conditional compilation
 // based on the types of H0 and V. if any complex, RowMatrixXcd is used
 template <typename H_t, typename V_t>
@@ -42,23 +49,28 @@ using HFReturnType = std::conditional_t<
 template <typename H_t, typename V_t>
 HFReturnType<H_t, V_t> get_HF_cos(Eigen::Ref<const H_t> H0, Eigen::Ref<const V_t> V, double Omega, size_t NF);
 
+template <typename H_t, typename V_t>
+RowMatrixXcd get_HF_sin(Eigen::Ref<const H_t> H0, Eigen::Ref<const V_t> V, double Omega, size_t NF);
+
 /*
  * Floquet forces tensor construction
  */
 template <typename dHF_dR_t, typename dH0_dR_t>
 void fill_dHF_dR_diagonal(
-    // Eigen::Ref<dHF_dR_t> dHF_dR,        // the Floquet forces tensor
-    // Eigen::Ref<const dH0_dR_t> dH0_dR,  // the forces tensor
-    const dH0_dR_t &dH0_dR,
-    dHF_dR_t &dHF_dR,
+    dHF_dR_t& dHF_dR,
+    const dH0_dR_t& dH0_dR,
     size_t NF);
 
 template <typename dHF_dR_t, typename dV_dR_t>
 void fill_dHF_dR_offdiagonal_cosine(
-    // Eigen::Ref<dHF_dR_t> dHF_dR,      // the Floquet forces tensor
-    // Eigen::Ref<const dV_dR_t> dV_dR,  // the Floquet perturbation forces tensor (upper triangular part)
-    const dV_dR_t &dV_dR,
-    dHF_dR_t &dHF_dR,
+    dHF_dR_t& dHF_dR,
+    const dV_dR_t& dV_dR,
+    size_t NF);
+
+template <typename dV_dR_t>
+void fill_dHF_dR_offdiagonal_sine(
+    Tensor3cd& dHF_dR,
+    const dV_dR_t& dV_dR,
     size_t NF);
 
 template <typename dH0_dR_t, typename dV_dR_t>
@@ -73,6 +85,14 @@ dHF_dRReturnType<dH0_dR_t, dV_dR_t> get_dHF_dR_cos(
     // Eigen::Ref<const dV_dR_t> dV_dR, 
     const dH0_dR_t &dH0_dR,
     const dV_dR_t &dV_dR,
+    size_t NF
+);
+
+
+template <typename dH0_dR_t, typename dV_dR_t>
+Tensor3cd get_dHF_dR_sin(
+    const dH0_dR_t& dH0_dR, 
+    const dV_dR_t& dV_dR, 
     size_t NF
 );
 

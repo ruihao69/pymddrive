@@ -1,13 +1,15 @@
 from pymddrive.my_types import GenericOperator, GenericVectorOperator
-from pymddrive.low_level.floquet import get_HF_cos, get_dHF_dR_cos
+from pymddrive.low_level.floquet import get_HF_cos, get_dHF_dR_cos, get_HF_sin, get_dHF_dR_sin
 from pymddrive.models.floquet.floquet_types import FloquetType
 
 HF_function_table = {
     FloquetType.COSINE: get_HF_cos,
+    FloquetType.SINE: get_HF_sin,
 }
 
 dHF_dR_function_table = {
     FloquetType.COSINE: get_dHF_dR_cos,
+    FloquetType.SINE: get_dHF_dR_sin,
 }
 
 def get_HF(floquet_type: FloquetType, H0: GenericOperator, H1: GenericOperator, Omega: float, NF: int):

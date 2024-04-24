@@ -4,7 +4,7 @@ from enum import Enum, unique
 class FloquetablePulses(Enum):
     MORLET = "Morlet"
     MORLET_REAL = "MorletReal"
-    SINE_SQUARED_PULSE = "SineSquaredPulse"
+    SINE_SQUARE_PULSE = "SineSquarePulse"
     COSINE = "CosinePulse"
     SINE = "SinePulse"
     EXPONENTIAL = "ExponentialPulse"

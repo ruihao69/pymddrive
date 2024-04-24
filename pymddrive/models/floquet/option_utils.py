@@ -1,4 +1,4 @@
-from pymddrive.pulses import PulseBase, Morlet, MorletReal, CosinePulse, SinePulse
+from pymddrive.pulses import PulseBase, Morlet, MorletReal, CosinePulse, SinePulse, SineSquarePulse, SineSquareEnvelope
 
 from .floquet_types import FloquetType
 from .floquetable_pulses import FloquetablePulses
@@ -23,6 +23,8 @@ def get_floquet_type(pulse: PulseBase) -> FloquetType:
         return FloquetType.COSINE
     elif isinstance(pulse, SinePulse):
         return FloquetType.SINE
+    elif isinstance(pulse, SineSquarePulse):
+        return FloquetType.SINE
     else:
         raise NotImplementedError(f"The (quasi-)Floquet methods for pulse type {pulse} is not implemented yet.")
     
@@ -35,6 +37,8 @@ def get_envelope_function_type(pulse: PulseBase) -> ValidEnvolpeFunctions:
         return ValidEnvolpeFunctions.UNIT
     elif isinstance(pulse, SinePulse):
         return ValidEnvolpeFunctions.UNIT
+    elif isinstance(pulse, SineSquarePulse):
+        return ValidEnvolpeFunctions.SINE_SQUARE_ENVELOPE
     else:
         raise NotImplementedError(f"The quasi-floquet model for pulse type {pulse} is not implemented yet.")
     

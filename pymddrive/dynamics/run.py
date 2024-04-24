@@ -98,7 +98,7 @@ def run_dynamics_zvode(
    
     _R, _, _rho = dynamics.s0.get_variables()
     traj_writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
-    restart_writer = RestartWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
+    restart_writer = RestartWriter(dim_elec=_rho.shape[0], dim_nucl=dynamics.solver.get_dim_nuclear())
     if (restart_every is not None) and not isinstance(restart_every, int):
         raise ValueError(f"The {restart_every=} is not an integer.")
     elif restart_every is None:
@@ -165,7 +165,7 @@ def run_dynamics_rk4(
        
     _R, _, _rho = dynamics.s0.get_variables()
     traj_writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
-    restart_writer = RestartWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
+    restart_writer = RestartWriter(dim_elec=_rho.shape[0], dim_nucl=dynamics.solver.get_dim_nuclear())
     
     if (restart_every is not None) and not isinstance(restart_every, int):
         raise ValueError(f"The {restart_every=} is not an integer.")
@@ -215,7 +215,7 @@ def run_ensemble(
         # the file pattern is like "*.*.nc"
         # where the second * is the index of the trajectory
         # represented by numers like 000, 001, 002, ...
-        file_pattern = "*.*.nc"
+        file_pattern = "*.?????.nc"
         current_files = glob.glob(os.path.join(file_dirname, file_pattern))
         N_current = len(current_files)
         filename_list = [numerate_file_name(filename, i+N_current) for i in range(ntrajectories)]

@@ -38,7 +38,7 @@ class LandrySpinBoson(HamiltonianBase):
         Returns:
             ArrayLike: The nuclear potential part of the Hamiltonian
         """
-        return  np.sum(0.5 * M * Omega**2 * R**2) * np.eye(2)
+        return np.sum(0.5 * M * Omega**2 * R**2) * np.eye(2)
     
     @staticmethod
     def dUdR(

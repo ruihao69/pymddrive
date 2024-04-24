@@ -1,6 +1,5 @@
 # %%
 import numpy as np
-from numpy.typing import ArrayLike
 
 from pymddrive.my_types import RealVector
 from pymddrive.models.landry_spin_boson import LandrySpinBoson
@@ -99,7 +98,8 @@ def main(
     project_prefix: str,
     ntrajs: int, 
     basis_rep: BasisRepresentation = BasisRepresentation.DIABATIC, 
-    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST, numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE
+    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST, 
+    numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE
 ):
     _hamiltonian = LandrySpinBoson()
     position_samples, momentum_samples = sample_lsb_boltzmann(
