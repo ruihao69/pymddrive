@@ -184,16 +184,7 @@ def run_dynamics_rk4(
                 break
         if (istep % restart_every) == 0:
             restart_writer.write_frame(t=t, R=s.get_R(), P=s.get_P(), rho=s.get_rho())
-        _, _, rho = s.get_variables()
-        NF = dynamics.solver.hamiltonian.NF
-        rhoF = get_rhoF(rho, dim=2, NF=dynamics.solver.hamiltonian.NF)
-        properties = dynamics.solver.calculate_properties(t, s)
-        print(f"{rhoF[NF, NF]}") 
-        print(f"{dynamics.solver.cache.active_surface[0]}=")
-        print(f"{properties.diabatic_populations=}")
         t, s = step_rk4(t, s) 
-        if istep > 4:
-            break
     
     if filename is None:
         warnings.warn(f"You haven't provided an directory for the output file, you'll get nothing. Nonetheless, you can find the temperary data file at {writer.fn}.")
