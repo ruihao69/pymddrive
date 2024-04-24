@@ -81,6 +81,12 @@ def floquet_populations(
         populations[:, ii] = props.diabatic_populations
         active_surf[ii] = dyn.solver.cache.active_surface[0]
         
+    for ii, dyn in enumerate(dynamics_list):
+        props = dyn.solver.calculate_properties(t0, s0_list[ii])
+        # populations[:, ii] = props.adiabatic_populations
+        populations[:, ii] = props.diabatic_populations
+        active_surf[ii] = dyn.solver.cache.active_surface[0] 
+        
     print(np.mean(populations[0]))
     print(np.sum(active_surf==10))
     print(np.sum(active_surf==11))
@@ -121,13 +127,16 @@ def run_landry_spin_boson(
     
     # initial states 
     t0 = 0.0
+    evecs_list = []
     rho0 = [get_initial_rho(NF=NF) for _ in range(n_ensemble)]
     if basis_rep == BasisRepresentation.ADIABATIC:
         for ii in range(n_ensemble):
             H = hamiltonian.H(t0, R0[ii])
             evals, evecs = np.linalg.eigh(H)
+            hamiltonian._last_evecs[:] = evecs
             rho0_ii = evecs.T.conjugate() @ rho0[ii] @ evecs
             rho0[ii] = rho0_ii
+            evecs_list.append(evecs)
             
     s0_list = [get_state(mass=mass, R=R0[ii], P=P0[ii], rho_or_psi=rho0[ii]) for ii in range(n_ensemble)]
     
@@ -142,6 +151,7 @@ def run_landry_spin_boson(
             method=solver,
             dynamics_basis=basis_rep
         )
+        dynamics.hamiltonian.update_last_evecs(evecs_list[ii])
         dynamics_list.append(dynamics)
         
     # prepare the data directory
@@ -245,5 +255,15 @@ if __name__ == "__main__":
     # NF = None
     main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, phi=phi, N=N, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, NF=NF)
     
+
+# %%
+rho0 = np.array([[ 0.57960976+0.j,         -0.49362071-0.00095022j],
+                 [-0.49362071+0.00095022j,  0.42039024+0.j        ]])
+zeros_like = np.zeros_like(rho0)
+rhoF = sps.block_diag([zeros_like]*NF + [rho0] + [zeros_like]*NF).toarray()
+s0 = get_state(mass=1.0, R=0.0, P=0.0, rho_or_psi=rhoF)
+hamiltonian = get_landry_spin_boson(E0=0.0925, Omega=0.05696, N=8, phi=0.0, pulse_type='sine_squared_pulse', NF=NF)
+dynamics = get_dynamics(t0=0.0, s0=s0, dt=0.1, hamiltonian=hamiltonian, method=NonadiabaticDynamicsMethods.FSSH, dynamics_basis=BasisRepresentation.ADIABATIC)
+dynamics.solver.calculate_properties(0.0, s0)
 
 # %%

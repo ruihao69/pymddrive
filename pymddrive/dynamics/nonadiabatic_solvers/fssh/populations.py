@@ -88,6 +88,15 @@ def fill_coherence(rho: GenericOperator, rho_coarse_grain: GenericOperator) -> N
             rho_coarse_grain[ii, jj] = rho[ii, jj]
             rho_coarse_grain[jj, ii] = rho[jj, ii]
 
+@njit
+def fill_coherence_2(rho: GenericOperator, rho_coarse_grain: GenericOperator, active_surface: int) -> None:
+    dim: int = rho.shape[0]
+    for jj in range(dim):
+        if jj == active_surface:
+            continue
+        rho_coarse_grain[active_surface, jj] += 0.5 * rho[active_surface, jj] / rho[active_surface, active_surface]
+        rho_coarse_grain[jj, active_surface] += 0.5 * rho[jj, active_surface] / rho[active_surface, active_surface]
+
 def get_coarse_grained_diabatic_rhoF(
     rho: GenericOperator,
     evecs_F: GenericOperator,
@@ -96,11 +105,13 @@ def get_coarse_grained_diabatic_rhoF(
     rho_coarse_grain = np.zeros((evecs_F.shape[0], evecs_F.shape[0]), dtype=np.complex128)
     rho_coarse_grain[active_surface[0], active_surface[0]] = 1.0
     fill_coherence(rho, rho_coarse_grain)
+    # fill_coherence_2(rho, rho_coarse_grain, active_surface[0])
     # active_state_adiabatic = np.zeros(rho.shape[0], dtype=np.float64)
     # active_state_adiabatic[active_surface[0]] = 1.0
     
     # Adiabatic to diabatic
-    coarse_grain_rho_diabatic = adiabatic_to_diabatic(rho_coarse_grain, evecs_F)
+    # coarse_grain_rho_diabatic = adiabatic_to_diabatic(rho_coarse_grain, evecs_F)
+    coarse_grain_rho_diabatic = diabatic_to_adiabatic(rho_coarse_grain, evecs_F)
     return coarse_grain_rho_diabatic
 
 def compute_floquet_populations_from_rho_ddd(
@@ -139,7 +150,8 @@ def compute_floquet_populations_from_rho_add(
 ) -> RealVector:
     rho_F_diab = get_coarse_grained_diabatic_rhoF(rho, evecs_F, active_surface)
     return ehrenfest_compute_floquet_populations_from_rho_ddd(rho_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
-
+    
+    
 def compute_floquet_populations_from_rho_ada(
     rho: GenericOperator,
     Omega: float,

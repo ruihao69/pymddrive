@@ -84,6 +84,7 @@ def run_landry_spin_boson(
         filename=filename,
         numerical_integrator=integrator,
         save_every=10,
+        mode='append'
     )
     
     post_process(data_dir)
@@ -133,7 +134,7 @@ def main(
     
 # %%
 if __name__ == "__main__":
-    ntrajs = 16
+    ntrajs = 1
     
     def estimate_NF(A: float, Omega: float, tol: float=1e-6) -> int:
         from scipy.special import jv
@@ -159,11 +160,11 @@ if __name__ == "__main__":
     # project_prefix = f"data_ehrenfest_diabatic_E0_{E0}-Omega_{Omega}-N_{N}-phi_{phi}"
     # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, phi=phi, N=N, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC)
     
-    project_prefix = f"data_f_ehrenfest_diabatic_E0_{E0}-Omega_{Omega}-N_{N}-phi_{phi}"
+    project_prefix = f"data_floquet_fssh_E0_{E0}-Omega_{Omega}-N_{N}-phi_{phi}"
     NF = estimate_NF(A, Omega)  
-    main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, phi=phi, N=N, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, NF=NF)
+    main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, phi=phi, N=N, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, NF=NF)
     
-    project_prefix = f"data_ehrenfest_diabatic"
-    pulse_type = 'no_pulse'
-    main(project_prefix=project_prefix, ntrajs=ntrajs, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC)
+    # project_prefix = f"data_ehrenfest_diabatic"
+    # pulse_type = 'no_pulse'
+    # main(project_prefix=project_prefix, ntrajs=ntrajs, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC)
 # %%
