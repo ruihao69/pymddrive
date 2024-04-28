@@ -2,7 +2,8 @@
 import numpy as np
 
 from pymddrive.my_types import RealVector
-from pymddrive.models.landry_spin_boson import LandrySpinBoson
+# from pymddrive.models.landry_spin_boson import LandrySpinBoson
+from pymddrive.models.landry_spin_boson import get_landry_spin_boson
 from pymddrive.integrators.state import get_state
 from pymddrive.dynamics.options import BasisRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
 from pymddrive.dynamics.get_dynamics import get_dynamics
@@ -15,14 +16,14 @@ import os
 from typing import Tuple
 
 def stop_condition(t, s):
-    return t > 5000
+    return t > 100000
 
 def break_condition(t, s):
     return False
 
 def sample_lsb_boltzmann(
     n_samples: int, 
-    lsb_hamiltonian: LandrySpinBoson,
+    lsb_hamiltonian,
     initialize_from_donor: bool =True
 ):
     # constants
@@ -62,7 +63,9 @@ def run_landry_spin_boson(
     rho0 = [get_initial_rho() for _ in range(n_ensemble)]
     
     # intialize the model
-    hamiltonian = LandrySpinBoson()
+    hamiltonian = get_landry_spin_boson(
+        param_set='SymmetricDoubleWell'
+    ) 
     if basis_rep == BasisRepresentation.ADIABATIC:
         for ii in range(n_ensemble):
             H = hamiltonian.H(t0, np.array([R0[ii]]))
@@ -101,7 +104,10 @@ def main(
     solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST, 
     numerical_integrator: NumericalIntegrators = NumericalIntegrators.ZVODE
 ):
-    _hamiltonian = LandrySpinBoson()
+    _hamiltonian = get_landry_spin_boson(
+        param_set='SymmetricDoubleWell'
+    )
+    
     position_samples, momentum_samples = sample_lsb_boltzmann(
         n_samples=ntrajs, lsb_hamiltonian=_hamiltonian, initialize_from_donor=True
     )
@@ -113,7 +119,8 @@ def main(
         raise ValueError(f"Unknown solver {solver}")
     
     run_landry_spin_boson(
-        R0=position_samples, P0=momentum_samples, n_ensemble=ntrajs, basis_rep=basis_rep, solver=solver, integrator=numerical_integrator, data_dir=project_prefix, filename=filename
+        R0=position_samples, P0=momentum_samples, n_ensemble=ntrajs, basis_rep=basis_rep, solver=solver, integrator=numerical_integrator, data_dir=project_prefix, filename=filename,
+        dt=1.25
     )
     
 
@@ -121,7 +128,7 @@ def main(
 # %%
 def _test_sampling(T: float = 300):
     import matplotlib.pyplot as plt
-    hamiltonian = LandrySpinBoson()
+    hamiltonian = get_landry_spin_boson(param_set='SymmetricDoubleWell')
     position_samples, momentum_samples = sample_lsb_boltzmann(3000, lsb_hamiltonian=hamiltonian)
     R0 = 0.5 * (hamiltonian.get_donor_R() + hamiltonian.get_acceptor_R())
     L = 15
@@ -155,7 +162,7 @@ def _test_sampling(T: float = 300):
     
 # %%
 if __name__ == "__main__":
-    ntraj = 16
+    ntraj = 128
     # numerical_integrator = NumericalIntegrators.ZVODE
     numerical_integrator = NumericalIntegrators.RK4
     project_prefix = "data_ehrenfset_diabatic"

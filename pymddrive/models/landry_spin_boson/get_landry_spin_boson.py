@@ -9,6 +9,7 @@ from pymddrive.models.landry_spin_boson.landry_spin_boson import LandrySpinBoson
 from pymddrive.models.landry_spin_boson.landry_spin_boson_pulsed import LandrySpinBosonPulsed
 from pymddrive.models.landry_spin_boson.landry_spin_boson_pulsed_floquet import LandrySpinBosonPulsedFloquet
 from pymddrive.models.landry_spin_boson.landry_pulse_types import LandryPulseTypes
+from pymddrive.models.landry_spin_boson.parameter_sets import LandryJCP2013, SymmetricDoubleWell
 
 from typing import Optional
 
@@ -27,7 +28,18 @@ def get_landry_spin_boson(
     gamma: Optional[float] = 0.04275,
     kT: Optional[float] = 0.00095,
     mu: Optional[float] = 0.04,
+    param_set: str = 'LandryJCP2013'
 ) -> HamiltonianBase:
+    # get parameters from parameter set
+    if param_set == 'LandryJCP2013':
+        params = LandryJCP2013() 
+        Omega_nuclear, M, V, Er, epsilon0, gamma, kT = params.Omega_nuclear, params.M, params.V, params.Er, params.epsilon0, params.gamma, params.kT
+    elif param_set == 'SymmetricDoubleWell':
+        params = SymmetricDoubleWell()
+        Omega_nuclear, M, V, Er, epsilon0, gamma, kT = params.Omega_nuclear, params.M, params.V, params.Er, params.epsilon0, params.gamma, params.kT
+    else:
+        raise ValueError(f"Invalid parameter set: {param_set}. The valid parameter sets for now are: ['LandryJCP2013', 'SymmetricDoubleWell']")
+        
     # get pulse type from string
     try:
         pulse_type_enum = LandryPulseTypes[pulse_type.upper()]
