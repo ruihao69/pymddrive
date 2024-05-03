@@ -1,129 +1,115 @@
 # %% 
 import numpy as np
 
-from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
-from pymddrive.integrators.state import State
-from pymddrive.dynamics.options import BasisRepresentation, QunatumRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators    
-from pymddrive.dynamics import NonadiabaticDynamics, run_nonadiabatic_dynamics 
+from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
+from pymddrive.integrators.state import get_state
+from pymddrive.dynamics.options import BasisRepresentation, NonadiabaticDynamicsMethods, NumericalIntegrators  
+from pymddrive.dynamics.get_dynamics import get_dynamics
+from pymddrive.dynamics.run import run_ensemble
 
-from tullyone_utils import *
+from tullyone_utils import outside_boundary, get_tully_one_p0_list, get_tully_one_delay_time
+from scatter_postprocess import post_process
 
 import os
 import time
 import argparse
+from typing import Optional
 
-def stop_condition(t, s, states):
+def stop_condition(t, s):
     r, _, _ = s.get_variables()
     return outside_boundary(r, (-10, 10))
-
-def break_condition(t, s, states):
-    R = np.array(states['R'])
-    return is_trapped(R, r_TST=0.0, recross_tol=10)
 
 def run_tullyone_pulsed(
     r0: float, 
     p0: float, 
-    Omega: float, 
-    tau: float, 
-    pulse_type: TullyOnePulseTypes,
-    mass: float = 2000, 
-    qm_rep: QunatumRepresentation = QunatumRepresentation.DensityMatrix,
-    basis_rep: BasisRepresentation = BasisRepresentation.Adiabatic,
-    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.EHRENFEST,
+    Omega: float,
+    tau: float,
+    pulse_type: TullyOnePulseTypes, 
+    NF: Optional[int]=None,
+    n_ensemble: int=100,
+    mass: float=2000, 
+    solver: NonadiabaticDynamicsMethods = NonadiabaticDynamicsMethods.FSSH,
+    data_dir: str='./',
+    basis_rep: BasisRepresentation = BasisRepresentation.ADIABATIC,
     integrator: NumericalIntegrators = NumericalIntegrators.ZVODE,
-):
-    A = 0.01
-    B = 1.6
-    C = 0.005
-    D = 1.0
-    
-    # To estimate the delay time
-    start = time.perf_counter()
-    _delay = estimate_delay_time(A, B, C, D, p0)
-    print(f"Time elapsed for estimating the delay time is {time.perf_counter()-start:.5f} seconds.", flush=True)
-    
-    # initialize the model and states
+    dt: float = 0.1,
+    mode: str = 'normal',
+) -> None:
+    # get the delay time from cubic spline interpolation, and generate hamiltonian
+    delay_time = get_tully_one_delay_time(R0=r0, P0=p0)
     hamiltonian = get_tullyone(
-        t0=_delay, Omega=Omega, tau=tau,
-        pulse_type=pulse_type, td_method=TD_Methods.BRUTE_FORCE
+        t0=delay_time, Omega=Omega, tau=tau,
+        pulse_type=pulse_type, NF=NF
     )
-    pulse = hamiltonian.pulse
     
-    rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
-    s0 = State.from_variables(R=r0, P=p0, rho=rho0)
+    # get the initial time and state object
+    t0 = 0.0
     
-    # initialize the integrator 
-    t_bounds = (pulse.t0 - pulse.tau, pulse.t0 + pulse.tau)
+    rho0 = np.zeros((2, 2), dtype=np.complex128)
+    rho0[0, 0] = 1
+    if NF is not None:
+        import scipy.sparse as sp
+        zeros_like = np.zeros_like(rho0)
+        rho0 = sp.block_diag([zeros_like]*NF + [rho0] + [zeros_like]*NF).toarray()
+    s0 = get_state(mass=mass, R=r0, P=p0, rho_or_psi=rho0)
+    if basis_rep == BasisRepresentation.ADIABATIC:
+        _, _, rho0 = s0.get_variables()
+        H = hamiltonian.H(t0, np.array([r0]))
+        evals, evecs = np.linalg.eigh(H)
+        rho0_adiabatic = evecs.T.conj() @ rho0 @ evecs
+        s0 = get_state(mass=mass, R=r0, P=p0, rho_or_psi=rho0_adiabatic)
+        
+    # get the dynamics object
+    dynamic_list = []
+    for _ in range(n_ensemble):
+        dyn = get_dynamics(t0=t0, s0=s0, dt=dt, hamiltonian=hamiltonian, dynamics_basis=basis_rep, method=solver)
+        dynamic_list.append(dyn)
     
-    dyn = NonadiabaticDynamics(
-        hamiltonian=hamiltonian,
-        t0=0.0,
-        s0=s0,
-        mass=mass,
-        basis_rep=basis_rep,
-        qm_rep=qm_rep,
-        solver=solver,
+    # use run ensemble to run the dynamics
+    momentum_signature = f"P0-{p0:.6f}"
+    if solver == NonadiabaticDynamicsMethods.EHRENFEST:
+        filename = "ehrenfest.nc"
+    elif solver == NonadiabaticDynamicsMethods.FSSH:
+        filename = "fssh.nc"
+    else:
+        raise ValueError(f"Unknown solver {solver}")
+            
+    filename = os.path.join(data_dir, momentum_signature, filename)
+    data_files_dir = os.path.dirname(filename)
+    if not os.path.isdir(data_files_dir):
+        os.makedirs(data_files_dir)
+        
+    run_ensemble(
+        dynamics_list=dynamic_list,
+        break_condition=stop_condition,
+        filename=filename,
         numerical_integrator=integrator,
-        dt=0.03,
-        save_every=30
+        save_every=10,
+        mode=mode
     )
     
-    output = run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
-    
-    return output, pulse
-    
-
-def estimate_delay_time(A, B, C, D, p0, mass: float=2000.0):
-    # model = TullyOne(A, B, C, D)
-    hamiltonian = get_tullyone(
-        A=A, B=B, C=C, D=D,
-        pulse_type=TullyOnePulseTypes.NO_PULSE
-    )
-    rho0 = np.array([[1.0, 0], [0, 0.0]], dtype=np.complex128)
-    s0 = State.from_variables(R=-10.0, P=p0, rho=rho0)
-    dyn = NonadiabaticDynamics(
-        hamiltonian=hamiltonian,
-        t0=0.0,
-        s0=s0,
-        mass=mass,
-        basis_rep=BasisRepresentation.Diabatic,
-        qm_rep=QunatumRepresentation.DensityMatrix,
-        solver=NonadiabaticDynamicsMethods.EHRENFEST,
-        numerical_integrator=NumericalIntegrators.ZVODE,
-        dt=1,
-        save_every=100
-    )
-    def stop_condition(t, s, states):
-        r, p, _ = s.get_variables()
-        return (r>0.0) or (p<0.0)
-    break_condition = lambda t, s, states: False
-    res = run_nonadiabatic_dynamics(dyn, stop_condition, break_condition)
-    return res['time'][-1] 
+    post_process(data_files_dir)
 
 def main(
-    sim_signature: str, 
-    n_samples: int, 
-    Omega: float, 
-    tau: float, 
-    pt: TullyOnePulseTypes, 
+    Omega: float,
+    tau: float,
+    pulse_type: TullyOnePulseTypes,
+    sim_signature: str,
+    dynamics_method: NonadiabaticDynamicsMethods,
+    basis_rep: BasisRepresentation,
+    n_initial_momentum_samples: int=40,
+    ensemble_size: int=10,
+    NF: Optional[int]=None, 
+    mode: str='normal'
 ):
-    from pararun import ParaRunScatter
-    if not os.path.exists(sim_signature):
-        os.makedirs(sim_signature)
-        
     r0 = -10.0
-    _r0_list = np.array([r0]*n_samples)
-    _p0_list = get_tully_one_p0_list(n_samples, pulse_type=pt)  
-    _Omega_list = np.array([Omega]*n_samples)
-    _tau_list = np.array([tau]*n_samples)
-    _pulse_type_list = np.array([pt]*n_samples) 
+    p0_list = get_tully_one_p0_list(n_initial_momentum_samples, pulse_type=pulse_type)
+    for p0 in p0_list:
+        run_tullyone_pulsed(
+            r0=r0, p0=p0, Omega=Omega, tau=tau, pulse_type=pulse_type, 
+            n_ensemble=ensemble_size, solver=dynamics_method, basis_rep=basis_rep, data_dir=sim_signature, NF=NF, mode=mode
+        )
     
-    runner = ParaRunScatter(r0=_r0_list, p0=_p0_list, Omega=_Omega_list, tau=_tau_list, pulse_type=_pulse_type_list)
-    
-    res_gen = runner.run(run_tullyone_pulsed, accumulate_output, sim_signature)
-    traj_dict, pulses = accumulate_output(_p0_list, res_gen)
-    
-    post_process_output(sim_signature, traj_dict, pulse_list=pulses)
     
 # %% 
 if __name__ == "__main__":
@@ -136,20 +122,35 @@ if __name__ == "__main__":
     # args = parser.parse_args() 
     
     # Omega, tau, pulse_type= args.Omega, args.tau, args.pulse_type
-    Omega, tau, pulse_type = 0.05, 100, 2
+    Omega, tau, pulse_num = 0.05, 100, 3
     
-    if pulse_type == 1:
+    if pulse_num == 1:
         pulse_type: TullyOnePulseTypes = TullyOnePulseTypes.PULSE_TYPE1
-        sim_signature = f"data_tullyone_pulseone-Omega-{Omega}-tau-{tau}"
-    elif pulse_type == 2:
+        # sim_signature = f"data_tullyone_pulseone-Omega-{Omega}-tau-{tau}"
+    elif pulse_num == 2:
         pulse_type: TullyOnePulseTypes = TullyOnePulseTypes.PULSE_TYPE2
-        sim_signature = f"data_tullyone_pulsetwo-Omega-{Omega}-tau-{tau}"
-    elif pulse_type == 3:
+        # sim_signature = f"data_tullyone_pulsetwo-Omega-{Omega}-tau-{tau}"
+    elif pulse_num == 3:
         pulse_type: TullyOnePulseTypes = TullyOnePulseTypes.PULSE_TYPE3
-        sim_signature = f"data_tullyone_pulsethree-Omega-{Omega}-tau-{tau}"
+        # sim_signature = f"data_tullyone_pulsethree-Omega-{Omega}-tau-{tau}"
     else:
-        raise ValueError(f"The pulse_type must be 1, 2, or 3. But it is {pulse_type}.")
-    nsamples = 8
-    main(sim_signature, nsamples, Omega, tau, pulse_type,)
+        raise ValueError(f"The pulse_type must be 1, 2, or 3. But it is {pulse_num}.")
+    sim_signature = f"data_floquet_fssh-Omega-{Omega}-tau-{tau}-pulse-{pulse_num}"
+    nsamples = 40
+    # n_ensemble = 1
+    n_ensemble = 8
+    main(
+        Omega=Omega, 
+        tau=tau, 
+        pulse_type=pulse_type, 
+        sim_signature=sim_signature,
+        # dynamics_method=NonadiabaticDynamicsMethods.EHRENFEST,
+        # basis_rep=BasisRepresentation.DIABATIC,
+        dynamics_method=NonadiabaticDynamicsMethods.FSSH,
+        basis_rep=BasisRepresentation.ADIABATIC,
+        n_initial_momentum_samples=nsamples,
+        ensemble_size=n_ensemble,
+        NF=1,
+    )
 
 # %%

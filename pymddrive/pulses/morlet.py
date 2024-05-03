@@ -1,47 +1,32 @@
 # %% The package
+import attr
+from attrs import define, field
 import numpy as np
 
-from numbers import Real, Complex
-from typing import Union    
-
+from pymddrive.my_types import AnyNumber, RealNumber
 from pymddrive.pulses.pulse_base import PulseBase
 
 
+@define
 class Morlet(PulseBase):
-    def __init__(
-        self,
-        A: Union[complex, float] = 1.0,
-        t0: float = 0.0,
-        tau: float = 1.0,
-        Omega: float = 1,
-        phi: float = 0.0,
-        cache_length: int = 40
-    ) -> None:
-        super().__init__(Omega=Omega, cache_length=cache_length)
-        
-        if not isinstance(self.Omega, Real):
-            raise ValueError(f"For Morlet, the carrier frequency {self.Omega=} should be a real number, not {type(self.Omega)}.")
+    A: AnyNumber = field(on_setattr=attr.setters.frozen)
+    t0: RealNumber = field(on_setattr=attr.setters.frozen)
+    tau: RealNumber = field(on_setattr=attr.setters.frozen)
+    Omega: RealNumber = field(on_setattr=attr.setters.frozen)
+    phi: RealNumber = field(on_setattr=attr.setters.frozen)
+    
 
-        self.A : Union[complex, float] = A
-        self.t0 : float = t0
-        self.tau : float = tau
-        self.phi : float = phi
-
-    def __repr__(self) -> str:
-        return f"Morlet(A={self.A}, t0={self.t0}, tau={self.tau}, Omega={self.Omega}, phi={self.phi})"
-
-    def _pulse_func(self, time: float) -> Union[complex, float]:
-        self.Omega: float
+    def _pulse_func(self, time: RealNumber) -> AnyNumber:
         return Morlet.morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
 
     @staticmethod
     def morlet_pulse(
-        A: Union[float, complex],
-        t0: float,
-        tau: float,
-        Omega: float,
-        phi: float,
-        time: float 
+        A: AnyNumber,
+        t0: RealNumber,
+        tau: RealNumber,
+        Omega: RealNumber,
+        phi: RealNumber,
+        time: RealNumber
     ) -> complex:
         return A * np.exp(-1j * (Omega * (time - t0) + phi)) * np.exp(-0.5 * (time - t0)**2 / tau**2)
 
@@ -50,8 +35,6 @@ class Morlet(PulseBase):
 def _debug_test():
     import numpy as np
     import matplotlib.pyplot as plt
-    import scienceplots
-    plt.style.use('science')
     
     p = Morlet(A=1, t0=4, tau=1, Omega=10, phi=0)
     

@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
 
 from pymddrive.models.tullyone import TullyOnePulseTypes
 
@@ -88,7 +89,7 @@ def sample_sigmoid(x_left: float, x_right: float, n: int) -> np.ndarray:
     
 def get_tully_one_p0_list(nsamples: int, pulse_type: TullyOnePulseTypes=TullyOnePulseTypes.NO_PULSE) -> np.ndarray:
     if pulse_type == TullyOnePulseTypes.NO_PULSE or pulse_type == TullyOnePulseTypes.PULSE_TYPE3:
-        p0_bounds_0 = (0.5, 12.0); n_bounds_0 = nsamples // 2
+        p0_bounds_0 = (2.0, 12.0); n_bounds_0 = nsamples // 2
         p0_bounds_1 = (13, 35); n_bounds_1 = nsamples - n_bounds_0
     elif pulse_type == TullyOnePulseTypes.PULSE_TYPE1 or pulse_type == TullyOnePulseTypes.PULSE_TYPE2:
         p0_bounds_0 = (0.5, 19); n_bounds_0 = nsamples // 3 * 2
@@ -251,3 +252,19 @@ def post_process_output(sim_signature: str, traj_dict: dict, pulse_list: list | 
     # save the pulse
     if pulse_list is not None:
         save_pulses(p0_list=traj_dict['p0'], pulse_list=pulse_list, filename=fn_pulses)
+        
+def get_tully_one_delay_time(R0: float, P0: float, ) -> float:
+    import pymddrive
+    
+    if R0 != -10.0:
+        raise ValueError("Only R0 = -10.0 is supported at the moment.")
+    
+    base = os.path.dirname(pymddrive.__path__[0])
+    
+    tully_one_delay_time_tabulate = os.path.join(
+        base, 'tabulate', 'tully_one_delay_time.txt'
+    )
+    P0_tab, delay_tab = np.loadtxt(tully_one_delay_time_tabulate, unpack=True)
+    interp_func = interp1d(P0_tab, delay_tab, kind='cubic')
+    return interp_func(P0)
+    

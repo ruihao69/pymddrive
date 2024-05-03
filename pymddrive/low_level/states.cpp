@@ -31,20 +31,46 @@ void bind_state(py::module& m) {
         .def(py::pickle(
             [](const State& state) {  // __getstate__
                 // Return a tuple that contains the necessary data to reconstruct the State object
-                return py::make_tuple(state.get_R(), state.get_P(), state.get_psi(), state.get_rho(), state.get_mass(), state.get_state_type(), state.get_representation());
+                return py::make_tuple(
+                    state.get_mass(),
+                    state.get_R(),
+                    state.get_P(),
+                    state.get_psi(),
+                    state.get_rho(),
+                    state.get_representation(),
+                    state.get_state_type(),
+                    state.get_flatten_view()
+                );
             },
             [](py::tuple tuple) {  // __setstate__
                 // Reconstruct the State object from the tuple
-                State state(tuple[0].cast<Eigen::VectorXd>(), tuple[1].cast<Eigen::VectorXd>(), tuple[4].cast<double>(), tuple[2].cast<Eigen::VectorXcd>(), tuple[3].cast<Eigen::MatrixXcd>());
-                state.set_state_type(tuple[5].cast<StateType>());
-                state.set_representation(tuple[6].cast<QuantumStateRepresentation>());
-                return state;
+                StateData state_data;
+                state_data.mass = tuple[0].cast<double>();
+                state_data.R = tuple[1].cast<Eigen::VectorXd>();
+                state_data.P = tuple[2].cast<Eigen::VectorXd>();
+                state_data.psi = tuple[3].cast<Eigen::VectorXcd>();
+                state_data.rho = tuple[4].cast<RowMatrixXcd>();
+                return State(
+                    state_data,
+                    tuple[5].cast<QuantumStateRepresentation>(),
+                    tuple[6].cast<StateType>(),
+                    tuple[7].cast<Eigen::VectorXcd>()
+                );
+                // State state(tuple[0].cast<StateData>(), tuple[1].cast<Eigen::VectorXd>(), tuple[4].cast<double>(), tuple[2].cast<Eigen::VectorXcd>(), tuple[3].cast<RowMatrixXcd>());
+                // state.set_state_type(tuple[5].cast<StateType>());
+                // state.set_representation(tuple[6].cast<QuantumStateRepresentation>());
+                // return state;
             }))
-        .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double>())
-                .def(py::init<const Eigen::VectorXcd&>())
-                .def(py::init<const Eigen::MatrixXcd&>())
-                .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double, const Eigen::VectorXcd&>())
-                .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double, const Eigen::MatrixXcd&>())
+            .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double>())
+                .def(py::init<Eigen::Ref<const Eigen::VectorXcd>>())
+                .def(py::init<Eigen::Ref<const RowMatrixXcd>>())
+                .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double, Eigen::Ref<const Eigen::VectorXcd>>())
+                .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double, Eigen::Ref<const RowMatrixXcd>>())
+                // .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double>())
+                // .def(py::init<const Eigen::VectorXcd&>())
+                // .def(py::init<const RowMatrixXcd&>())
+                // .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double, const Eigen::VectorXcd&>())
+                // .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double, const RowMatrixXcd&>())
                 .def("flatten", &State::flatten)
                 .def("get_R", &State::get_R)
                 .def("set_R", &State::set_R)

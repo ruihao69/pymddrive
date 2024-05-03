@@ -53,7 +53,7 @@ inline int hop(Eigen::Ref<const Eigen::RowVectorXd> hopping_probabilities) {
   double cumulative_probability = 0.0;
   int surface_index = 0;
 
-  while (surface_index < hopping_probabilities.size() - 1) {
+  while (surface_index < hopping_probabilities.size()) {
     cumulative_probability += hopping_probabilities(surface_index);
     if (random_number < cumulative_probability) {
       break;

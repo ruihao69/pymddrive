@@ -2,18 +2,21 @@
 """
 This module defines the Pulse and MultiPulse classes for handling pulse signals.
 """
-from typing import Union, TypeAlias, Optional
+import attr
+from attrs import define, field
+
+from typing import Optional
 from numbers import Real
 from collections import OrderedDict
 from abc import ABC, abstractmethod
 
 # TypeOmega: TypeAlias = Union[int, float, None]
 
+@define
 class PulseBase(ABC):
-    def __init__(self, Omega: Optional[float]=None, cache_length: int=30):
-        self.Omega = Omega  
-        self._cache: OrderedDict = OrderedDict()
-        self._cache_length = cache_length
+    Omega: float = field(default=float('nan'), on_setattr=attr.setters.frozen)
+    _cache: OrderedDict = field(factory=OrderedDict, init=False)
+    _cache_length: int = field(default=30, init=False)
         
     def __call__(self, time: float):
         if time in self._cache:
@@ -43,6 +46,5 @@ class PulseBase(ABC):
         else:
             raise ValueError(f"After the pulse has been initialized, you can only set the carrier frequency with a real number, not {Omega}")
     
-def get_carrier_frequency(pulse: PulseBase) -> Optional[float]:
-    return pulse.Omega        
+        
 # %%

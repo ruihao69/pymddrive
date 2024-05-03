@@ -1,5 +1,4 @@
 from .pulse_base import PulseBase
-from .pulse_base import get_carrier_frequency
 from .multipulse import MultiPulse
 
 from .cosine_pulse import CosinePulse
@@ -11,6 +10,11 @@ from .morlet import Morlet
 from .morlet_real import MorletReal
 from .gaussian import Gaussian
 
+from .sine_square_pulse import SineSquarePulse
+from .sine_square_envelope import SineSquareEnvelope
+
+from .pulse_utils import get_carrier_frequency
+
 __all__ = [
     "PulseBase",
     "get_carrier_frequency",
@@ -21,5 +25,7 @@ __all__ = [
     "ZeroPulse",
     "Morlet",
     "MorletReal",
-    "Gaussian"
+    "Gaussian",
+    "SineSquarePulse",
+    "SineSquareEnvelope",
 ]

@@ -1,14 +1,13 @@
 # %%
 import numpy as np
-# import scipy.linalg as LA
 import numpy.linalg as LA
-from numba import jit
-import scipy.sparse as sp
-from numpy.typing import ArrayLike
+from nptyping import NDArray, Shape, Float64
 
-from typing import Tuple, Union, Optional
+from pymddrive.my_types import GenericOperator, GenericVectorOperator, RealVector
 
-def align_phase(prev_evecs: ArrayLike, curr_evecs: ArrayLike) -> ArrayLike:
+from typing import Tuple, Optional
+
+def align_phase(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> GenericOperator:
     """Algorithm to align the phase of eigen vectors, originally proposed
     by Graham (Gaohan) Miao and Zeyu Zhou. (the Hamiltonian is changed adiabatically)
 
@@ -31,21 +30,18 @@ def align_phase(prev_evecs: ArrayLike, curr_evecs: ArrayLike) -> ArrayLike:
     aligned_evecs = curr_evecs / phase_factors
     return aligned_evecs
 
-def nac_phase_following(d_prev: ArrayLike, d_curr: ArrayLike) -> ArrayLike:
+def nac_phase_following(d_prev: GenericVectorOperator, d_curr: GenericVectorOperator) -> GenericVectorOperator:
     """A wrapper function for numba routine '_nac_phase_following' to calculate the
     phase-corrected non-adiabatic couplings (NACs).
 
     Args:
-        d_prev (ArrayLike): NACs of the previous iteration
-        d_curr (ArrayLike): NACs of the current iteration
+        d_prev (GenericVectorOperator): NACs of the previous iteration
+        d_curr (GenericVectorOperator): NACs of the current iteration
 
     Returns:
-        ArrayLike: the phase-corrected NACs
+        GenericVectorOperator: the phase-corrected NACs
     """
-    # print("nac_phase_following is called")
-    dim_classical = d_curr.shape[0]
-    dim_electrnic = d_curr.shape[1]
-    d_corrected = np.zeros((dim_classical, dim_electrnic, dim_electrnic), dtype=d_curr.dtype)
+    d_corrected = np.zeros_like(d_curr)
     try:
         assert d_prev.shape == d_curr.shape == d_corrected.shape
     except AssertionError:
@@ -58,7 +54,7 @@ def nac_phase_following(d_prev: ArrayLike, d_curr: ArrayLike) -> ArrayLike:
     # return _nac_phase_following(d_prev, d_curr, d_corrected)
     return adjust_nac_phase(d_prev, d_curr, d_corrected)
 
-def _nac_phase_following(d_prev: ArrayLike, d_curr: ArrayLike, d_corr: ArrayLike) -> ArrayLike:
+def _nac_phase_following(d_prev: GenericVectorOperator, d_curr: GenericVectorOperator, d_corr: GenericVectorOperator) -> GenericVectorOperator:
     """The phase following algorithm for the non-adiabatic couplings (NAC) by
     the JADE-NAMD package developers.
 
@@ -97,62 +93,46 @@ def _nac_phase_following(d_prev: ArrayLike, d_curr: ArrayLike, d_corr: ArrayLike
             # calculate the dot product of the NACs
             nac_dot_product = np.dot(d_prev[:, jj, kk], d_curr[:, jj, kk])
             # if (prev_nac_norm == 0) or (curr_nac_norm == 0):
+            cos_angle: float
             if np.isclose(prev_nac_norm, 0, atol=ATOL, rtol=RTOL) or np.isclose(curr_nac_norm, 0, atol=ATOL, rtol=RTOL):
                 # phase_factor = 1.0
-                cos_angle: float = 1.0
+                cos_angle = 1.0
             else:
-                cos_angle: float = nac_dot_product / (prev_nac_norm * curr_nac_norm)
+                cos_angle = nac_dot_product / (prev_nac_norm * curr_nac_norm)
                 # phase_factor = nac_dot_product / (prev_nac_norm * curr_nac_norm)
             # correct the phase of the NACs at (jj, kk) electronic indices using the phase factor
             # d_corr[:, jj, kk] = d_curr[:, jj, kk] / phase_factor
             d_corr[:, jj, kk] = d_curr[:, jj, kk] * np.sign(cos_angle)
     return d_corr
 
-def adjust_nac_phase(d_prev: ArrayLike, d_curr: ArrayLike, d_corr: ArrayLike) -> ArrayLike:
+def adjust_nac_phase(d_prev: GenericVectorOperator, d_curr: GenericVectorOperator, d_corr: GenericVectorOperator) -> GenericVectorOperator:
     # print(f"{d_prev.shape=}", f"{d_curr.shape=}") 
     for ii in range(d_curr.shape[1]):
         for jj in range(ii+1, d_curr.shape[2]):
-            ovlp: float = 0.0
-            snac_old: float = 0.0
-            snac: float = 0.0
             
-            # snac_old = np.sqrt(np.sum(d_prev[:, ii, jj]**2))
-            # snac = np.sqrt(np.sum(d_curr[:, ii, jj]**2))
             snac_old = LA.norm(d_prev[:, ii, jj])
             snac = LA.norm(d_curr[:, ii, jj])
             
             if (np.sqrt(snac_old * snac) < 1e-8):
-                ovlp: float = 1.0
+                ovlp = 1.0
             else:
-                dot_nac: float = 0.0
                 dot_nac = np.sum(d_prev[:, ii, jj].conjugate() * d_curr[:, ii, jj])
                 ovlp = dot_nac / (snac_old * snac)
                 
             d_corr[:, ii, jj] = d_curr[:, ii, jj] / ovlp
             d_corr[:, jj, ii] = d_curr[:, jj, ii] / ovlp
     return d_corr
-                
-            
-    
 
-def diagonalize_hamiltonian_history(hamiltonian: ArrayLike, prev_evecs: Optional[ArrayLike]=None) -> Tuple[ArrayLike, ArrayLike]:
-    evals, evecs = LA.eigh(hamiltonian.toarray()) if sp.isspmatrix(hamiltonian) else LA.eigh(hamiltonian)
-    if prev_evecs is not None:
-        evecs = align_phase(prev_evecs, evecs) #if prev_evecs is not None else evecs
-    # else:
-    #     phases = np.diagonal(evecs.conjugate().T @ evecs)
-    #     phases = phases / np.abs(phases)
-    #     over_all_sign = np.sign(LA.det(evecs))
-    #     evecs = evecs * over_all_sign / phases
-    # else:
-        
-        # signs = np.sign(np.diagonal(evecs))
-        # print(f"{signs=}")
-        # evecs = evecs * signs
-            
+                
+def diagonalization(hamiltonian: GenericOperator, prev_evecs: Optional[GenericOperator]=None) -> Tuple[RealVector, GenericOperator]:
+    evals, evecs = LA.eigh(hamiltonian)
+    evecs = align_phase(prev_evecs, evecs) if np.sum(np.shape(prev_evecs)) > 0 else evecs
     return evals, evecs
 
-def diagonalize_2d_real_symmetric(H: ArrayLike) -> Tuple[ArrayLike, ArrayLike]:
+
+def diagonalize_2d_real_symmetric(
+    H: NDArray[Shape['2, 2'], Float64]
+) -> Tuple[NDArray[Shape['2'], Float64], NDArray[Shape['2, 2'], Float64]]:
     a = H[0, 0]
     b = H[1, 1]
     c = H[0, 1]
@@ -169,26 +149,16 @@ def diagonalize_2d_real_symmetric(H: ArrayLike) -> Tuple[ArrayLike, ArrayLike]:
     return evals, evecs
 
 def diabatic_to_adiabatic(
-    O: ArrayLike,
-    U: ArrayLike,
-    out: Union[ArrayLike, None]=None
-)-> ArrayLike:
-    if out is not None:
-        np.dot(O, U, out=out)
-        np.dot(U.conjugate().T, out, out=out)
-    else:
-        return np.dot(U.conjugate().T, np.dot(O, U))
+    O: GenericOperator,
+    U: GenericOperator,
+)-> GenericOperator:
+    return np.dot(U.conjugate().T, np.dot(O, U))
 
 def adiabatic_to_diabatic(
-    O: ArrayLike,
-    U: ArrayLike,
-    out: Union[ArrayLike, None]=None
-) -> ArrayLike:
-    if out is not None:
-        np.dot(U, O, out=out)
-        np.dot(out, U.conjugate().T, out=out)
-    else:
-        return np.dot(U, np.dot(O, U.conjugate().T))
+    O: GenericOperator,
+    U: GenericOperator,
+) -> GenericOperator:
+    return np.dot(U, np.dot(O, U.conjugate().T))
 
 # %%
 def _evaluate_tullyone_hamiltonian(t, r, model):
@@ -201,7 +171,7 @@ def _evaluate_tullyone_hamiltonian(t, r, model):
     for ii, rr in enumerate(r):
         H = model.H(t, rr)
         dHdR = model.dHdR(t, rr)
-        evals, evecs = diagonalize_hamiltonian_history(H, model.last_evecs)
+        evals, evecs = diagonalize_hamiltonian(H, model.last_evecs)
         model.update_last_evecs(evecs)
 
         d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
@@ -223,7 +193,7 @@ def _evaluate_tullyone_floquet_hamiltonian(t, r, model):
         # R = np.array([rr])
         H = model.H(t, rr)
         dHdR = model.dHdR(t, rr)
-        evals, evecs = diagonalize_hamiltonian_history(H, model.last_evecs)
+        evals, evecs = diagonalize_hamiltonian(H, model.last_evecs)
         model.update_last_evecs(evecs)
         # print(f"{np.linalg.det(evecs)=}")
         # evals, evecs = diagonalize_hamiltonian_history(H, model.last_evecs)
@@ -323,7 +293,7 @@ def _test_enforce_gauge_main(pulse_type):
     h_tullyone = get_tullyone(
         t0=t0, Omega=Omega, tau=120,
         pulse_type=pulse_type,
-        td_method=TD_Methods.FLOQUET, NF=NF
+        NF=NF
     )
     # from negative to positive
 
@@ -337,7 +307,7 @@ def _test_enforce_gauge_main(pulse_type):
     h_tullyone = get_tullyone(
         t0=t0, Omega=Omega, tau=120,
         pulse_type=pulse_type,
-        td_method=TD_Methods.FLOQUET, NF=NF
+        NF=NF
     )
 
     # from positive to negative
@@ -349,7 +319,7 @@ def _test_enforce_gauge_main(pulse_type):
 
 # %%
 if __name__ == "__main__":
-    from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes, TD_Methods
+    from pymddrive.models.tullyone import get_tullyone, TullyOnePulseTypes
     # _test_enforce_gauge_main(pulse_type=TullyOnePulseTypes.NO_PULSE)
     _test_enforce_gauge_main(pulse_type=TullyOnePulseTypes.PULSE_TYPE1)
 # %%

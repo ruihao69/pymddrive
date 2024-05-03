@@ -24,17 +24,17 @@ Eigen::VectorXd ehrenfest_meanF_diabatic(
     Eigen::Ref<const State_t> rho_or_psi  // density matrix or wavefunction
 );
 
-template <typename TENSOR_OP_t>
+template <typename TENSOR_OP_t, typename F_t>
 Eigen::VectorXd ehrenfest_meanF_adiabatic(
-    Eigen::Ref<const RowMatrixXcd> F,            // forces on PESs (electronic, nuclear)
+    Eigen::Ref<const F_t> F,            // forces on PESs (electronic, nuclear)
     Eigen::Ref<const Eigen::VectorXd> eig_vals,  // eigenvalues of the Hamiltonian
     const TENSOR_OP_t& dc,                       // non-adiabatic coupling
     Eigen::Ref<const Eigen::VectorXcd> psi       // wavefunction
 );
 
-template <typename TENSOR_OP_t>
+template <typename TENSOR_OP_t, typename F_t>
 Eigen::VectorXd ehrenfest_meanF_adiabatic(
-    Eigen::Ref<const RowMatrixXcd> F,            // forces on PESs (electronic, nuclear)
+    Eigen::Ref<const F_t> F,            // forces on PESs (electronic, nuclear)
     Eigen::Ref<const Eigen::VectorXd> eig_vals,  // eigenvalues of the Hamiltonian
     const TENSOR_OP_t& dc,                       // non-adiabatic coupling
     Eigen::Ref<const RowMatrixXcd> rho           // density matrix

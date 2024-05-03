@@ -163,6 +163,9 @@ cython_debug/
 *.npz
 *.pdf
 *.dat
+*.nc
+*.nc4
+*.ncdf
 
 # nohup 
 nohup.out

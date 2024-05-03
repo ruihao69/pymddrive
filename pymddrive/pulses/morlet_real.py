@@ -1,53 +1,41 @@
 # %% The package
+import attr
+from attrs import define, field
 import numpy as np
 
+from pymddrive.my_types import AnyNumber, RealNumber
 from pymddrive.pulses.pulse_base import PulseBase
 
+@define
 class MorletReal(PulseBase):
-    def __init__(
-        self,
-        A: float = 1,
-        t0: float = 0,
-        tau: float = 1,
-        Omega: float = 1,
-        phi: float = 0,
-        cache_length: int = 40
-    ):
-        super().__init__(Omega=Omega, cache_length=cache_length)
-        self.A = A
-        self.t0 = t0
-        self.tau = tau
-        self.phi = phi
-        if not isinstance(self.Omega, float):
-            raise ValueError(f"For MorletReal, the carrier frequency {self.Omega=} should be a real number, not {type(self.Omega)}.")
+    A: AnyNumber = field(on_setattr=attr.setters.frozen)
+    t0: RealNumber = field(on_setattr=attr.setters.frozen)
+    tau: RealNumber = field(on_setattr=attr.setters.frozen)
+    Omega: RealNumber = field(on_setattr=attr.setters.frozen)
+    phi: RealNumber = field(on_setattr=attr.setters.frozen)
+    
 
-    def __repr__(self) -> str:
-        return f"MorletReal(A={self.A}, t0={self.t0}, tau={self.tau}, Omega={self.Omega}, phi={self.phi})"
-
-    def __call__(self, time: float):
-        return super().__call__(time)
-
-    def _pulse_func(self, time: float) -> float:
-        self.Omega: float
+    def _pulse_func(self, time: RealNumber) -> AnyNumber:
         return MorletReal.real_morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
 
     @staticmethod
     def real_morlet_pulse(
-        A: float,
-        t0: float,
-        tau: float,
-        Omega: float,
-        phi: float,
-        time: float
-    ):
+        A: AnyNumber,
+        t0: RealNumber,
+        tau: RealNumber,
+        Omega: RealNumber,
+        phi: RealNumber,
+        time: RealNumber
+    ) -> RealNumber:
+        # fully real-valued Morlet wavelet
         # return A * np.cos(Omega * (time - t0) + phi) * np.exp(-0.5 * (time - t0)**2 / tau**2)
+        
+        # real-valued Morlet wavelet without the phase factor
         return A * np.cos(Omega * time) * np.exp(-0.5 * (time - t0)**2 / tau**2)
     
 # %% The temperary testting/debugging code
 def _test_debug_morlet_real():
     import matplotlib.pyplot as plt
-    import scienceplots
-    plt.style.use('science')
     p1 = MorletReal(A=1, t0=4, tau=1, Omega=10, phi=0)
     t = np.linspace(-0, 12, 3000)
     sig = [p1(tt) for tt in t]

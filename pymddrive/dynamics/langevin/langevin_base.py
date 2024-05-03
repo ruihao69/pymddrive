@@ -1,48 +1,44 @@
 import numpy as np
-from numpy.typing import NDArray
+
+from pymddrive.my_types import RealVector
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Union
+
 
 class LangevinBase(ABC):
-    # def __init__(self, kT: Optional[float]=None) -> None:
-    #     self.kT: float = kT if kT is not None else None
-    #     self.beta: float = 1.0 / kT if kT is not None else None
-        
-    def __repr__(self) -> str:
-        return f"LangevinBase(kT={self.kT})"
     
     @abstractmethod
-    def get_gamma(self, t: float, R: Optional[NDArray[np.float64]]=None) -> NDArray[np.float64]:
+    def get_gamma(self, t: float, R: RealVector) -> Union[float, RealVector]:
         pass
     
     @abstractmethod
-    def get_mass(self) -> Optional[float]:
+    def get_mass(self) -> Union[float, RealVector]:
         pass
     
     @abstractmethod
-    def get_kT(self) -> Optional[float]:
+    def get_kT(self) -> float:
         pass
     
     @abstractmethod
-    def get_beta(self) -> Optional[float]:
+    def get_beta(self) -> float:
         pass
     
     def frictional_force(
         self,
-        gamma: NDArray[np.float64],
-        P: NDArray[np.float64],
-    ) -> NDArray[np.float64]:
+        gamma: Union[float, RealVector],
+        P: RealVector,
+    ) -> RealVector:
         return -gamma * P
     
     def random_force(
         self,
         dt: float,
         kT: float,
-        mass: Union[float, NDArray[np.float64]],
-        gamma: NDArray[np.float64],
-        P: NDArray[np.float64],
-    ) -> NDArray[np.float64]:
+        mass: Union[float, RealVector],
+        gamma: Union[float, RealVector],
+        P: RealVector,
+    ) -> RealVector:
         random_force = np.zeros_like(P)
         D = kT * gamma * mass
         random_force[:] = np.random.normal(0, 1, P.shape) * np.sqrt(2 * D / dt)
@@ -51,11 +47,10 @@ class LangevinBase(ABC):
     def evaluate_langevin(
         self,
         t: float,
-        R: NDArray[np.float64],
-        P: NDArray[np.float64],
+        R: RealVector,
+        P: RealVector,
         dt: float,
-    ) -> NDArray[np.float64]:
-        # get all the necessary parameters 
+    ) -> RealVector:
         gamma = self.get_gamma(t, R)
         mass = self.get_mass()
         kT = self.get_kT()
@@ -63,7 +58,3 @@ class LangevinBase(ABC):
         friction = self.frictional_force(gamma, P)
         random_force = self.random_force(dt, kT, mass, gamma, P)
         return friction + random_force 
-        # return friction
-    
-    
-    

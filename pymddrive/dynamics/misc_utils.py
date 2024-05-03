@@ -9,7 +9,7 @@ from pymddrive.integrators.rungekutta import evaluate_initial_dt
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, nac_phase_following
 from pymddrive.dynamics.options import BasisRepresentation
 
-from typing import Tuple, Any
+from typing import Tuple, Any, Optional
 from numbers import Real
 from collections import namedtuple
 
@@ -18,11 +18,11 @@ HamiltonianRetureType = namedtuple('HamiltonianRetureType', 'H, dHdR, evals, eve
 
 def eval_nonadiabatic_hamiltonian(
     t: float, R: ArrayLike, hamiltonian: HamiltonianBase, 
-    basis_rep: BasisRepresentation=BasisRepresentation.Adiabatic,
+    basis_rep: BasisRepresentation=BasisRepresentation.ADIABATIC,
     eval_deriv_cp: bool=False,
 ) -> HamiltonianRetureType: 
     flag_reshape = False
-    flag_evec_following = True if basis_rep == BasisRepresentation.Adiabatic else False
+    flag_evec_following = True if basis_rep == BasisRepresentation.ADIABATIC else False
     # flag_evec_following = False
     if R.shape[0] == 1:
         H, dHdR, evals, evecs = evaluate_hamiltonian(t, R[0], hamiltonian, enable_evec_following=flag_evec_following)
@@ -77,8 +77,19 @@ def valid_real_positive_value(value: Real) -> bool:
     else:
         return False, flag_pos, flag_real
     
-def assert_valid_real_positive_value(value: Real) -> None:
+def assert_valid_real_positive_value(value: float) -> None:
     flag, flag_pos, flag_real = valid_real_positive_value(value)
     if not flag:
         raise ValueError(f"The value {value} is not a valid real positive number. The flags are {flag_pos=}, {flag_real=}.")
+    
+def numerate_file_name(file_name: str, n: int, suffix: Optional[str]=None) -> str:
+    splited_name = file_name.split('.') 
+    extention = splited_name[-1]
+    file_name = '.'.join(splited_name[:-1])
+    numbers = f"{n:05d}"
+    if suffix is not None:
+        return ".".join([file_name, numbers, suffix, extention])
+    else:
+        return ".".join([file_name, numbers, extention])
+    
 # %%

@@ -1,5 +1,6 @@
 import numpy as np
 from numpy.typing import ArrayLike
+from netCDF4 import Dataset 
 
 import os
 import logging
@@ -43,3 +44,15 @@ def get_ncpus():
         ncpus = cpu_count()
 
     return ncpus
+
+def is_empty_ncdf(nc_filename: str) -> bool: 
+    nc = Dataset(nc_filename, 'r')
+    if len(nc.variables) == 0:
+        return True
+    else:
+        vars_ = nc.variables
+        if all([len(vars_[var]) == 0 for var in vars_]):
+            return True
+        else:
+            return False
+    

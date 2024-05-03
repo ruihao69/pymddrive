@@ -26,9 +26,9 @@ Eigen::VectorXd ehrenfest_meanF_diabatic(
   return -get_expected_value(dHdR, rho_or_psi);
 }
 
-template <typename TENSOR_OP_t>
+template <typename TENSOR_OP_t, typename F_t>
 Eigen::VectorXd ehrenfest_meanF_adiabatic(
-    Eigen::Ref<const RowMatrixXd> F,             // forces on PESs
+    Eigen::Ref<const F_t> F,                     // forces on PESs
     Eigen::Ref<const Eigen::VectorXd> eig_vals,  // eigenvalues of the Hamiltonian
     const TENSOR_OP_t& dc,                       // non-adiabatic coupling
     Eigen::Ref<const RowMatrixXcd> rho           // density matrix
@@ -36,7 +36,7 @@ Eigen::VectorXd ehrenfest_meanF_adiabatic(
   Eigen::VectorXd meanF = Eigen::VectorXd::Zero(F.cols());
   for (int kk = 0; kk < F.cols(); ++kk) {
     for (int ii = 0; ii < F.rows(); ++ii) {
-      meanF(kk) += rho(ii, ii).real() * F(ii, kk);
+      meanF(kk) += std::real(rho(ii, ii) * F(ii, kk));
       for (int jj = ii + 1; jj < F.rows(); ++jj) {
         const double dE = eig_vals(jj) - eig_vals(ii);
         const std::complex<double> rho_ij_dc_ji = rho(ii, jj) * dc(jj, ii, kk);
@@ -47,9 +47,9 @@ Eigen::VectorXd ehrenfest_meanF_adiabatic(
   return meanF;
 }
 
-template <typename TENSOR_OP_t>
+template <typename TENSOR_OP_t, typename F_t>
 Eigen::VectorXd ehrenfest_meanF_adiabatic(
-    Eigen::Ref<const RowMatrixXd> F,             // forces on PESs
+    Eigen::Ref<const F_t> F,                     // forces on PESs
     Eigen::Ref<const Eigen::VectorXd> eig_vals,  // eigenvalues of the Hamiltonian
     const TENSOR_OP_t& dc,                       // non-adiabatic coupling
     Eigen::Ref<const Eigen::VectorXcd> psi       // wavefunction
@@ -57,7 +57,7 @@ Eigen::VectorXd ehrenfest_meanF_adiabatic(
   Eigen::VectorXd meanF = Eigen::VectorXd::Zero(F.cols());
   for (int kk = 0; kk < F.cols(); ++kk) {
     for (int ii = 0; ii < F.rows(); ++ii) {
-      meanF(kk) += rho_ij_real(psi(ii), psi(ii)) * F(ii, kk);
+      meanF(kk) += std::real(rho_ij(psi(ii), psi(ii)) * F(ii, kk));
       for (int jj = ii + 1; jj < F.rows(); ++jj) {
         const double dE = eig_vals(jj) - eig_vals(ii);
         const std::complex<double> rho_ij_dc_ji = rho_ij(psi(jj), psi(ii)) * dc(jj, ii, kk);
