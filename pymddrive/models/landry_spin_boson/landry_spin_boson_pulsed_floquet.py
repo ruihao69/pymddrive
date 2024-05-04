@@ -97,6 +97,28 @@ class LandrySpinBosonPulsedFloquet(QuasiFloquetHamiltonianBase):
         """
         return np.zeros((self.dim, self.dim, R.shape[-1]))
     
+    def transition_dipole(self, R: RealVector) -> RealOperator:
+        """The transition dipole operator.
+
+        Args:
+            R (RealVector): The nuclear coordinate
+
+        Returns:
+            RealOperator: The transition dipole operator
+        """
+        return self.mu * np.array([[0, 1], [1, 0]])
+    
+    def transition_dipole_gradient(self, R: RealVector) -> RealVectorOperator:
+        """The gradient of the transition dipole operator.
+
+        Args:
+            R (RealVector): The nuclear coordinate
+
+        Returns:
+            RealVectorOperator: Zero matrix (since the dipole does not depend on the nuclear coordinate yet)
+        """
+        return np.zeros((self.dim, self.dim, R.shape[-1]))
+    
     def H0(self, R: RealVector) -> GenericOperator:
         # nuclear potential (on the diagonal)
         U = LandrySpinBoson.U(self.M, self.Omega_nuclear, R)
@@ -112,7 +134,8 @@ class LandrySpinBosonPulsedFloquet(QuasiFloquetHamiltonianBase):
     
     def H1(self, t: float, R: RealVector) -> GenericOperator:
         # light-matter interaction term
-        mu = self.permanent_dipole(R)
+        # mu = self.permanent_dipole(R)
+        mu = self.transition_dipole(R)
         Et = self.envelope_pulse(t)
         return mu_Et(mu, Et)
     
@@ -129,7 +152,8 @@ class LandrySpinBosonPulsedFloquet(QuasiFloquetHamiltonianBase):
         t: float,
         R: RealVector,
     ) -> GenericVectorOperator:
-        return dmu_dR_Et(self.permanent_dipole_gradient(R), self.envelope_pulse(t))
+        # return dmu_dR_Et(self.permanent_dipole_gradient(R), self.envelope_pulse(t))
+        return dmu_dR_Et(self.transition_dipole_gradient(R), self.envelope_pulse(t))
     
     @staticmethod
     def spin_boson_offset(
