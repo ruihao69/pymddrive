@@ -1,4 +1,6 @@
 # %%
+import numpy as np
+
 from pymddrive.pulses import PulseBase as Pulse
 # Continuous Wave pulses
 from pymddrive.pulses import SineSquareEnvelope, SineSquarePulse
@@ -18,6 +20,7 @@ def get_landry_spin_boson(
     Omega: Optional[float] = None, # laser carrier frequency
     N: Optional[int] = None,       # number of laser cycles in sine-squared pulse
     phi: Optional[float] = None,   # laser carrier phase
+    t0: Optional[float] = None,    # time delay for Morlet pulse
     pulse_type: str = 'no_pulse',  # valid values are encompassed in LandryPulseTypes enum class
     NF: Optional[int] = None,      # number of Floquet replicas
     Omega_nuclear: Optional[float] = 0.021375,
@@ -72,7 +75,25 @@ def get_landry_spin_boson(
         else:
             raise ValueError(f"Invalid number of Floquet replicas: {NF}. Should be an integer or None. Got {type(NF)}")
     elif pulse_type_enum == LandryPulseTypes.MORLET_REAL:
-        raise NotImplementedError(f"Only CW(sine-squared) pulses are implemented for now.")
+        # raise NotImplementedError(f"Only CW(sine-squared) pulses are implemented for now.")
+        if not all([
+            isinstance(E0, float),
+            isinstance(Omega, float),
+            isinstance(N, int),
+            isinstance(phi, float),
+            isinstance(t0, float),
+        ]): 
+            raise ValueError(f"Invalid pulse parameters: E0={E0}, Omega={Omega}, N={N}, phi={phi}, t0={t0}.")
+        T_period = 2 * np.pi / Omega
+        tau = T_period * N
+        ultrafast_pulse = MorletReal(Omega=Omega, A=E0, t0=t0, tau=tau, phi=phi)
+        envelope_pulse = Gaussian.from_quasi_floquet_morlet_real(ultrafast_pulse)
+        if NF is None:
+            # initialize the TD Hamiltonian
+            return LandrySpinBosonPulsed(Omega_nuclear=Omega_nuclear, M=M, V=V, Er=Er, epsilon0=epsilon0, gamma=gamma, kT=kT, mu=mu, pulse=ultrafast_pulse)
+        elif isinstance(NF, int):
+            # initialize the Floquet Hamiltonian
+            return LandrySpinBosonPulsedFloquet(Omega_nuclear=Omega_nuclear, M=M, V=V, Er=Er, epsilon0=epsilon0, gamma=gamma, kT=kT, mu=mu, ultrafast_pulse=ultrafast_pulse, envelope_pulse=envelope_pulse, NF=NF)
     else:
         raise KeyError(f"Invalid pulse type: {pulse_type}. The valid pulse types are: {LandryPulseTypes.__members__.keys()}")
                 
