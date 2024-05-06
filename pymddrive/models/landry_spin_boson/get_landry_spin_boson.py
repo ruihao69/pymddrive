@@ -85,7 +85,8 @@ def get_landry_spin_boson(
         ]): 
             raise ValueError(f"Invalid pulse parameters: E0={E0}, Omega={Omega}, N={N}, phi={phi}, t0={t0}.")
         T_period = 2 * np.pi / Omega
-        tau = T_period * N
+        # this is ad hoc
+        tau = T_period * N / 3 # pulse duration defaults to N times the period of the carrier frequency
         ultrafast_pulse = MorletReal(Omega=Omega, A=E0, t0=t0, tau=tau, phi=phi)
         envelope_pulse = Gaussian.from_quasi_floquet_morlet_real(ultrafast_pulse)
         if NF is None:
