@@ -108,10 +108,10 @@ def get_coarse_grained_diabatic_rhoF(
     # fill_coherence_2(rho, rho_coarse_grain, active_surface[0])
     # active_state_adiabatic = np.zeros(rho.shape[0], dtype=np.float64)
     # active_state_adiabatic[active_surface[0]] = 1.0
-    
+
     # Adiabatic to diabatic
-    # coarse_grain_rho_diabatic = adiabatic_to_diabatic(rho_coarse_grain, evecs_F)
-    coarse_grain_rho_diabatic = diabatic_to_adiabatic(rho_coarse_grain, evecs_F)
+    coarse_grain_rho_diabatic = adiabatic_to_diabatic(rho_coarse_grain, evecs_F)
+    # coarse_grain_rho_diabatic = diabatic_to_adiabatic(rho_coarse_grain, evecs_F)
     return coarse_grain_rho_diabatic
 
 def compute_floquet_populations_from_rho_ddd(
@@ -150,8 +150,8 @@ def compute_floquet_populations_from_rho_add(
 ) -> RealVector:
     rho_F_diab = get_coarse_grained_diabatic_rhoF(rho, evecs_F, active_surface)
     return ehrenfest_compute_floquet_populations_from_rho_ddd(rho_F_diab, Omega, t, NF, dim, evecs_0, evecs_F)
-    
-    
+
+
 def compute_floquet_populations_from_rho_ada(
     rho: GenericOperator,
     Omega: float,
