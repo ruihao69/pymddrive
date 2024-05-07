@@ -41,6 +41,18 @@ class ResonantDoubleWell:
     kT: float = 0.00095
     lambd: float = np.sqrt(Er * M * Omega_nuclear**2 / 2)
     
+@dataclass(frozen=True)
+class AmberJCTC2016:
+    Omega_nuclear: float = 0.0009113    
+    M: float = 1836
+    V: float = 0.000228
+    Er: float = 0.029042
+    epsilon0: float = 0.05695
+    kT: float = 0.0018224881 # 575.5 K
+    gamma: float = 0.0009113 # moderate friction
+    lambd: float = np.sqrt(Er * M * Omega_nuclear**2 / 2)
+    
+    
     
 def main(landry_p, label: str):
     import numpy as np
