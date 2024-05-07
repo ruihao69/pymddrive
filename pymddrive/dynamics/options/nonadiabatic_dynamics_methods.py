@@ -4,3 +4,4 @@ from enum import Enum, unique
 class NonadiabaticDynamicsMethods(Enum):
     EHRENFEST = 'Ehrenfest'
     FSSH = 'FSSH'
+    AFSSH = 'A-FSSH'

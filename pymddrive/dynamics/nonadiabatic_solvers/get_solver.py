@@ -5,6 +5,7 @@ from pymddrive.dynamics.options import NonadiabaticDynamicsMethods, BasisReprese
 from pymddrive.dynamics.nonadiabatic_solvers.nonadiabatic_solver_base import NonadiabaticSolverBase
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest import Ehrenfest
 from pymddrive.dynamics.nonadiabatic_solvers.fssh import FSSH
+from pymddrive.dynamics.nonadiabatic_solvers.afssh import AFSSH
 
 from copy import deepcopy
 
@@ -31,6 +32,13 @@ def get_solver(
         )
     elif method == NonadiabaticDynamicsMethods.FSSH:
         return FSSH.initialize(
+            state=s0_local,
+            hamiltonian=hamiltonian_local,
+            basis_representation=dynamics_basis,
+            dt=dt
+        )
+    elif method == NonadiabaticDynamicsMethods.AFSSH:
+        return AFSSH.initialize(
             state=s0_local,
             hamiltonian=hamiltonian_local,
             basis_representation=dynamics_basis,
