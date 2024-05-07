@@ -123,6 +123,7 @@ def run_landry_spin_boson(
             rho0_ii = evecs.T.conjugate() @ rho0[ii] @ evecs
             rho0[ii] = rho0_ii
             
+    mass = hamiltonian.M
     s0_list = [get_state(mass=mass, R=R0[ii], P=P0[ii], rho_or_psi=rho0[ii]) for ii in range(n_ensemble)]
     
     # get the dynamics ensemble

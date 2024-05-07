@@ -10,7 +10,7 @@ from pymddrive.dynamics.nonadiabatic_solvers.math_utils import adiabatic_equatio
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.fssh_math_utils import initialize_active_surface
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.populations import compute_floquet_populations, compute_populations
 from pymddrive.dynamics.nonadiabatic_solvers.afssh.aux_variables import AuxVariables
-from pymddrive.dynamics.nonadiabatic_solvers.afssh.afssh_math_utils import compute_delta_op_tilde, evaluate_delta_F
+from pymddrive.dynamics.nonadiabatic_solvers.afssh.afssh_math_utils import evaluate_delta_F, tildify_diagonal_operator, un_tildify_diagonal_operator
 from pymddrive.dynamics.nonadiabatic_solvers.afssh.aux_variables_vv import delta_R_dot, delta_P_dot
 from pymddrive.dynamics.nonadiabatic_solvers.afssh.afssh_decoherence import afssh_decoherence
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization
@@ -57,17 +57,17 @@ class AFSSH(NonadiabaticSolverBase):
         # A-FSSH decoherence: Diagonal approximation of the equations of motion 
         # for the moments delta_R and delta_P
         # --- evaluate the new delta_F_tilde, and update the auxiliary variables
-        delta_F_prev_tilde = self.auxvars.delta_F_prev_tilde.copy()
-        delta_F = evaluate_delta_F(F, new_active_surface)
-        delta_F_tilde = compute_delta_op_tilde(delta_F, evecs)
-        self.auxvars.delta_F_prev_tilde[:] = delta_F_tilde
+        delta_F_prev_tilde = self.auxvars.delta_F_prev.copy() # F_tilde(t0) = F(t0)
+        delta_F = evaluate_delta_F(F, new_active_surface)     # evaluate F(t0+dt)
+        self.auxvars.delta_F_prev[:] = delta_F                # update F(t0+dt)
+        delta_F_tilde = tildify_diagonal_operator(delta_F, evecs) # evaulate F_tilde(t0+dt)
         
         # --- evaluate the new delta_R_tilde, and update the auxiliary variables
         rho_diabatic = adiabatic_to_diabatic(rho, evecs)
         delta_R_tilde = delta_R_dot(self.auxvars.delta_R, self.auxvars.delta_P, delta_F_prev_tilde, mass, dt, rho_diabatic)
         delta_P_tilde = delta_P_dot(self.auxvars.delta_P, delta_F_prev_tilde, delta_F_tilde, dt, rho_diabatic)
-        delta_R = compute_delta_op_tilde(delta_R_tilde, evecs)
-        delta_P = compute_delta_op_tilde(delta_P_tilde, evecs)
+        delta_R = un_tildify_diagonal_operator(delta_R_tilde, evecs)
+        delta_P = un_tildify_diagonal_operator(delta_P_tilde, evecs)
         
         # --- apply the decoherence to the density matrix and the auxiliary variables
         # --- update the density matrix and the auxiliary variables
@@ -162,11 +162,10 @@ class AFSSH(NonadiabaticSolverBase):
         
         # initialize the auxiliary variables
         delta_F = evaluate_delta_F(F, active_surface)
-        delta_F_tilde = compute_delta_op_tilde(delta_F, evecs)
         auxvars = AuxVariables(
             delta_R=np.zeros((dim_hamiltonian, dim_nuclear), dtype=np.float64),
             delta_P=np.zeros((dim_hamiltonian, dim_nuclear), dtype=np.float64),
-            delta_F_prev_tilde=delta_F_tilde
+            delta_F_prev=delta_F,
         )
         
         return cls(

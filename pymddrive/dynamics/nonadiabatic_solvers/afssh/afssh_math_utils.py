@@ -11,7 +11,7 @@ def evaluate_delta_F(
     return F - F[lambd, :]
 
 @njit
-def compute_delta_op_tilde(
+def tildify_diagonal_operator(
     delta_op: GenericDiagonalVectorOperator,
     evecs: GenericOperator
 ) -> GenericDiagonalVectorOperator:
@@ -22,4 +22,17 @@ def compute_delta_op_tilde(
         for kk in range(dim):
             delta_op_tilde[jj] = np.abs(evecs[jj, kk])**2 * delta_op[kk]
             
-    return delta_op_tilde
+    return delta_op_tilde    
+
+def un_tildify_diagonal_operator(
+    delta_op_tilde: GenericDiagonalVectorOperator,
+    evecs: GenericOperator
+) -> GenericDiagonalVectorOperator:
+    dim: int = evecs.shape[0]
+    delta_op = np.zeros_like(delta_op_tilde)
+    
+    for jj in range(dim):
+        for kk in range(dim):
+            delta_op[jj] += np.abs(evecs[kk, jj])**2 * delta_op_tilde[kk]
+            
+    return delta_op
