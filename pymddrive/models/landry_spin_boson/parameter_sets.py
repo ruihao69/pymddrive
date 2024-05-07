@@ -31,8 +31,8 @@ class SymmetricDoubleWell:
     
 @dataclass(frozen=True)
 class ResonantDoubleWell:  
-    Omega_nuclear: float = 0.0085
-    M: float = 7.466666666666667
+    Omega_nuclear: float = 0.001002 # 220 cm-1
+    M: float = 1836 # proton mass in atomic units
     V: float = 0.0005 # weak coupling
     Er: float = 0.00475
     epsilon0: float = 0.05695 # energy difference between the two wells
