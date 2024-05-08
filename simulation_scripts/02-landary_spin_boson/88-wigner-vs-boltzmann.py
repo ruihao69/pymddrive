@@ -29,7 +29,7 @@ def sample_wigner(R_eq, mass, Omega, kT, n_samples):
     R_list = np.random.normal(R_eq, sigma_R, n_samples)
     return R_list, P_list    
 
-def plot_distribution_over_PES(R, H, E, R_list_bolz, R_list_wign):
+def plot_distribution_over_PES(R, H, E, R_list_bolz, R_list_wign, R_donor, R_acceptor, E_donor_eq, E_acceptor_eq):
     dim: int = H.shape[0]
     
     fig = plt.figure(dpi=300)
@@ -50,6 +50,17 @@ def plot_distribution_over_PES(R, H, E, R_list_bolz, R_list_wign):
     l3, = ax_two.plot(r_bins, hist, c='purple', label='Wigner distribution')
     handles.append(l3)
     
+    ax.axvline(R_donor, ls='-.', c='k', alpha=0.5)  
+    ax.axvline(R_acceptor, ls='-.', c='k', alpha=0.5)
+    
+    ax.axhline(E_donor_eq, ls='--', c='k', alpha=0.5)
+    ax.axhline(E_acceptor_eq, ls='--', c='k', alpha=0.5)
+    
+    au2eV = 27.211386245988
+    dE = E_donor_eq - E_acceptor_eq
+    
+    print(f"Energy difference: {dE * au2eV} eV")
+    
     
     ax.set_xlabel("R")
     ax.set_ylabel("Energy")
@@ -60,7 +71,7 @@ def plot_distribution_over_PES(R, H, E, R_list_bolz, R_list_wign):
     
 
 def main():
-    hamiltonian = get_landry_spin_boson(param_set="ResonantDoubleWell")
+    hamiltonian = get_landry_spin_boson(param_set="MarcusNormalRegime")
     mass = hamiltonian.M
     kT = hamiltonian.kT
     Omega = hamiltonian.Omega_nuclear
@@ -72,7 +83,7 @@ def main():
     COM = R_list_bolz.mean()
     L = R_list_bolz.max() - R_list_bolz.min()
     N = 1000
-    r = np.linspace(COM - 3 * L, COM + 3 * L, 1000)
+    r = np.linspace(COM - L, COM + L, 1000)
     H = np.zeros((2, 2, N))
     E = np.zeros((2, N))
     
@@ -81,9 +92,19 @@ def main():
         evals, _ = np.linalg.eigh(_H)
         H[:, :, ii] = _H
         E[:, ii] = evals
+    R_donor = hamiltonian.get_donor_R()
+    R_acceptor = hamiltonian.get_acceptor_R()
+    print(f"R_donor: {R_donor}, R_acceptor: {R_acceptor}")
     
-    plot_distribution_over_PES(r, H, E, R_list_bolz, R_list_wign)
-    plot_distribution_over_PES(r, H, E, P_list_bolz, P_list_wign)
+    def get_H_diag(r):
+        H = hamiltonian.H(0.0, r)
+        return H.diagonal()
+    
+    E_donor_eq = get_H_diag(R_donor)[0]
+    E_acceptor_eq = get_H_diag(R_acceptor)[1]   
+    
+    plot_distribution_over_PES(r, H, E, R_list_bolz, R_list_wign, R_donor, R_acceptor, E_donor_eq, E_acceptor_eq)
+    # plot_distribution_over_PES(r, H, E, P_list_bolz, P_list_wign)
      
     
 # %%

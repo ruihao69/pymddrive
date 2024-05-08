@@ -52,6 +52,17 @@ class AmberJCTC2016:
     gamma: float = 0.0009113 # moderate friction
     lambd: float = np.sqrt(Er * M * Omega_nuclear**2 / 2)
     
+@dataclass(frozen=True)
+class MarcusNormalRegime:
+    Omega_nuclear: float = 0.001823
+    M: float = 1836
+    V: float = 0.0054676
+    Er: float = 0.029042
+    epsilon0: float = 0.020 # 0.5442 eV
+    kT: float = 0.001823 # 300 K
+    gamma: float = 0.0054676 # moderate friction
+    lambd: float = np.sqrt(Er * M * Omega_nuclear**2 / 2)
+    
     
     
 def main(landry_p, label: str):
