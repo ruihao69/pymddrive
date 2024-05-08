@@ -28,7 +28,7 @@ def initialize_active_surface_impl_rho(
         init_state += 1
     return init_state
 
-@njit
+# @njit
 def initialize_active_surface_impl_psi(
     psi: ComplexVector,
 ) -> int:

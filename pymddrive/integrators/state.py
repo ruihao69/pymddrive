@@ -22,7 +22,7 @@ def _preprocess_classical_variable(classical_var: Union[float, NDArray[np.float6
     return np_classical_var
 
 def _preprocess_quantum_variable(quantum_var: NDArray[np.complex128]) -> NDArray[np.complex128]:
-    if quantum_var.ndim != 2:
+    if (quantum_var.ndim != 2) and (quantum_var.ndim != 1):
         raise ValueError(f"Invalid shape for quantum variable: {quantum_var.shape}")
     return quantum_var if np.iscomplexobj(quantum_var) else quantum_var.astype(np.complex128)
 

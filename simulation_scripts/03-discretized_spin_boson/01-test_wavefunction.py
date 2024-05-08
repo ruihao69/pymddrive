@@ -75,27 +75,27 @@ def run_spin_boson(
     
     n_ensemble = R0.shape[0]
     
-    def get_initial_rho(NF: Optional[int]=None):
-        rho0 = np.zeros((2, 2), dtype=np.complex128)
-        rho0[init_state, init_state] = 1
+    def get_initial_psi(NF: Optional[int]=None):
+        psi0 = np.zeros(2, dtype=np.complex128)
+        psi0[init_state] = 1.0
         if NF is None:
-            return rho0
+            return psi0
         else:
-            zeros_like = np.zeros_like(rho0)
-            data = [zeros_like] * NF + [rho0] + [zeros_like] * NF
-            return sps.block_diag(data).toarray() 
+            raise NotImplementedError("Floquet dynamics with state vector psi0 is not implemented yet")
+    
         
     # initial states 
     t0 = 0.0
-    rho0 = [get_initial_rho(NF=NF) for _ in range(n_ensemble)]
+    # rho0 = [get_initial_rho(NF=NF) for _ in range(n_ensemble)]
+    psi0 = [get_initial_psi(NF=NF) for _ in range(n_ensemble)]
     if basis_rep == BasisRepresentation.ADIABATIC:
         for ii in range(n_ensemble):
             H = hamiltonian.H(t0, R0[ii])
             evals, evecs = np.linalg.eigh(H)
-            rho0_ii = evecs.T.conjugate() @ rho0[ii] @ evecs
-            rho0[ii] = rho0_ii
+            psi0_ii = evecs.T.conjugate() @ psi0[ii]
+            psi0[ii] = psi0_ii
             
-    s0_list = [get_state(mass=mass, R=R0[ii], P=P0[ii], rho_or_psi=rho0[ii]) for ii in range(n_ensemble)]
+    s0_list = [get_state(mass=mass, R=R0[ii], P=P0[ii], rho_or_psi=psi0[ii]) for ii in range(n_ensemble)]
     dynamics_list = []
     for ii in range(n_ensemble):
         dynamics = get_dynamics(
@@ -168,13 +168,13 @@ def main(
 if __name__ == "__main__":
     ntrajs = 16
     # project_prefix = "data_test"
-    # project_prefix = "data_ehrenfest_dibatic"
-    project_prefix = "data_fssh"
+    project_prefix = "data_ehrenfest_dibatic"
+    # project_prefix = "data_fssh"
     init_state = 0
     dt = 0.003
     
-    test_sampling()
-    main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.ZVODE, dt=dt)
+    # test_sampling()
+    main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, init_state=init_state, integrator=NumericalIntegrators.RK4, dt=dt)
     
     
 # %%

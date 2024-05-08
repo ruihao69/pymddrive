@@ -27,11 +27,11 @@ def expected_value_operator_density_matrix(operator: GenericOperator, density_ma
 def expected_value_vector_operator_wavefunction(v_operator: GenericVectorOperator, wavefunction: ComplexVector) -> RealVector:
     # note numpy functions like dots are faster on contiguous arrays
     # hence we take the hustle to copy the operator to a temporary contiguous array
-    _op = np.zeros((v_operator.shape[0], v_operator.shape[1]), dtype=v_operator.dtype)
+    _op = np.zeros((v_operator.shape[0], v_operator.shape[1]), dtype=np.complex128)
     result = np.zeros((v_operator.shape[2],), dtype=np.float64)
     for inuc in range(v_operator.shape[2]):
-        _op = np.ascontiguousarray(v_operator[..., inuc])
-        result[inuc] = np.dot(wavefunction.conj(), _op.dot(wavefunction)).real
+        _op[:] = np.ascontiguousarray(v_operator[..., inuc])
+        result[inuc] = np.dot(wavefunction.conj(), np.dot(_op, wavefunction)).real
     return result
 
 @njit
