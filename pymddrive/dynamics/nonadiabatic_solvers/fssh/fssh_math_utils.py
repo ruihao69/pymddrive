@@ -41,4 +41,3 @@ def initialize_active_surface_impl_psi(
             break
         init_state += 1
     return init_state
-    

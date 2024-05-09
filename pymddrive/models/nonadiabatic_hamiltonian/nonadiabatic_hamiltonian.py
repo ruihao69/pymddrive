@@ -29,7 +29,7 @@ def evaluate_nonadiabatic_couplings(
     
     _op = np.zeros((dHdR.shape[0], dHdR.shape[0]), dtype=dHdR.dtype)
     for kk in range(dHdR.shape[-1]):
-        _op = np.ascontiguousarray(dHdR[:, :, kk])
+        _op[:] = np.ascontiguousarray(dHdR[:, :, kk])
         d[:, :, kk] = np.dot(evecs.T.conjugate(), np.dot(_op, evecs))
     
     for ii in range(dHdR.shape[0]):
