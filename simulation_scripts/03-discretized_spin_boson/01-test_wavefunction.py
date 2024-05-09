@@ -148,7 +148,7 @@ def main(
     filename = get_filename(solver)
     
     # get the initial conditions
-    R0, P0 = boltzmann_sampling(ntrajs, hamiltonian.kT, hamiltonian.omega_alpha, hamiltonian.get_acceptor_R())
+    R0, P0 = boltzmann_sampling(ntrajs, hamiltonian.kT, hamiltonian.omega_alpha, hamiltonian.get_donor_R())
     run_spin_boson(
         R0=R0,
         P0=P0,
