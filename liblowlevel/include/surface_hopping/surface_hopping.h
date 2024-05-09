@@ -16,6 +16,8 @@ inline double b2_4ac(double a, double b, double c) {
   return b * b - 4.0 * a * c;
 }
 
+// --- Density matrix implementation of the surface hopping algorithm ---
+
 template <typename evecs_t>
 double evaluate_diabatic_state_population(
     int active_surface,
@@ -72,12 +74,12 @@ std::pair<bool, Eigen::RowVectorXd> momentum_rescale(
     const mass_t& mass                          // mass matrix
 );
 
-template <typename dc_tensor_t, typename mass_t, typename v_dot_d_t>
+template <typename dc_tensor_t, typename mass_t, typename v_dot_d_t, typename quantum_t>
     std::tuple<bool, int, Eigen::RowVectorXd> fssh_surface_hopping(
         double dt,
         int active_surface,
         Eigen::Ref<const Eigen::RowVectorXd> P_current,
-        Eigen::Ref<const RowMatrixXcd> rho,
+        Eigen::Ref<const quantum_t> rho_or_psi,
         Eigen::Ref<const Eigen::RowVectorXd> eig_vals,
         Eigen::Ref<const v_dot_d_t> v_dot_d,
         const dc_tensor_t& dc,
@@ -88,6 +90,23 @@ Eigen::Matrix<T, 1, Eigen::Dynamic> get_dc_component_at_ij(
     int ii,
     int jj,
     const Eigen::Tensor<T, 3>& dc);
+
+
+// --- Wavefunction implementation of the surface hopping algorithm ---
+template <typename v_dot_d_t>
+double evaluate_hopping_probability(
+    int active_surface,
+    int target_surface,
+    double dt,
+    Eigen::Ref<const v_dot_d_t> v_dot_d,
+    Eigen::Ref<const Eigen::VectorXcd> psi);
+
+template <typename v_dot_d_t>
+Eigen::RowVectorXd get_hopping_probabilities(
+    int active_surface,
+    double dt,
+    Eigen::Ref<const v_dot_d_t> v_dot_d,
+    Eigen::Ref<const Eigen::VectorXcd> psi);
 
 
 }  // namespace rhbi

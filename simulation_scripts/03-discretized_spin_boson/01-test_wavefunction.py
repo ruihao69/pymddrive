@@ -168,13 +168,13 @@ def main(
 if __name__ == "__main__":
     ntrajs = 16
     # project_prefix = "data_test"
-    project_prefix = "data_ehrenfest_dibatic"
-    # project_prefix = "data_fssh"
+    # project_prefix = "data_ehrenfest_dibatic"
+    project_prefix = "data_fssh"
     init_state = 0
     dt = 0.003
     
     # test_sampling()
-    main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, init_state=init_state, integrator=NumericalIntegrators.RK4, dt=dt)
+    main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.RK4, dt=dt)
     
     
 # %%

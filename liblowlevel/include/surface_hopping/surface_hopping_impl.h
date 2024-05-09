@@ -39,6 +39,7 @@ namespace rhbi {
         return populations;
     }
 
+    // --- Density matrix implementation of the surface hopping algorithm ---
     template <typename v_dot_d_t>
     double evaluate_hopping_probability(
         int active_surface,
@@ -63,6 +64,37 @@ namespace rhbi {
                 continue;
             }
             probabilities(ii) = evaluate_hopping_probability(active_surface, ii, dt, v_dot_d, rho);
+            probabilities(active_surface) -= probabilities(ii);
+        }
+        return probabilities;
+    }
+
+    // --- Wavefunction implementation of the surface hopping algorithm ---
+    template <typename v_dot_d_t>
+    double evaluate_hopping_probability(
+        int active_surface,
+        int target_surface,
+        double dt,
+        Eigen::Ref<const v_dot_d_t> v_dot_d,
+        Eigen::Ref<const Eigen::VectorXcd> psi) {
+        // double probability = -2.0 * dt * std::real(v_dot_d(active_surface, target_surface) * psi(target_surface) / psi(active_surface));
+        double probability = 2.0 * dt * std::real(v_dot_d(active_surface, target_surface) * psi(target_surface) / psi(active_surface));
+        return probability > 0.0 ? probability : 0.0;
+    }
+
+    template <typename v_dot_d_t>
+    Eigen::RowVectorXd get_hopping_probabilities(
+        int active_surface,
+        double dt,
+        Eigen::Ref<const v_dot_d_t> v_dot_d,
+        Eigen::Ref<const Eigen::VectorXcd> psi) {
+        Eigen::RowVectorXd probabilities = Eigen::RowVectorXd::Zero(psi.size());
+        probabilities(active_surface) = 1.0;
+        for (int ii = 0; ii < psi.size(); ++ii) {
+            if (ii == active_surface) {
+                continue;
+            }
+            probabilities(ii) = evaluate_hopping_probability(active_surface, ii, dt, v_dot_d, psi);
             probabilities(active_surface) -= probabilities(ii);
         }
         return probabilities;
@@ -98,17 +130,17 @@ namespace rhbi {
         }
     }
 
-    template <typename dc_tensor_t, typename mass_t, typename v_dot_d_t>
+    template <typename dc_tensor_t, typename mass_t, typename v_dot_d_t, typename quantum_t>
     std::tuple<bool, int, Eigen::RowVectorXd> fssh_surface_hopping(
         double dt,
         int active_surface,
         Eigen::Ref<const Eigen::RowVectorXd> P_current,
-        Eigen::Ref<const RowMatrixXcd> rho,
+        Eigen::Ref<const quantum_t> rho_or_psi,
         Eigen::Ref<const Eigen::RowVectorXd> eig_vals,
         Eigen::Ref<const v_dot_d_t> v_dot_d,
         const dc_tensor_t& dc,
         const mass_t& mass) {
-        Eigen::RowVectorXd hopping_probabilities = get_hopping_probabilities(active_surface, dt, v_dot_d, rho);
+        Eigen::RowVectorXd hopping_probabilities = get_hopping_probabilities(active_surface, dt, v_dot_d, rho_or_psi);
         int target_surface = hop(hopping_probabilities);
         if (target_surface == active_surface) {
             return std::make_tuple(false, active_surface, P_current);

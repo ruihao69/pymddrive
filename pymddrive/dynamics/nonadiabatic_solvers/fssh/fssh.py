@@ -52,10 +52,8 @@ class FSSH(NonadiabaticSolverBase):
         # print(f"{type(v_dot_d)=}, {v_dot_d.dtype=} {v_dot_d.shape=}")
         # print(f"{type(d)=}, {d.dtype=}, {d.shape=}")
         
-        rho = rho_or_psi if rho_or_psi.ndim == 2 else np.outer(rho_or_psi, rho_or_psi.conjugate())
-        
         hop_flag, new_active_surface, P_new = fssh_surface_hopping(
-            dt, current_active_surface[0], P_current, rho, evals, v_dot_d, d, mass
+            dt, current_active_surface[0], P_current, rho_or_psi, evals, v_dot_d, d, mass
         )
         
         # update the cache 
