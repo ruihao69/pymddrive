@@ -23,11 +23,10 @@ def test_sampling():
     hamiltonian = get_spin_boson(n_classic_bath=n_modes)
     initial_state = 0
     w_alpha = hamiltonian.omega_alpha
-    R_eq = hamiltonian.get_donor_R() if initial_state == 0 else hamiltonian.get_acceptor_R()
     kT = hamiltonian.kT
 
     R_ensemble_boltz, P_ensemble_boltz = boltzmann_sampling(n_trajs, kT, w_alpha)
-    R_ensemble_wign, P_ensemble_wign = wigner_sampling(n_trajs, kT, w_alpha, R_eq)
+    R_ensemble_wign, P_ensemble_wign = wigner_sampling(n_trajs, kT, w_alpha)
 
 
     def plot_distributions(R_ensemble_boltz, R_ensemble_wign):
@@ -178,13 +177,7 @@ if __name__ == "__main__":
     dt = 0.003
 
     # test_sampling()
-    # main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.RK4, dt=dt)
-    R0, P0 = boltzmann_sampling(ntrajs, 1.0, np.array([0.1, 0.2, 0.3]), np.array([0.1, 0.2, 0.3]))
-    s0 = get_state(mass=1.0, R=R0[0], P=P0[0], rho_or_psi=np.array([1.0, 0.0]))
-    print(s0)
-    v = s0.get_v()
-    print(P0[0])
-    print(v)
+    main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.RK4, dt=dt)
 
 
 #%%

@@ -1,6 +1,6 @@
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
 from pymddrive.models.spin_boson_discrete.discretize_debye import discretize_Debye_bath
-from pymddrive.models.spin_boson_discrete.parameter_sets import TempelaarJCP2018
+from pymddrive.models.spin_boson_discrete.parameter_sets import TempelaarJCP2018, BiasedTempelaarJCP2018
 from pymddrive.models.spin_boson_discrete.spin_boson import SpinBoson
 
 def get_spin_boson(
@@ -10,6 +10,9 @@ def get_spin_boson(
 ) -> HamiltonianBase:
     if param_set == "TempelaarJCP2018":
         params = TempelaarJCP2018()
+        E, V, Omega, lambd, kT = params.E, params.V, params.Omega, params.lambd, params.kT
+    elif param_set == "BiasedTempelaarJCP2018":
+        params = BiasedTempelaarJCP2018()
         E, V, Omega, lambd, kT = params.E, params.V, params.Omega, params.lambd, params.kT
     else:
         raise ValueError(f"The parameters set: {param_set} is not recognized.")

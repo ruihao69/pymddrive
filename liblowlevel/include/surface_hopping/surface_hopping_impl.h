@@ -78,10 +78,10 @@ namespace rhbi {
         double dt,
         Eigen::Ref<const v_dot_d_t> v_dot_d,
         Eigen::Ref<const Eigen::RowVectorXcd> psi) {
-        // double b_kl = -2.0 * std::real(v_dot_d(active_surface, target_surface) * std::conj(psi(active_surface)) * psi(target_surface));
-        // double a_kk = std::abs(psi(active_surface)) * std::abs(psi(active_surface));
-        // double probability = dt * b_kl / a_kk;
-        double probability = -2.0 * dt * std::real(v_dot_d(active_surface, target_surface) * psi(target_surface) / psi(active_surface));
+        double b_kl = -2.0 * std::real(v_dot_d(active_surface, target_surface) * std::conj(psi(active_surface)) * psi(target_surface));
+        double a_kk = std::abs(psi(active_surface)) * std::abs(psi(active_surface));
+        double probability = dt * b_kl / a_kk;
+        // double probability = -2.0 * dt * std::real(v_dot_d(active_surface, target_surface) * psi(target_surface) / psi(active_surface));
         return probability > 0.0 ? probability : 0.0;
     }
 
