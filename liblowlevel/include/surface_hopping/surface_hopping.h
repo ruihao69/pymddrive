@@ -74,12 +74,23 @@ std::pair<bool, Eigen::RowVectorXd> momentum_rescale(
     const mass_t& mass                          // mass matrix
 );
 
-template <typename dc_tensor_t, typename mass_t, typename v_dot_d_t, typename quantum_t>
-    std::tuple<bool, int, Eigen::RowVectorXd> fssh_surface_hopping(
+template <typename dc_tensor_t, typename mass_t, typename v_dot_d_t>
+    std::tuple<bool, int, Eigen::RowVectorXd> fssh_surface_hopping_dm(
         double dt,
         int active_surface,
         Eigen::Ref<const Eigen::RowVectorXd> P_current,
-        Eigen::Ref<const quantum_t> rho_or_psi,
+        Eigen::Ref<const RowMatrixXcd> rho,
+        Eigen::Ref<const Eigen::RowVectorXd> eig_vals,
+        Eigen::Ref<const v_dot_d_t> v_dot_d,
+        const dc_tensor_t& dc,
+        const mass_t& mass);
+
+template <typename dc_tensor_t, typename mass_t, typename v_dot_d_t>
+    std::tuple<bool, int, Eigen::RowVectorXd> fssh_surface_hopping_wf(
+        double dt,
+        int active_surface,
+        Eigen::Ref<const Eigen::RowVectorXd> P_current,
+        Eigen::Ref<const Eigen::RowVectorXcd> psi,
         Eigen::Ref<const Eigen::RowVectorXd> eig_vals,
         Eigen::Ref<const v_dot_d_t> v_dot_d,
         const dc_tensor_t& dc,
