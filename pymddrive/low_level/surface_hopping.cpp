@@ -51,25 +51,25 @@ void bind_vector_mass_imag_derivative_coupling_density_matrix(py::module& m) {
 }
 
 void bind_scalar_mass_real_derivative_coupling_wavefunction(py::module& m) {
-    m.def("fssh_surface_hopping", [](double dt, int active_surface, Eigen::Ref<const Eigen::RowVectorXd> P_current, Eigen::Ref<const Eigen::VectorXcd> psi, Eigen::Ref<const Eigen::RowVectorXd> eig_vals, Eigen::Ref<const RowMatrixXd> v_dot_d, const Tensor3d& dc, double mass) {
+    m.def("fssh_surface_hopping", [](double dt, int active_surface, Eigen::Ref<const Eigen::RowVectorXd> P_current, Eigen::Ref<const Eigen::RowVectorXcd> psi, Eigen::Ref<const Eigen::RowVectorXd> eig_vals, Eigen::Ref<const RowMatrixXd> v_dot_d, const Tensor3d& dc, double mass) {
         return fssh_surface_hopping(dt, active_surface, P_current, psi, eig_vals, v_dot_d, dc, mass);
         });
 }
 
 void bind_vector_mass_real_derivative_coupling_wavefunction(py::module& m) {
-    m.def("fssh_surface_hopping", [](double dt, int active_surface, Eigen::Ref<const Eigen::RowVectorXd> P_current, Eigen::Ref<const Eigen::VectorXcd> psi, Eigen::Ref<const Eigen::RowVectorXd> eig_vals, Eigen::Ref<const RowMatrixXd> v_dot_d, const Tensor3d& dc, Eigen::Ref<const Eigen::RowVectorXd> mass) {
+    m.def("fssh_surface_hopping", [](double dt, int active_surface, Eigen::Ref<const Eigen::RowVectorXd> P_current, Eigen::Ref<const Eigen::RowVectorXcd> psi, Eigen::Ref<const Eigen::RowVectorXd> eig_vals, Eigen::Ref<const RowMatrixXd> v_dot_d, const Tensor3d& dc, Eigen::Ref<const Eigen::RowVectorXd> mass) {
         return fssh_surface_hopping(dt, active_surface, P_current, psi, eig_vals, v_dot_d, dc, mass);
         });
 }
 
 void bind_scalar_mass_imag_derivative_coupling_wavefunction(py::module& m) {
-    m.def("fssh_surface_hopping", [](double dt, int active_surface, Eigen::Ref<const Eigen::RowVectorXd> P_current, Eigen::Ref<const Eigen::VectorXcd> psi, Eigen::Ref<const Eigen::RowVectorXd> eig_vals, Eigen::Ref<const RowMatrixXcd> v_dot_d, const Tensor3cd& dc, double mass) {
+    m.def("fssh_surface_hopping", [](double dt, int active_surface, Eigen::Ref<const Eigen::RowVectorXd> P_current, Eigen::Ref<const Eigen::RowVectorXcd> psi, Eigen::Ref<const Eigen::RowVectorXd> eig_vals, Eigen::Ref<const RowMatrixXcd> v_dot_d, const Tensor3cd& dc, double mass) {
         return fssh_surface_hopping(dt, active_surface, P_current, psi, eig_vals, v_dot_d, dc, mass);
         });
 }
 
 void bind_vector_mass_imag_derivative_coupling_wavefunction(py::module& m) {
-    m.def("fssh_surface_hopping", [](double dt, int active_surface, Eigen::Ref<const Eigen::RowVectorXd> P_current, Eigen::Ref<const Eigen::VectorXcd> psi, Eigen::Ref<const Eigen::RowVectorXd> eig_vals, Eigen::Ref<const RowMatrixXcd> v_dot_d, const Tensor3cd& dc, Eigen::Ref<const Eigen::RowVectorXd> mass) {
+    m.def("fssh_surface_hopping", [](double dt, int active_surface, Eigen::Ref<const Eigen::RowVectorXd> P_current, Eigen::Ref<const Eigen::RowVectorXcd> psi, Eigen::Ref<const Eigen::RowVectorXd> eig_vals, Eigen::Ref<const RowMatrixXcd> v_dot_d, const Tensor3cd& dc, Eigen::Ref<const Eigen::RowVectorXd> mass) {
         return fssh_surface_hopping(dt, active_surface, P_current, psi, eig_vals, v_dot_d, dc, mass);
         });
 }

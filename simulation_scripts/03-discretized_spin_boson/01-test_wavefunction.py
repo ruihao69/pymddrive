@@ -15,6 +15,7 @@ from typing import Optional, List
 
 def stop_condition(t, s):
     return t > 40
+    # return t > 0.01
 
 def test_sampling():
     n_modes = 9
@@ -177,4 +178,4 @@ if __name__ == "__main__":
     main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.RK4, dt=dt)
     
     
-# %%
+#%%

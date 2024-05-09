@@ -32,7 +32,7 @@ Eigen::RowVectorXd get_diabatic_populations(
     Eigen::Ref<const RowMatrixXcd> rho);
 
 template <typename v_dot_d_t>
-double evaluate_hopping_probability(
+double evaluate_hopping_probability_dm(
     int active_surface,
     int target_surface,
     double dt,
@@ -40,7 +40,7 @@ double evaluate_hopping_probability(
     Eigen::Ref<const RowMatrixXcd> rho);
 
 template <typename v_dot_d_t>
-Eigen::RowVectorXd get_hopping_probabilities(
+Eigen::RowVectorXd get_hopping_probabilities_dm(
     int active_surface,
     double dt,
     Eigen::Ref<const v_dot_d_t> v_dot_d,
@@ -94,19 +94,19 @@ Eigen::Matrix<T, 1, Eigen::Dynamic> get_dc_component_at_ij(
 
 // --- Wavefunction implementation of the surface hopping algorithm ---
 template <typename v_dot_d_t>
-double evaluate_hopping_probability(
+double evaluate_hopping_probability_wf(
     int active_surface,
     int target_surface,
     double dt,
     Eigen::Ref<const v_dot_d_t> v_dot_d,
-    Eigen::Ref<const Eigen::VectorXcd> psi);
+    Eigen::Ref<const Eigen::RowVectorXcd> psi);
 
 template <typename v_dot_d_t>
-Eigen::RowVectorXd get_hopping_probabilities(
+Eigen::RowVectorXd get_hopping_probabilities_wf(
     int active_surface,
     double dt,
     Eigen::Ref<const v_dot_d_t> v_dot_d,
-    Eigen::Ref<const Eigen::VectorXcd> psi);
+    Eigen::Ref<const Eigen::RowVectorXcd> psi);
 
 
 }  // namespace rhbi
