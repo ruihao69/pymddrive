@@ -16,3 +16,4 @@ class Moments:
         
         delta_R = np.zeros(shape=shape, dtype=np.complex128)
         delta_P = np.zeros(shape=shape, dtype=np.complex128)
+        return cls(delta_R=delta_R, delta_P=delta_P)

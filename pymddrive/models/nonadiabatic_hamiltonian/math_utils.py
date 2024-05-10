@@ -23,8 +23,8 @@ def align_phase(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> Gen
              See the 'Hamiltonian::cal_info()' function in 'src/hamiltonian.cpp'
     """
     tmp = np.dot(prev_evecs.conjugate().T, curr_evecs)
-    diag_tmp = np.diag(tmp) 
-    phase_factors = np.ones_like(diag_tmp) 
+    diag_tmp = np.diag(tmp)
+    phase_factors = np.ones_like(diag_tmp)
     mask = np.logical_not(np.isclose(diag_tmp, 0))
     phase_factors[mask] = diag_tmp[mask] / np.abs(diag_tmp[mask])
     aligned_evecs = curr_evecs / phase_factors
@@ -64,7 +64,7 @@ def _nac_phase_following(d_prev: GenericVectorOperator, d_curr: GenericVectorOpe
     The second and third dimensions are the number of electronic states.
     That is to say, the input d_prev and d_curr have the shape of
     (dim_classical, dim_electrnic, dim_electrnic).
-    
+
     * Note that I have tried to use the `numba` to speed up the calculation.
     * However, numba yields a faulty result. Use pure numpy at the moment.
 
@@ -106,24 +106,24 @@ def _nac_phase_following(d_prev: GenericVectorOperator, d_curr: GenericVectorOpe
     return d_corr
 
 def adjust_nac_phase(d_prev: GenericVectorOperator, d_curr: GenericVectorOperator, d_corr: GenericVectorOperator) -> GenericVectorOperator:
-    # print(f"{d_prev.shape=}", f"{d_curr.shape=}") 
+    # print(f"{d_prev.shape=}", f"{d_curr.shape=}")
     for ii in range(d_curr.shape[1]):
         for jj in range(ii+1, d_curr.shape[2]):
-            
+
             snac_old = LA.norm(d_prev[:, ii, jj])
             snac = LA.norm(d_curr[:, ii, jj])
-            
+
             if (np.sqrt(snac_old * snac) < 1e-8):
                 ovlp = 1.0
             else:
                 dot_nac = np.sum(d_prev[:, ii, jj].conjugate() * d_curr[:, ii, jj])
                 ovlp = dot_nac / (snac_old * snac)
-                
+
             d_corr[:, ii, jj] = d_curr[:, ii, jj] / ovlp
             d_corr[:, jj, ii] = d_curr[:, jj, ii] / ovlp
     return d_corr
 
-                
+
 def diagonalization(hamiltonian: GenericOperator, prev_evecs: Optional[GenericOperator]=None) -> Tuple[RealVector, GenericOperator]:
     evals, evecs = LA.eigh(hamiltonian)
     evecs = align_phase(prev_evecs, evecs) if np.sum(np.shape(prev_evecs)) > 0 else evecs
@@ -174,7 +174,7 @@ def _evaluate_tullyone_hamiltonian(t, r, model):
         evals, evecs = diagonalize_hamiltonian(H, model.last_evecs)
         model.update_last_evecs(evecs)
 
-        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
+        d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         E_out[ii, :] = evals
         F_out[ii, :] = F
         d_out[ii, :, :] = d
@@ -198,7 +198,7 @@ def _evaluate_tullyone_floquet_hamiltonian(t, r, model):
         # print(f"{np.linalg.det(evecs)=}")
         # evals, evecs = diagonalize_hamiltonian_history(H, model.last_evecs)
         # model.update_last_evecs(evecs)
-        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
+        d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         d = d[np.newaxis, :, :]
         d = nac_phase_following(d_last, d) if d_last is not None else d
         # d = adjust_nac_phase(d_last, d) if d_last is not None else d

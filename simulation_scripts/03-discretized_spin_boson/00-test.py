@@ -26,7 +26,7 @@ def test_sampling():
     kT = hamiltonian.kT
 
     R_ensemble_boltz, P_ensemble_boltz = boltzmann_sampling(n_trajs, kT, w_alpha)
-    R_ensemble_wign, P_ensemble_wign = wigner_sampling(n_trajs, kT, w_alpha, R_eq)
+    R_ensemble_wign, P_ensemble_wign = wigner_sampling(n_trajs, kT, w_alpha)
 
 
     def plot_distributions(R_ensemble_boltz, R_ensemble_wign):
@@ -168,13 +168,14 @@ def main(
 if __name__ == "__main__":
     ntrajs = 128
     # project_prefix = "data_test"
-    # project_prefix = "data_ehrenfest_dibatic"
-    project_prefix = "data_fssh"
+    project_prefix = "data_ehrenfest_dibatic"
+    # project_prefix = "data_fssh"
     init_state = 0
     dt = 0.003
 
-    test_sampling()
-    main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.ZVODE, dt=dt)
+    # test_sampling()
+    # main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.ZVODE, dt=dt)
+    main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, init_state=init_state, integrator=NumericalIntegrators.ZVODE, dt=dt)
 
 
 # %%

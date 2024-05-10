@@ -35,7 +35,7 @@ class FSSH(NonadiabaticSolverBase):
         v = state.get_v()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
         evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
-        d, _ = evaluate_nonadiabatic_couplings(dHdR=dHdR, evals=evals, evecs=evecs)
+        d, _, _ = evaluate_nonadiabatic_couplings(dHdR=dHdR, evals=evals, evecs=evecs)
         self.hamiltonian.update_last_evecs(evecs)
 
         # surface hopping
@@ -108,7 +108,7 @@ class FSSH(NonadiabaticSolverBase):
         # diagonalize the Hamiltonian
         evals, evecs = diagonalization(H, last_evecs)
         # compute the nonadiabatic couplings
-        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
+        d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         # evaluate the v_dot_d term
         v_dot_d = compute_v_dot_d(v, d)
 
@@ -136,7 +136,7 @@ class FSSH(NonadiabaticSolverBase):
 
         H, dHdR = evaluate_hamiltonian(0.0, R, hamiltonian)
         evals, evecs = diagonalization(H, hamiltonian._last_evecs)
-        d, F = evaluate_nonadiabatic_couplings(dHdR=dHdR, evals=evals, evecs=evecs)
+        d, F, _ = evaluate_nonadiabatic_couplings(dHdR=dHdR, evals=evals, evecs=evecs)
 
         cache = Cache.from_dimensions(dim_elec=dim_hamiltonian, dim_nucl=dim_nuclear)
         cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR, nac=d, active_surface=active_surface)

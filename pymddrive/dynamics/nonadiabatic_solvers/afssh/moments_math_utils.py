@@ -11,7 +11,7 @@ def dot_delta_R(
     delta_R: ComplexVectorOperator, # delta_R
     delta_P: ComplexVectorOperator, # delta_P
     mass: Union[float, RealVector], # mass
-    v_dot_d: GenericOperator, # v_dot_d 
+    v_dot_d: GenericOperator, # v_dot_d
     active_surface: ActiveSurface, # active surface
 ) -> ComplexVectorOperator:
     ii = active_surface[0]
@@ -31,7 +31,7 @@ def dot_delta_P(
     T_P = evaluate_T_P(evals, delta_P, delta_F, v_dot_d, rho)
     T_P_ii = T_P[ii, ii, :]
     return T_P - T_P_ii[None, None, :]
-    
+
 
 def evaluate_T_R(
     evals: RealVector, # eigenvalues, V
@@ -41,7 +41,7 @@ def evaluate_T_R(
     v_dot_d: GenericOperator, # v_dot_d
 ) -> ComplexVectorOperator:
     T_R = np.zeros(shape=delta_R.shape, dtype=np.complex128)
-    
+
     T_R[:] += -1.j * vectorized_diagonal_commutator(evals, delta_R)
     T_R[:] += delta_P  / mass
     T_R[:] += -vectorized_commutator(v_dot_d, delta_R)
@@ -55,12 +55,12 @@ def evaluate_T_P(
     rho: ComplexOperator, # rho
 ) -> ComplexVectorOperator:
     T_P = np.zeros(shape=delta_P.shape, dtype=np.complex128)
-    
+
     T_P[:] += -1.j * vectorized_diagonal_commutator(evals, delta_P)
     T_P[:] += 0.5 * vectorized_anti_commutator(rho, delta_F)
     T_P[:] += -vectorized_commutator(v_dot_d, delta_P)
     return T_P
-    
+
 @njit
 def vectorized_diagonal_commutator(
     diag_O: GenericVector, # diagonal operator O represented by a vector
@@ -73,7 +73,7 @@ def vectorized_diagonal_commutator(
         for ii in range(dim_elec):
             for jj in range(dim_elec):
                 out[ii, jj, kk] = diag_O[ii] * vec[ii, jj, kk] - vec[ii, jj, kk] * diag_O[jj]
-                
+
     return out
 
 @njit
@@ -89,7 +89,7 @@ def vectorized_commutator(
             for jj in range(dim_elec):
                 for ll in range(dim_elec):
                     out[ii, jj, kk] += O[ii, ll] * vec[ll, jj, kk] - vec[ii, ll, kk] * O[ll, jj]
-                
+
     return out
 
 @njit
@@ -108,6 +108,19 @@ def vectorized_anti_commutator(
     return out
 
 @njit
+def evaluate_delta_vec_O(
+    vec_O: GenericVectorOperator,
+    vec: GenericVector
+) -> GenericVectorOperator:
+    delta_vec_O = np.copy(vec_O)
+    dim_qm = vec_O.shape[0]
+    dim_cl = vec_O.shape[2]
+    for kk in range(dim_cl):
+        for ii in range(dim_qm):
+            delta_vec_O[ii, ii, kk] -= vec[kk]
+    return delta_vec_O
+
+@njit
 def reconstruct_HF_force(
     F: GenericDiagonalVectorOperator,
     d: GenericVectorOperator,
@@ -117,7 +130,7 @@ def reconstruct_HF_force(
     # fill the diagonal elements
     for ii in range(d.shape[0]):
         hellmann_feynman[ii, ii, :] = -F[ii, :]
-        
+
     # fill the off-diagonal elements
     for ii in range(d.shape[0]):
         for jj in range(ii+1, d.shape[0]):
@@ -130,29 +143,29 @@ def test():
     def test_vectorized_commutator():
         O = np.random.rand(2, 2)
         vec = np.random.rand(2, 2, 100)
-        
+
         expected = np.zeros(shape=vec.shape, dtype=np.complex128)
         for kk in range(100):
             expected[..., kk] = np.dot(O, vec[..., kk]) - np.dot(vec[..., kk], O)
         result = vectorized_commutator(O, vec)
-        
+
         print(f"{np.allclose(result, expected)=}")
-        
+
     def test_vectorized_diagonal_commutator():
         diag_O = np.random.rand(2)
         vec = np.random.rand(2, 2, 100)
-        
+
         expected = np.zeros(shape=vec.shape, dtype=np.complex128)
         for kk in range(100):
             mat_diag_O = np.diagflat(diag_O)
             expected[..., kk] = np.dot(mat_diag_O, vec[..., kk]) - np.dot(vec[..., kk], mat_diag_O)
         result = vectorized_diagonal_commutator(diag_O, vec)
-        
-        print(f"{np.allclose(result, expected)=}")  
-        
+
+        print(f"{np.allclose(result, expected)=}")
+
     test_vectorized_commutator()
     test_vectorized_diagonal_commutator()
-    
+
     def test_evaluate_dot_delta_R():
         from tests.test_utils import get_random_O, get_random_psi, get_random_vO
         from pymddrive.models.nonadiabatic_hamiltonian import evaluate_nonadiabatic_couplings
@@ -163,30 +176,30 @@ def test():
         H = get_random_O(n_elec)
         dHdR = get_random_vO(n_elec, n_nucl)
         evals, evecs = np.linalg.eigh(H)
-        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
-        
+        d, F, F_hellmann_feynman = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
+
         P = np.random.rand(n_nucl)
         mass = 1
         v = P / mass
         v_dot_d = np.tensordot(v, d, axes=(0, 2))
-        
+
         delta_R = get_random_vO(n_elec, n_nucl)
         delta_P = get_random_vO(n_elec, n_nucl)
         F_HF = reconstruct_HF_force(F, d, evals)
         active_surface = 0
         delta_F = F_HF - F_HF[active_surface, active_surface, :]
-        
+
         active_surface : ActiveSurface = np.array([0])
         dot_delta_R(evals, delta_R, delta_P, mass, v_dot_d, active_surface)
         dot_delta_P(evals, delta_P, delta_F, v_dot_d, rho, active_surface)
-        
-    test_evaluate_dot_delta_R()
-        
-    
 
-    
-    
-    
+    test_evaluate_dot_delta_R()
+
+
+
+
+
+
 if __name__ == "__main__":
     test()
 # %%
