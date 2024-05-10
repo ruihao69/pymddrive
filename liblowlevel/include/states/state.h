@@ -13,7 +13,8 @@ enum QuantumStateRepresentation { NONE = 0,
                                   DENSITY_MATRIX = 2 };
 enum StateType { CLASSICAL = 1,
                  QUANTUM = 2,
-                 MQC = 3 };
+                 MQC = 3,
+                 AFSSH = 4 };
 
 struct StateData {
   double mass;           // mass of the particle
@@ -21,7 +22,8 @@ struct StateData {
   Eigen::VectorXd P;     // P are the momenta of the vibrational mode
   Eigen::VectorXcd psi;  // wave function
   RowMatrixXcd rho;  // density matrix
-  // StateData() : mass(-1.0), R(Eigen::VectorXd::Zero(0)), P(Eigen::VectorXd::Zero(0)), psi(Eigen::VectorXcd::Zero(0)), rho(Eigen::MatrixXcd::Zero(0, 0)) {}
+  Tensor3cd delta_R;     // delta_R for A-FSSH
+  Tensor3cd delta_P;     // delta_P for A-FSSH
   StateData zeros_like() const;
 };
 
@@ -56,6 +58,18 @@ class State {
       Eigen::Ref<const RowMatrixXcd> rho  //
   );
 
+  // A-FSSH constructor: (only density matrix)
+  State(
+        Eigen::Ref<const Eigen::VectorXd> R,  // R are the coordinates of the vibrational mode
+        Eigen::Ref<const Eigen::VectorXd> P,  // P are the momenta of the vibrational mode
+        double mass,                //
+        Eigen::Ref<const RowMatrixXcd> rho,  // density matrix
+        const Tensor3cd& delta_R,  // delta_R for A-FSSH
+        const Tensor3cd& delta_P   // delta_P for A-FSSH
+  );
+
+
+
   // straight forward constructor (directly construction from private data)
   State(StateData state_data, QuantumStateRepresentation representation, StateType state_type, const Eigen::VectorXcd& flatten_view);
 
@@ -70,6 +84,10 @@ class State {
   void set_psi(Eigen::Ref<const Eigen::VectorXcd> psi) { state_data.psi = psi; }
   const RowMatrixXcd& get_rho() const { return state_data.rho; }
   void set_rho(const RowMatrixXcd& rho) { state_data.rho = rho; }
+  const Tensor3cd& get_delta_R() const { return state_data.delta_R; }
+  void set_delta_R(const Tensor3cd& delta_R) { state_data.delta_R = delta_R; }
+  const Tensor3cd& get_delta_P() const { return state_data.delta_P; }
+  void set_delta_P(const Tensor3cd& delta_P) { state_data.delta_P = delta_P; }
   const Eigen::VectorXcd& get_flatten_view() const { return flatten_view; }
   StateData get_state_data() const { return state_data; }
   QuantumStateRepresentation get_representation() const { return representation; }

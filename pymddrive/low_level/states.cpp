@@ -24,7 +24,6 @@ void bind_expected_values(py::module& m);
 void bind_states(py::module& m);
 
 // The implementation of the functions is in the following files
-
 void bind_state(py::module& m) {
     // The binding code for State class
     py::class_<State>(m, "State")
@@ -37,6 +36,8 @@ void bind_state(py::module& m) {
                     state.get_P(),
                     state.get_psi(),
                     state.get_rho(),
+                    state.get_delta_R(),
+                    state.get_delta_P(),
                     state.get_representation(),
                     state.get_state_type(),
                     state.get_flatten_view()
@@ -50,22 +51,16 @@ void bind_state(py::module& m) {
                 state_data.P = tuple[2].cast<Eigen::VectorXd>();
                 state_data.psi = tuple[3].cast<Eigen::VectorXcd>();
                 state_data.rho = tuple[4].cast<RowMatrixXcd>();
-                return State(
-                    state_data,
-                    tuple[5].cast<QuantumStateRepresentation>(),
-                    tuple[6].cast<StateType>(),
-                    tuple[7].cast<Eigen::VectorXcd>()
-                );
-                // State state(tuple[0].cast<StateData>(), tuple[1].cast<Eigen::VectorXd>(), tuple[4].cast<double>(), tuple[2].cast<Eigen::VectorXcd>(), tuple[3].cast<RowMatrixXcd>());
-                // state.set_state_type(tuple[5].cast<StateType>());
-                // state.set_representation(tuple[6].cast<QuantumStateRepresentation>());
-                // return state;
+                state_data.delta_R = tuple[5].cast<Eigen::Tensor<std::complex<double>, 3>>();
+                state_data.delta_P = tuple[6].cast<Eigen::Tensor<std::complex<double>, 3>>();
+                return State(state_data, tuple[7].cast<QuantumStateRepresentation>(), tuple[8].cast<StateType>(), tuple[9].cast<Eigen::VectorXcd>());
             }))
             .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double>())
                 .def(py::init<Eigen::Ref<const Eigen::VectorXcd>>())
                 .def(py::init<Eigen::Ref<const RowMatrixXcd>>())
                 .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double, Eigen::Ref<const Eigen::VectorXcd>>())
                 .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double, Eigen::Ref<const RowMatrixXcd>>())
+                .def(py::init<Eigen::Ref<const Eigen::VectorXd>, Eigen::Ref<const Eigen::VectorXd>, double, Eigen::Ref<const RowMatrixXcd>, const Tensor3cd&, const Tensor3cd&>())
                 // .def(py::init<const Eigen::VectorXd&, const Eigen::VectorXd&, double>())
                 // .def(py::init<const Eigen::VectorXcd&>())
                 // .def(py::init<const RowMatrixXcd&>())
@@ -82,31 +77,42 @@ void bind_state(py::module& m) {
                 .def("get_rho", &State::get_rho)
                 .def("set_rho", &State::set_rho)
                 .def("get_mass", &State::get_mass)
+                .def("get_delta_R", &State::get_delta_R)
+                .def("set_delta_R", &State::set_delta_R)
+                .def("get_delta_P", &State::get_delta_P)
+                .def("set_delta_P", &State::set_delta_P)
                 .def("from_unstructured", &State::from_unstructured)
                 .def("rk4_step_inplace", &State::rk4_step_inplace)
                 .def("zeros_like", &State::zeros_like)
                 .def("get_state_type", &State::get_state_type)
                 .def("get_quantum_representation", &State::get_representation)
                 .def("get_variables", [](const State& state) {
-                if (state.get_representation() == QuantumStateRepresentation::NONE) {
-                    return py::make_tuple(state.get_R(), state.get_P(), py::none());
-                }
-                else if (state.get_representation() == QuantumStateRepresentation::WAVE_FUNCTION) {
-                    if (state.get_state_type() == StateType::MQC) {
-                        return py::make_tuple(state.get_R(), state.get_P(), state.get_psi());
+                    switch (state.get_representation()) {
+                        case QuantumStateRepresentation::NONE:
+                            return py::make_tuple(state.get_R(), state.get_P(), py::none());
+                        case QuantumStateRepresentation::WAVE_FUNCTION:
+                            if (state.get_state_type() == StateType::CLASSICAL) {
+                                return py::make_tuple(py::none(), py::none(), state.get_psi());
+                            }
+                            else {
+                                return py::make_tuple(state.get_R(), state.get_P(), state.get_psi());
+                            }
+                        case QuantumStateRepresentation::DENSITY_MATRIX:
+                            if (state.get_state_type() == StateType::CLASSICAL) {
+                                return py::make_tuple(py::none(), py::none(), state.get_rho());
+                            }
+                            else {
+                                return py::make_tuple(state.get_R(), state.get_P(), state.get_rho());
+                            }
                     }
-                    else {
-                        return py::make_tuple(py::none(), py::none(), state.get_psi());
+                    
+                })
+                .def("get_afssh_variables", [](const State& state) {
+                    if (state.get_state_type() != StateType::AFSSH) {
+                        throw std::runtime_error("This method is only available for A-FSSH states.");
                     }
-                }
-                else {
-                    if (state.get_state_type() == StateType::MQC) {
-                        return py::make_tuple(state.get_R(), state.get_P(), state.get_rho());
-                    }
-                    else {
-                        return py::make_tuple(py::none(), py::none(), state.get_rho());
-                    }
-                } })
+                    return py::make_tuple(state.get_R(), state.get_P(), state.get_rho(), state.get_delta_R(), state.get_delta_P());
+                })
                 // static methods
                     .def_static("axpy", &State::axpy)
                     .def_static("rk4_step", &State::rk4_step)
@@ -123,7 +129,8 @@ void bind_state(py::module& m) {
                 py::enum_<StateType>(m, "StateType")
                     .value("CLASSICAL", StateType::CLASSICAL)
                     .value("QUANTUM", StateType::QUANTUM)
-                    .value("MQC", StateType::MQC);
+                    .value("MQC", StateType::MQC)
+                    .value("AFSSH", StateType::AFSSH);
 }
 
 void bind_expected_values(py::module& m) {
