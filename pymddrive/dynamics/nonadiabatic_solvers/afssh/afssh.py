@@ -9,14 +9,9 @@ from pymddrive.dynamics.nonadiabatic_solvers.nonadiabatic_solver_base import Non
 from pymddrive.dynamics.nonadiabatic_solvers.math_utils import adiabatic_equations_of_motion, compute_v_dot_d
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.fssh_math_utils import initialize_active_surface
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.populations import compute_floquet_populations, compute_populations
-# from pymddrive.dynamics.nonadiabatic_solvers.afssh.aux_variables import AuxVariables
-# from pymddrive.dynamics.nonadiabatic_solvers.afssh.afssh_math_utils import evaluate_delta_F, tildify_diagonal_operator, un_tildify_diagonal_operator
-# from pymddrive.dynamics.nonadiabatic_solvers.afssh.aux_variables_vv import delta_R_dot, delta_P_dot
-from pymddrive.dynamics.nonadiabatic_solvers.afssh.moments import Moments
-from pymddrive.dynamics.nonadiabatic_solvers.afssh.moments_math_utils import dot_delta_P, dot_delta_R, vectorized_commutator, evaluate_delta_vec_O
-from pymddrive.dynamics.nonadiabatic_solvers.afssh.afssh_decoherence import afssh_decoherence
+from pymddrive.dynamics.nonadiabatic_solvers.afssh.moments_math_utils import dot_delta_P, dot_delta_R, evaluate_delta_vec_O, evaluate_delta_vec_O, delta_P_rescale
+from pymddrive.dynamics.nonadiabatic_solvers.afssh.decoherence_rates import apply_decoherence
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization
-from pymddrive.models.nonadiabatic_hamiltonian import adiabatic_to_diabatic
 from pymddrive.low_level.states import State
 from pymddrive.low_level.surface_hopping import fssh_surface_hopping
 
@@ -34,11 +29,11 @@ class AFSSH(NonadiabaticSolverBase):
     hamiltonian: HamiltonianBase = field(on_setattr=attr.setters.frozen)
     cache: Cache
     evecs_0: Union[None, GenericOperator] = field(default=None)
-    moments: Moments = field(default=None, on_setattr=attr.setters.frozen)
 
     def callback(self, t: float, state: State) -> Tuple[State, bool]:
         # compute the Hamiltonian at the current time
-        R, P, rho = state.get_variables()
+        # R, P, rho = state.get_variables()
+        R, P, rho, delta_R, delta_P = state.get_afssh_variables()
         v = state.get_v()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
         evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
@@ -56,60 +51,38 @@ class AFSSH(NonadiabaticSolverBase):
         )
         new_active_surface = np.array([new_active_surface])
 
-        # A-FSSH decoherence: Diagonal approximation of the equations of motion
-        # for the moments delta_R and delta_P
-        # --- evaluate the new delta_F_tilde, and update the auxiliary variables
-        delta_F_prev_tilde = self.auxvars.delta_F_prev.copy() # F_tilde(t0) = F(t0)
-        delta_F = evaluate_delta_F(F, new_active_surface)     # evaluate F(t0+dt)
-        self.auxvars.delta_F_prev[:] = delta_F                # update F(t0+dt)
-        delta_F_tilde = tildify_diagonal_operator(delta_F, evecs) # evaulate F_tilde(t0+dt)
-
-        # --- evaluate the new delta_R_tilde, and update the auxiliary variables
-        rho_diabatic = adiabatic_to_diabatic(rho, evecs)
-        delta_R_tilde = delta_R_dot(self.auxvars.delta_R, self.auxvars.delta_P, delta_F_prev_tilde, mass, dt, rho_diabatic)
-        delta_P_tilde = delta_P_dot(self.auxvars.delta_P, delta_F_prev_tilde, delta_F_tilde, dt, rho_diabatic)
-        delta_R = un_tildify_diagonal_operator(delta_R_tilde, evecs)
-        delta_P = un_tildify_diagonal_operator(delta_P_tilde, evecs)
-
-        # --- apply the decoherence to the density matrix and the auxiliary variables
-        # --- update the density matrix and the auxiliary variables
-        rho, delta_R, delta_P, collapsed_flag = afssh_decoherence(rho, delta_F, delta_R, delta_P, new_active_surface, d, evals, dt)
-        self.auxvars.delta_R[:] = delta_R
-        self.auxvars.delta_P[:] = delta_P
-
+        # --- if hopped, we reset delta_R and rescale delta_P
+        if hop_flag:
+            delta_R[:] = 0.0 # We reset the position moment
+            delta_P[:] = delta_P_rescale(P=P_new, mass=mass, delta_P=delta_P, evals=evals, rho=rho, active_surface=new_active_surface, dc=d) # We rescale the momentum moment  
+        
+        # --- decoherence
+        collapsed_or_reset_flag, new_rho, new_delta_R, new_delta_P = apply_decoherence(
+            rho=rho, active_state=new_active_surface[0], F_hellmann_feynman=F_hellmann_feynman, delta_F=evaluate_delta_vec_O(F_hellmann_feynman, F[new_active_surface[0]]), delta_R=delta_R, delta_P=delta_P, dt=dt
+        )
+            
         # update the cache
         self.cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR, nac=d, active_surface=new_active_surface)
 
         # return the state after callback, as well as the update flag for the numerical integrator
-        if (hop_flag or collapsed_flag):
-            new_state = state.from_unstructured(np.concatenate([R, P_new, rho.flatten()], dtype=np.complex128))
+        if (hop_flag or collapsed_or_reset_flag):
+            new_state = state.from_unstructured(np.concatenate([R, P_new, new_rho.flatten(), new_delta_R.flatten('F'), new_delta_P.flatten('F')], dtype=np.complex128))
             return new_state, True
         else:
             return state, False
 
     def derivative(self, t: float, state: State) -> State:
-        R, P, rho = state.get_variables()
-        delta_R, delta_P = self.moments.delta_R, self.moments.delta_P
+        R, P, rho, delta_R, delta_P = state.get_afssh_variables()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
         v = state.get_v()
+        mass = state.get_mass()
         if self.basis_representation == BasisRepresentation.DIABATIC:
             raise NotImplementedError("Surface hopping has poor performance in diabatic representation. Hence, this method is not implemented.")
         elif self.basis_representation == BasisRepresentation.ADIABATIC:
-            dR, dP, drho, delta_R_dot, delta_P_dot = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.cache.evecs, self.cache.active_surface, delta_R, delta_P)
+            dR, dP, drho, delta_R_dot, delta_P_dot = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.cache.evecs, self.cache.active_surface, delta_R, delta_P, mass)
         else:
             raise ValueError("Invalid basis representation")
-        return state.from_unstructured(np.concatenate([dR, dP, drho.flatten()], dtype=np.complex128))
-
-    @staticmethod
-    def derivative_diabatic(
-        v: RealVector,
-        rho_or_psi: Union[ComplexVector, ComplexOperator],
-        H: GenericOperator,
-        dHdR: GenericVectorOperator,
-        F_langevin: RealVector,
-        active_surface: ActiveSurface
-    ) -> Tuple[RealVector, RealVector, Union[ComplexVector, ComplexOperator]]:
-        raise NotImplementedError(f"Surface hopping has poor performance in diabatic representation. Hence, this method is not implemented.")
+        return state.from_unstructured(np.concatenate([dR, dP, drho.flatten(), delta_R_dot.flatten('F'), delta_P_dot.flatten('F')], dtype=np.complex128))
 
     @staticmethod
     def derivative_adiabatic(
@@ -121,7 +94,8 @@ class AFSSH(NonadiabaticSolverBase):
         last_evecs: GenericOperator,
         active_surface: ActiveSurface,
         delta_R: ComplexVectorOperator, 
-        delta_P: ComplexVectorOperator
+        delta_P: ComplexVectorOperator,
+        mass: Union[float, RealVector],
     ) -> Tuple[RealVector, RealVector, Union[ComplexVector, ComplexOperator]]:
         # diagonalize the Hamiltonian
         evals, evecs = diagonalization(H, last_evecs)
@@ -138,7 +112,7 @@ class AFSSH(NonadiabaticSolverBase):
         P_dot = F[active_state, ...] + F_langevin
         
         # evaluate delta_R_dot 
-        delta_R_dot = dot_delta_R(evals, delta_R, delta_P, v_dot_d, active_surface)
+        delta_R_dot = dot_delta_R(evals, delta_R, delta_P, mass, v_dot_d, active_surface)
         
         # evaluate delta_P_dot
         delta_F = evaluate_delta_vec_O(F_hellmann_feynman, F[active_state])
@@ -146,9 +120,6 @@ class AFSSH(NonadiabaticSolverBase):
         
         # evaluate the derivative of the density matrix or the wavefunction
         rho_dot = adiabatic_equations_of_motion(rho, evals, v_dot_d)
-        correction = 1.j * np.sum(vectorized_commutator(F_hellmann_feynman, delta_R), axis=-1)
-        rho_dot[:] += correction
-        
         
         return R_dot, P_dot, rho_dot, delta_R_dot, delta_P_dot
 
@@ -183,10 +154,6 @@ class AFSSH(NonadiabaticSolverBase):
         cache = Cache.from_dimensions(dim_elec=dim_hamiltonian, dim_nucl=dim_nuclear)
         cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR, nac=d, active_surface=active_surface)
 
-        # initialize the moments
-        moments = Moments.initialize(dim_nuclear, dim_hamiltonian)
-        
-
         return cls(
             dim_hamiltonian=dim_hamiltonian,
             dim_electronic=dim_electronic,
@@ -196,7 +163,6 @@ class AFSSH(NonadiabaticSolverBase):
             basis_representation=basis_representation,
             hamiltonian=hamiltonian,
             cache=cache,
-            moments=moments
         )
 
     def calculate_properties(self, t: float, s: State) -> NonadiabaticProperties:

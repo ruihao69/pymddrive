@@ -94,8 +94,8 @@ def run_spin_boson(
             evals, evecs = np.linalg.eigh(H)
             rho0_ii = evecs.T.conjugate() @ rho0[ii] @ evecs
             rho0[ii] = rho0_ii
-
-    s0_list = [get_state(mass=mass, R=R0[ii], P=P0[ii], rho_or_psi=rho0[ii]) for ii in range(n_ensemble)]
+    is_afssh = (solver == NonadiabaticDynamicsMethods.AFSSH)
+    s0_list = [get_state(mass=mass, R=R0[ii], P=P0[ii], rho_or_psi=rho0[ii], is_afssh=is_afssh) for ii in range(n_ensemble)]
     dynamics_list = []
     for ii in range(n_ensemble):
         dynamics = get_dynamics(
@@ -166,16 +166,18 @@ def main(
 
 # %%
 if __name__ == "__main__":
-    ntrajs = 128
+    ntrajs = 16
     # project_prefix = "data_test"
-    project_prefix = "data_ehrenfest_dibatic"
+    # project_prefix = "data_ehrenfest_dibatic"
     # project_prefix = "data_fssh"
+    project_prefix = "data_afssh"
     init_state = 0
     dt = 0.003
 
     # test_sampling()
     # main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.ZVODE, dt=dt)
-    main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, init_state=init_state, integrator=NumericalIntegrators.ZVODE, dt=dt)
+    # main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, init_state=init_state, integrator=NumericalIntegrators.ZVODE, dt=dt)
+    main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.AFSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.RK4, dt=dt)
 
 
 # %%

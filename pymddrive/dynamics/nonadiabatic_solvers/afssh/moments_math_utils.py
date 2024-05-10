@@ -62,6 +62,58 @@ def evaluate_T_P(
     return T_P
 
 @njit
+def delta_P_rescale(
+    P: RealVector,
+    mass: Union[float, RealVector],
+    delta_P: ComplexVectorOperator,
+    evals: RealVector,
+    rho: ComplexOperator,
+    active_surface: ActiveSurface,
+    dc: GenericVectorOperator
+) -> ComplexVectorOperator:
+    delta_P_new = np.copy(delta_P)
+    n_elec = delta_P.shape[0]
+    n_nucl = delta_P.shape[2]
+    
+    direction = np.zeros(n_nucl, dtype=np.float64)
+    jj = active_surface[0]
+    for kk in range(n_elec):
+        direction[:] = dc[jj, kk, :]
+        gamma = rescale_single_delta_P(P, direction, evals[kk] - evals[jj], mass)
+        delta_P_new[kk, kk, :] = -gamma * direction * rho[kk, kk]
+        for ll in range(kk+1, n_elec):
+            delta_P_new[kk, ll, :] = 0.0 # We set the off-diagonal elements to zero
+            delta_P_new[ll, kk, :] = 0.0 # We set the off-diagonal elements to zero
+    return delta_P_new
+        
+
+@njit
+def rescale_single_delta_P(
+    P: RealVector,
+    direction: RealVector,
+    dE: float,
+    mass: Union[float, RealVector],
+) -> float:
+    a: float = 0.5 * np.dot(direction, direction) / mass
+    b: float = np.dot(P / mass, direction)
+    c: float = dE
+    
+    discriminant = b**2 - 4 * a * c
+    if discriminant < 0:
+        return 0.0
+    elif a == 0:
+        return 0.0
+    else:
+        gamma = (b + np.sqrt(discriminant)) / (2 * a) if b < 0 else (b - np.sqrt(discriminant)) / (2 * a)
+        return gamma
+        
+    
+    
+    
+
+    
+
+@njit
 def vectorized_diagonal_commutator(
     diag_O: GenericVector, # diagonal operator O represented by a vector
     vec: ComplexVectorOperator, # vector of operators shaped as (n, n, m)
@@ -81,7 +133,7 @@ def vectorized_commutator(
     O: GenericOperator, # operator O
     vec: ComplexVectorOperator, # vector of operators shaped as (n, n, m)
 ) -> ComplexVectorOperator:
-    out = np.zeros_like(vec)
+    out = np.zeros(shape=vec.shape, dtype=np.complex128)
     dim_elec = vec.shape[0]
     dim_nucl = vec.shape[2]
     for kk in range(dim_nucl):
@@ -97,7 +149,7 @@ def vectorized_anti_commutator(
     O: GenericOperator, # operator O
     vec: ComplexVectorOperator, # vector of operators shaped as (n, n, m)
 ) -> ComplexVectorOperator:
-    out = np.zeros_like(vec)
+    out = np.zeros(shape=vec.shape, dtype=np.complex128)
     dim_elec = vec.shape[0]
     dim_nucl = vec.shape[2]
     for kk in range(dim_nucl):
