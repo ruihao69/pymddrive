@@ -24,14 +24,17 @@ def evaluate_nonadiabatic_couplings(
     evals: RealVector,
     evecs: GenericOperator,
 ) -> Tuple[NDArray[Shape['A, A, B'], Any], NDArray[Shape['A, B'], Any], NDArray[Shape['A, A, B'], Any]]:
-    d = np.zeros_like(dHdR)
-    F_hellmann_feynman = np.zeros_like(dHdR)
-    F = np.zeros((dHdR.shape[1], dHdR.shape[2]), dtype=dHdR.dtype)
+    n_elec = dHdR.shape[0]
+    n_nucl = dHdR.shape[-1]
+    dtype = dHdR.dtype
     
-    _op = np.zeros((dHdR.shape[0], dHdR.shape[0]), dtype=dHdR.dtype)
+    d = np.zeros((n_elec, n_elec, n_nucl), dtype=dtype)
+    F_hellmann_feynman = np.zeros((n_elec, n_elec, n_nucl), dtype=dtype)
+    F = np.zeros((n_elec, n_nucl), dtype=dtype)
+    
     for kk in range(dHdR.shape[-1]):
-        _op[:] = np.ascontiguousarray(dHdR[:, :, kk])
-        F_hellmann_feynman[:, :, kk] = - np.dot(evecs.T.conjugate(), np.dot(_op, evecs))
+        dHdR_kk = np.ascontiguousarray(dHdR[:, :, kk])
+        F_hellmann_feynman[:, :, kk] = -np.dot(evecs.T.conjugate(), np.dot(dHdR_kk, evecs))
     
     for ii in range(dHdR.shape[0]):
         F[ii, :] = F_hellmann_feynman[ii, ii, :]
