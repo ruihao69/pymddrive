@@ -17,7 +17,7 @@ from abc import abstractmethod
 class QuasiFloquetHamiltonianBase(HamiltonianBase):
     envelope_pulse: Pulse = field(default=None, on_setattr=attr.setters.frozen)
     ultrafast_pulse: Pulse = field(default=None, on_setattr=attr.setters.frozen)
-    Omega: float = field(default=None, on_setattr=attr.setters.frozen)
+    driving_Omega: float = field(default=None, on_setattr=attr.setters.frozen)
     floquet_type: FloquetType = field(default=None, on_setattr=attr.setters.frozen)
     envelope_function_type: ValidEnvolpeFunctions= field(default=None, on_setattr=attr.setters.frozen)
     NF: int = field(default=None, on_setattr=attr.setters.frozen)
@@ -34,9 +34,9 @@ class QuasiFloquetHamiltonianBase(HamiltonianBase):
         
         super().__init__(dim)
         
-        object.__setattr__(self, "Omega", get_carrier_frequency(ultrafast_pulse))
-        # assert (self.Omega>0) and (self.Omega is not None), "The carrier frequency must be a positive number."
-        assert self.Omega is not None, "The carrier frequency must be a positive number."
+        object.__setattr__(self, "driving_Omega", get_carrier_frequency(ultrafast_pulse))
+        # assert (self.driving_Omega>0) and (self.driving_Omega is not None), "The carrier frequency must be a positive number."
+        assert self.driving_Omega is not None, "The carrier frequency must be a positive number."
         
         object.__setattr__(self, "floquet_type", get_floquet_type(ultrafast_pulse))
         object.__setattr__(self, "envelope_function_type", get_envelope_function_type(ultrafast_pulse)) 
@@ -67,7 +67,7 @@ class QuasiFloquetHamiltonianBase(HamiltonianBase):
     def H(self, t: float, R: RealVector) -> GenericOperator:
         H0 = self.H0(R)
         H1 = self.H1(t, R)
-        return self._get_HF(H0, H1, self.Omega, self.NF)
+        return self._get_HF(H0, H1, self.driving_Omega, self.NF)
     
     def dHdR(self, t: float, R: RealVector) -> GenericVectorOperator:
         dH0dR = self.dH0dR(R)
@@ -78,7 +78,7 @@ class QuasiFloquetHamiltonianBase(HamiltonianBase):
         return get_floquet_space_dim(self.dim, self.NF)
         
     def get_carrier_frequency(self) -> float:
-        return self.Omega
+        return self.driving_Omega
     
     def _get_HF(self, H0: GenericOperator, H1: GenericOperator, Omega: float, NF: int) -> GenericOperator:
         return get_HF(self.floquet_type, H0, H1, Omega, NF)
