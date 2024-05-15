@@ -194,46 +194,50 @@ State State::from_unstructured(Eigen::Ref<const Eigen::VectorXcd> unstructured_a
 }
 
 // inplace rk4_step
+template<typename eigen_obj>
+eigen_obj rk4_sum(const eigen_obj& k1, const eigen_obj& k2, const eigen_obj& k3, const eigen_obj& k4) {
+  eigen_obj sum = k1;
+  sum.noalias() += 2.0 * k2;
+  sum.noalias() += 2.0 * k3;
+  sum.noalias() += k4;
+  return sum;
+}
+
 void State::rk4_step_inplace(double dt, const State& k1, const State& k2, const State& k3, const State& k4) {
+  double rk4_common_scale = dt / 6.0;
   switch (state_type) {
     case StateType::CLASSICAL:
-      state_data.R += dt / 6.0 * (k1.get_R() + 2.0 * k2.get_R() + 2.0 * k3.get_R() + k4.get_R());
-      state_data.P += dt / 6.0 * (k1.get_P() + 2.0 * k2.get_P() + 2.0 * k3.get_P() + k4.get_P());
+      state_data.R.noalias() += rk4_common_scale * rk4_sum(k1.get_R(), k2.get_R(), k3.get_R(), k4.get_R());
+      state_data.P.noalias() += rk4_common_scale * rk4_sum(k1.get_P(), k2.get_P(), k3.get_P(), k4.get_P());
       break;
 
     case StateType::QUANTUM:
       if (representation == QuantumStateRepresentation::WAVE_FUNCTION) {
-        state_data.psi += dt / 6.0 * (k1.get_psi() + 2.0 * k2.get_psi() + 2.0 * k3.get_psi() + k4.get_psi());
+        state_data.psi.noalias() += rk4_common_scale * rk4_sum(k1.get_psi(), k2.get_psi(), k3.get_psi(), k4.get_psi());
       } else {
-        state_data.rho += dt / 6.0 * (k1.get_rho() + 2.0 * k2.get_rho() + 2.0 * k3.get_rho() + k4.get_rho());
+        state_data.rho.noalias() += rk4_common_scale * rk4_sum(k1.get_rho(), k2.get_rho(), k3.get_rho(), k4.get_rho());
       }
       break;
 
     case StateType::MQC:
+      state_data.R.noalias() += rk4_common_scale * rk4_sum(k1.get_R(), k2.get_R(), k3.get_R(), k4.get_R());
+      state_data.P.noalias() += rk4_common_scale * rk4_sum(k1.get_P(), k2.get_P(), k3.get_P(), k4.get_P());
       if (representation == QuantumStateRepresentation::WAVE_FUNCTION) {
-        state_data.R += dt / 6.0 * (k1.get_R() + 2.0 * k2.get_R() + 2.0 * k3.get_R() + k4.get_R());
-        state_data.P += dt / 6.0 * (k1.get_P() + 2.0 * k2.get_P() + 2.0 * k3.get_P() + k4.get_P());
-        state_data.psi += dt / 6.0 * (k1.get_psi() + 2.0 * k2.get_psi() + 2.0 * k3.get_psi() + k4.get_psi());
+        state_data.psi.noalias() += rk4_common_scale * rk4_sum(k1.get_psi(), k2.get_psi(), k3.get_psi(), k4.get_psi());
       } else {
-        state_data.R += dt / 6.0 * (k1.get_R() + 2.0 * k2.get_R() + 2.0 * k3.get_R() + k4.get_R());
-        state_data.P += dt / 6.0 * (k1.get_P() + 2.0 * k2.get_P() + 2.0 * k3.get_P() + k4.get_P());
-        state_data.rho += dt / 6.0 * (k1.get_rho() + 2.0 * k2.get_rho() + 2.0 * k3.get_rho() + k4.get_rho());
+        state_data.rho.noalias() += rk4_common_scale * rk4_sum(k1.get_rho(), k2.get_rho(), k3.get_rho(), k4.get_rho());
       }
       break;
 
     case StateType::AFSSH:
+    state_data.R.noalias() += rk4_common_scale * rk4_sum(k1.get_R(), k2.get_R(), k3.get_R(), k4.get_R());
+    state_data.P.noalias() += rk4_common_scale * rk4_sum(k1.get_P(), k2.get_P(), k3.get_P(), k4.get_P());
+    state_data.delta_R += rk4_common_scale * (k1.get_delta_R() + 2.0 * (k2.get_delta_R() + k3.get_delta_R()) + k4.get_delta_R());
+    state_data.delta_P += rk4_common_scale * (k1.get_delta_P() + 2.0 * (k2.get_delta_P() + k3.get_delta_P()) + k4.get_delta_P());
       if (representation == QuantumStateRepresentation::WAVE_FUNCTION) {
-        state_data.R += dt / 6.0 * (k1.get_R() + 2.0 * k2.get_R() + 2.0 * k3.get_R() + k4.get_R());
-        state_data.P += dt / 6.0 * (k1.get_P() + 2.0 * k2.get_P() + 2.0 * k3.get_P() + k4.get_P());
-        state_data.psi += dt / 6.0 * (k1.get_psi() + 2.0 * k2.get_psi() + 2.0 * k3.get_psi() + k4.get_psi());
-        state_data.delta_R += dt / 6.0 * (k1.get_delta_R() + 2.0 * k2.get_delta_R() + 2.0 * k3.get_delta_R() + k4.get_delta_R());
-        state_data.delta_P += dt / 6.0 * (k1.get_delta_P() + 2.0 * k2.get_delta_P() + 2.0 * k3.get_delta_P() + k4.get_delta_P());
+        state_data.psi.noalias() += rk4_common_scale * rk4_sum(k1.get_psi(), k2.get_psi(), k3.get_psi(), k4.get_psi());
       } else {
-        state_data.R += dt / 6.0 * (k1.get_R() + 2.0 * k2.get_R() + 2.0 * k3.get_R() + k4.get_R());
-        state_data.P += dt / 6.0 * (k1.get_P() + 2.0 * k2.get_P() + 2.0 * k3.get_P() + k4.get_P());
-        state_data.rho += dt / 6.0 * (k1.get_rho() + 2.0 * k2.get_rho() + 2.0 * k3.get_rho() + k4.get_rho());
-        state_data.delta_R += dt / 6.0 * (k1.get_delta_R() + 2.0 * k2.get_delta_R() + 2.0 * k3.get_delta_R() + k4.get_delta_R());
-        state_data.delta_P += dt / 6.0 * (k1.get_delta_P() + 2.0 * k2.get_delta_P() + 2.0 * k3.get_delta_P() + k4.get_delta_P());
+        state_data.rho.noalias() += rk4_common_scale * rk4_sum(k1.get_rho(), k2.get_rho(), k3.get_rho(), k4.get_rho());
       }
       break; 
   }
@@ -262,41 +266,41 @@ State State::axpy(double a, const State& x, const State& y) {
 
   switch (x_state_type) {
     case StateType::CLASSICAL:
-      new_state_data.R += a * x_state_data.R;
-      new_state_data.P += a * x_state_data.P;
+      new_state_data.R.noalias() += a * x_state_data.R;
+      new_state_data.P.noalias() += a * x_state_data.P;
       break;
 
     case StateType::QUANTUM:
       if (x_representation == QuantumStateRepresentation::WAVE_FUNCTION) {
-        new_state_data.psi += a * x_state_data.psi;
+        new_state_data.psi.noalias() += a * x_state_data.psi;
       } else {
-        new_state_data.rho += a * x_state_data.rho;
+        new_state_data.rho.noalias() += a * x_state_data.rho;
       }
       break;
 
     case StateType::MQC:
       if (x_representation == QuantumStateRepresentation::WAVE_FUNCTION) {
-        new_state_data.R += a * x_state_data.R;
-        new_state_data.P += a * x_state_data.P;
-        new_state_data.psi += a * x_state_data.psi;
+        new_state_data.R.noalias() += a * x_state_data.R;
+        new_state_data.P.noalias() += a * x_state_data.P;
+        new_state_data.psi.noalias() += a * x_state_data.psi;
       } else {
-        new_state_data.R += a * x_state_data.R;
-        new_state_data.P += a * x_state_data.P;
-        new_state_data.rho += a * x_state_data.rho;
+        new_state_data.R.noalias() += a * x_state_data.R;
+        new_state_data.P.noalias() += a * x_state_data.P;
+        new_state_data.rho.noalias() += a * x_state_data.rho;
       }
       break;
 
     case StateType::AFSSH:
       if (x_representation == QuantumStateRepresentation::WAVE_FUNCTION) {
-        new_state_data.R += a * x_state_data.R;
-        new_state_data.P += a * x_state_data.P;
-        new_state_data.psi += a * x_state_data.psi;
+        new_state_data.R.noalias() += a * x_state_data.R;
+        new_state_data.P.noalias() += a * x_state_data.P;
+        new_state_data.psi.noalias() += a * x_state_data.psi;
         new_state_data.delta_R += a * x_state_data.delta_R;
         new_state_data.delta_P += a * x_state_data.delta_P;
       } else {
-        new_state_data.R += a * x_state_data.R;
-        new_state_data.P += a * x_state_data.P;
-        new_state_data.rho += a * x_state_data.rho;
+        new_state_data.R.noalias() += a * x_state_data.R;
+        new_state_data.P.noalias() += a * x_state_data.P;
+        new_state_data.rho.noalias() += a * x_state_data.rho;
         new_state_data.delta_R += a * x_state_data.delta_R;
         new_state_data.delta_P += a * x_state_data.delta_P;
       }
