@@ -167,8 +167,8 @@ def main(
 
 # %%
 if __name__ == "__main__":
-    ntrajs = 16
-    
+    ntrajs = 32
+
     def estimate_NF(A: float, Omega: float, tol: float=1e-6) -> int:
         from scipy.special import jv
         # n = math.ceil(A / Omega)
@@ -180,7 +180,7 @@ if __name__ == "__main__":
                 break
             NF += 1
         return NF
-    
+
     # parameters for the laser pulse
     dimless_to_au = 0.00095
     dipole = 0.04                         # dipole moment in atomic units
@@ -197,8 +197,8 @@ if __name__ == "__main__":
     print(f"Omega: {Omega}, A: {A}, NF: {estimate_NF(A, Omega)}, tau: {tau}, t0: {t0}")
     # pulse_type = 'sine_squared_pulse'     # pulse type
     # t0 = None
-    
-    
+
+
     param_set = "BiasedTempelaarJCP2018Pulsed"
     # project_prefix = "data_CW_floquet_fssh-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
     # project_prefix = "data_floquet_afssh-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
@@ -207,10 +207,10 @@ if __name__ == "__main__":
     # project_prefix = "data_CW_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
     # project_prefix = "data_f_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
     init_state = 0
-    dt = 1 / 20 / Omega 
+    dt = 1 / 20 / Omega
     NF = estimate_NF(A, Omega)
     # NF = None
-    
+
     main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
     # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
     # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
