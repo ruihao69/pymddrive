@@ -23,13 +23,15 @@ class SpinBoson(HamiltonianBase):
     
     @staticmethod
     def V_c(omega_alpha: RealVector, R: RealVector):
-        V_classical = np.multiply(omega_alpha**2, R**2)
-        return 0.5 * np.sum(V_classical) * np.eye(2)
+        # V_classical = np.multiply(omega_alpha**2, R**2)
+        # return 0.5 * np.sum(V_classical) * np.eye(2)
+        return 0.5 * np.dot(omega_alpha**2, R**2) * np.eye(2)
     
     @staticmethod
     def V_qc(g_alpha: RealVector, R: RealVector):
-        V_quantum_classical = np.sum(g_alpha * R)
-        return V_quantum_classical * get_sigma_z()
+        # V_quantum_classical = np.sum(g_alpha * R)
+        # return V_quantum_classical * get_sigma_z()
+        return np.dot(g_alpha, R) * get_sigma_z() 
     
     def H(self, t: float, R: RealVector) -> RealOperator:
         H = self.H_q(self.E, self.V)

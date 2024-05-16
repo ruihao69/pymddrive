@@ -9,6 +9,7 @@ from pymddrive.dynamics.nonadiabatic_solvers.nonadiabatic_solver_base import Non
 from pymddrive.dynamics.nonadiabatic_solvers.math_utils import adiabatic_equations_of_motion, compute_v_dot_d
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.fssh_math_utils import initialize_active_surface
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.populations import compute_floquet_populations, compute_populations
+from pymddrive.dynamics.nonadiabatic_solvers.fssh.surface_hopping_py import fssh_surface_hopping_py
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization
 from pymddrive.low_level.states import State
 from pymddrive.low_level.surface_hopping import fssh_surface_hopping
@@ -55,11 +56,16 @@ class FSSH(NonadiabaticSolverBase):
         # hop_flag, new_active_surface, P_new = fssh_surface_hopping(
         #     dt, current_active_surface[0], P_current, rho_or_psi, evals, v_dot_d, d, mass
         # )
-
-        rho = rho_or_psi if rho_or_psi.ndim == 2 else np.outer(rho_or_psi, rho_or_psi.conjugate())
-        hop_flag, new_active_surface, P_new = fssh_surface_hopping(
-            dt, current_active_surface[0], P_current, rho, evals, v_dot_d, d, mass
+        
+        hop_flag, new_active_surface, P_new = fssh_surface_hopping_py(
+            dt, current_active_surface[0], P_current, rho_or_psi, evals, v_dot_d, d, mass
         )
+        
+
+        # rho = rho_or_psi if rho_or_psi.ndim == 2 else np.outer(rho_or_psi, rho_or_psi.conjugate())
+        # hop_flag, new_active_surface, P_new = fssh_surface_hopping(
+        #     dt, current_active_surface[0], P_current, rho, evals, v_dot_d, d, mass
+        # )
         # print(f"With density matrix: {hop_flag=}, {new_active_surface=}")
 
         # update the cache

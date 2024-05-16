@@ -40,16 +40,17 @@ def test_sampling():
             r_bins = 0.5 * (bins[1:] + bins[:-1])
             return r_bins, hist
 
-        for ii, (ax, r_eq) in enumerate(zip(axs, R_eq, )):
+        for ii, ax, in enumerate(axs):
             r_boltz = np.array(R_ensemble_boltz)[:, ii]
             r_wign = np.array(R_ensemble_wign)[:, ii]
 
             ax.plot(*get_hist(r_boltz), label="Boltzmann")
             ax.plot(*get_hist(r_wign), label="Wigner")
 
-            ax.axvline(r_eq, ls='-.', c='k', alpha=0.5)
             ax.set_title(f"Mode {ii}")
             ax.legend()
+
+        plt.show()
 
     plot_distributions(R_ensemble_boltz, R_ensemble_wign)
     plot_distributions(P_ensemble_boltz, P_ensemble_wign)
@@ -169,10 +170,10 @@ def main(
 
 # %%
 if __name__ == "__main__":
-    ntrajs = 128
+    ntrajs = 512
     # project_prefix = "data_test"
     # project_prefix = "data_ehrenfest_dibatic"
-    project_prefix = "data_fssh"
+    project_prefix = "data_fssh_wf"
     init_state = 0
     dt = 0.003
 
