@@ -8,30 +8,30 @@ from pymddrive.models.floquet import get_rhoF
 
 from typing import Union, Any
 
-# @njit
-# def compute_diabatic_populations_from_adiabatic_rho(
-#     rho: GenericOperator,
-#     evecs: GenericOperator,
-#     active_surface: ActiveSurface,
-# ) -> RealVector:
-#     dim: int = evecs.shape[0]
-#     active_state: int = active_surface[0]
-#     populations = np.zeros(dim, dtype=np.float64)
-#     for istate in range(dim):
-#         populations[istate] += np.abs(evecs[istate, active_state])**2
-#         for jj in range(dim):
-#             for kk in range(jj+1, dim):
-#                 populations[istate] += 2.0 * np.real(evecs[istate, jj] * rho[jj, kk] * np.conjugate(evecs[istate, kk]))
-#     return populations
-
+@njit
 def compute_diabatic_populations_from_adiabatic_rho(
     rho: GenericOperator,
     evecs: GenericOperator,
     active_surface: ActiveSurface,
 ) -> RealVector:
-    np.fill_diagonal(rho, 0.0)
-    rho[active_surface[0], active_surface[0]] = 1.0
-    return np.real(adiabatic_to_diabatic(rho, evecs).diagonal())
+    dim: int = evecs.shape[0]
+    active_state: int = active_surface[0]
+    populations = np.zeros(dim, dtype=np.float64)
+    for istate in range(dim):
+        populations[istate] += np.abs(evecs[istate, active_state])**2
+        for jj in range(dim):
+            for kk in range(jj+1, dim):
+                populations[istate] += 2.0 * np.real(evecs[istate, jj] * rho[jj, kk] * np.conjugate(evecs[istate, kk]))
+    return populations
+
+# def compute_diabatic_populations_from_adiabatic_rho(
+#     rho: GenericOperator,
+#     evecs: GenericOperator,
+#     active_surface: ActiveSurface,
+# ) -> RealVector:
+#     np.fill_diagonal(rho, 0.0)
+#     rho[active_surface[0], active_surface[0]] = 1.0
+#     return np.real(adiabatic_to_diabatic(rho, evecs).diagonal())
 
 def compute_diabatic_populations_from_adiabatic_psi(
     psi: GenericVector,
@@ -39,10 +39,10 @@ def compute_diabatic_populations_from_adiabatic_psi(
     active_surface: ActiveSurface
 ) -> RealVector:
     rho = np.outer(psi, psi.conjugate())
-    np.fill_diagonal(rho, 0.0) 
-    rho[active_surface[0], active_surface[0]] = 1.0
-    return np.real(adiabatic_to_diabatic(rho, evecs).diagonal())
-    # return compute_diabatic_populations_from_adiabatic_rho(rho, evecs, active_surface)
+    # np.fill_diagonal(rho, 0.0) 
+    # rho[active_surface[0], active_surface[0]] = 1.0
+    # return np.real(adiabatic_to_diabatic(rho, evecs).diagonal())
+    return compute_diabatic_populations_from_adiabatic_rho(rho, evecs, active_surface)
 
 def compute_populations_from_active_surface(
     rho_or_psi: Union[GenericOperator, GenericVector],

@@ -45,28 +45,15 @@ class FSSH(NonadiabaticSolverBase):
         P_current: RealVector = P
         v_dot_d = compute_v_dot_d(v, d)
         mass = state.get_mass()
-        # print(f"{type(dt)=}")
-        # print(f"{type(current_active_surface)=}, {current_active_surface.dtype=}")
-        # print(f"{type(P_current)=}, {P_current.dtype=} {P_current.shape=}")
-        # print(f"{type(rho_or_psi)=}, {rho_or_psi.dtype=} {rho_or_psi.shape=}")
-        # print(f"{type(evals)=}, {evals.dtype=} {evals.shape=}")
-        # print(f"{type(v_dot_d)=}, {v_dot_d.dtype=} {v_dot_d.shape=}")
-        # print(f"{type(d)=}, {d.dtype=}, {d.shape=}")
 
-        # hop_flag, new_active_surface, P_new = fssh_surface_hopping(
-        #     dt, current_active_surface[0], P_current, rho_or_psi, evals, v_dot_d, d, mass
-        # )
-        
-        hop_flag, new_active_surface, P_new = fssh_surface_hopping_py(
+        # rho = rho_or_psi if self.quantum_representation == QuantumRepresentation.DENSITY_MATRIX else np.outer(rho_or_psi, rho_or_psi.conj())
+        hop_flag, new_active_surface, P_new = fssh_surface_hopping(
             dt, current_active_surface[0], P_current, rho_or_psi, evals, v_dot_d, d, mass
         )
         
-
-        # rho = rho_or_psi if rho_or_psi.ndim == 2 else np.outer(rho_or_psi, rho_or_psi.conjugate())
-        # hop_flag, new_active_surface, P_new = fssh_surface_hopping(
-        #     dt, current_active_surface[0], P_current, rho, evals, v_dot_d, d, mass
+        # hop_flag, new_active_surface, P_new = fssh_surface_hopping_py(
+        #     dt, current_active_surface[0], P_current, rho_or_psi, evals, v_dot_d, d, mass
         # )
-        # print(f"With density matrix: {hop_flag=}, {new_active_surface=}")
 
         # update the cache
         self.cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR, nac=d, active_surface=new_active_surface)

@@ -2,7 +2,7 @@
 import numpy as np
 from numba import njit
 
-from pymddrive.my_types import RealVector, GenericOperator, RealOperator, RealVectorOperator, ComplexOperator, ComplexVector
+from pymddrive.my_types import RealVector, RealOperator, RealVectorOperator, ComplexOperator, ComplexVector
 
 from typing import Tuple, Union
 
@@ -26,18 +26,30 @@ def momentum_rescale(
      
 @njit
 def hop(
+    active_surface: int,
     hopping_probabilities: RealVector
 ) -> int:
     random_number = np.random.rand()
     cum_prob: float = 0.0
-    surf_index: int = 0
-    while cum_prob < random_number:
-        cum_prob += hopping_probabilities[surf_index]
+    for ii in range(hopping_probabilities.shape[0]):
+        if ii == active_surface:
+            continue
+        cum_prob += hopping_probabilities[ii]
         if cum_prob > random_number:
-            break
-        surf_index += 1
+            return ii
+    return active_surface
+    
+    # while cum_prob < random_number:
+    #     if surf_index == active_surface: # avoid self-hopping
+    #         continue
+    #     cum_prob += hopping_probabilities[surf_index]
+    #     if cum_prob > random_number:
+    #         return surf_index
+    #     surf_index += 1
+    
+    # return active_surface   
         
-    return surf_index
+    # return surf_index
 
 @njit
 def compute_hopping_probabilities_wf(
@@ -51,7 +63,8 @@ def compute_hopping_probabilities_wf(
     for ii in range(psi.shape[0]):
         if ii == active_surface:
             continue
-        tmp = -2.0 * dt * np.real(v_dot_d[active_surface, ii] * psi[ii] / psi[active_surface])
+        # tmp = -2.0 * dt * np.real(v_dot_d[active_surface, ii] * psi[ii] / psi[active_surface])
+        tmp = 2.0 * dt * np.real(v_dot_d[active_surface, ii] * psi[ii] / psi[active_surface])
         probabilities[ii] = tmp if tmp > 0.0 else 0.0
         probabilities[active_surface] -= probabilities[ii]
     
@@ -69,7 +82,7 @@ def compute_hopping_probabilities_dm(
     for ii in range(rho.shape[0]):
         if ii == active_surface:
             continue
-        tmp = 2.0 * dt * np.real(v_dot_d[active_surface, ii] * rho[ii, active_surface] / rho[active_surface, active_surface])
+        tmp = -2.0 * dt * np.real(v_dot_d[active_surface, ii] * rho[ii, active_surface] / rho[active_surface, active_surface])
         probabilities[ii] = tmp if tmp > 0.0 else 0.0
         probabilities[active_surface] -= probabilities[ii]
     
@@ -99,7 +112,7 @@ def fssh_surface_hopping_py(
 ) -> Tuple[bool, int, RealVector]:
     hopping_probabilities = compute_hopping_probabilities(current_active_surface, dt, v_dot_d, rho_or_psi)
     
-    target_surface = hop(hopping_probabilities)
+    target_surface = hop(current_active_surface, hopping_probabilities)
     if target_surface == current_active_surface:
         return False, current_active_surface, P_current
     else:

@@ -13,7 +13,7 @@ class SpinBoson(HamiltonianBase):
     E: float = field(default=0.5, on_setattr=attr.setters.frozen)
     V: float = field(default=0.5, on_setattr=attr.setters.frozen)
     Omega: float = field(default=0.1, on_setattr=attr.setters.frozen)
-    lambd: float = field(default=1.0, on_setattr=attr.setters.frozen)
+    lambd: float = field(default=0.25, on_setattr=attr.setters.frozen)
     kT: float = field(default=1.0, on_setattr=attr.setters.frozen)
     dim: int = field(default=2, init=False) 
     
@@ -65,8 +65,3 @@ class SpinBoson(HamiltonianBase):
     
     def get_kT(self, ) -> float:
         return self.kT
-    
-    
-
-        
-    

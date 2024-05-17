@@ -166,7 +166,7 @@ def main(
 
 # %%
 if __name__ == "__main__":
-    ntrajs = 500
+    ntrajs = 128
     # project_prefix = "data_test"
     # project_prefix = "data_ehrenfest_dibatic"
     # project_prefix = "data_fssh"

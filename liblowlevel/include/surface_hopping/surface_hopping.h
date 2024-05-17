@@ -46,23 +46,26 @@ Eigen::RowVectorXd get_hopping_probabilities_dm(
     Eigen::Ref<const v_dot_d_t> v_dot_d,
     Eigen::Ref<const RowMatrixXcd> rho);
 
-inline int hop(Eigen::Ref<const Eigen::RowVectorXd> hopping_probabilities) {
+inline int hop(
+    Eigen::Ref<const Eigen::RowVectorXd> hopping_probabilities,
+    int active_surface
+) {
   static std::random_device rd;
   static std::mt19937 gen(rd());
   static std::uniform_real_distribution<double> dis(0.0, 1.0);
 
   double random_number = dis(gen);
   double cumulative_probability = 0.0;
-  int surface_index = 0;
 
-  while (surface_index < hopping_probabilities.size()) {
-    cumulative_probability += hopping_probabilities(surface_index);
-    if (random_number < cumulative_probability) {
-      break;
+  for (int surface_index=0; surface_index < hopping_probabilities.size(); surface_index++) {
+    if (surface_index != active_surface) { // avoid self-hopping    
+      cumulative_probability += hopping_probabilities(surface_index);
+      if (random_number < cumulative_probability) {
+          return surface_index;
+      }
     }
-    ++surface_index;
   }
-  return surface_index;
+  return active_surface;
 }
 
 template <typename d_component_t, typename mass_t>

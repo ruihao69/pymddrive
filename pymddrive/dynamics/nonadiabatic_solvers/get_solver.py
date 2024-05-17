@@ -1,3 +1,5 @@
+import numpy as np
+
 from pymddrive.low_level.states import State
 from pymddrive.integrators.state import get_state
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
@@ -22,6 +24,9 @@ def get_solver(
     
     # copy the hamiltonian
     hamiltonian_local = deepcopy(hamiltonian)
+    H = hamiltonian_local.H(0.0, R)
+    _, evecs = np.linalg.eigh(H)
+    hamiltonian_local.update_last_evecs(evecs)
     
     # return the solver based on method
     if method == NonadiabaticDynamicsMethods.EHRENFEST:

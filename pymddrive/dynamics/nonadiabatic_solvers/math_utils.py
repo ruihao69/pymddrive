@@ -185,9 +185,24 @@ def main():
     print(expected_value(v_op, psi))
     print(expected_value(v_op, rho))
     
+    E = np.random.rand(ne)
+    comm1 = commutator_diagA_B(E, op)
+    comm2 = commutator(np.diagflat(E), op)
+    print(f"{np.allclose(comm1, comm2)=}")
+    
+    v = np.random.normal(0, 1, size=nu)
+    v_dot_d1 = compute_v_dot_d(v, v_op)
+    v_dot_d2 = np.zeros((ne, ne), dtype=np.complex128)
+    for kk in range(nu):
+        v_dot_d2[:] += v[kk] * v_op[..., kk]
+        
+    print(f"{np.allclose(v_dot_d1, v_dot_d2)=}")
+    
     
     
     
 if __name__ == '__main__':
     main()
 
+
+# %%

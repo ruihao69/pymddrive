@@ -78,10 +78,10 @@ namespace rhbi {
         double dt,
         Eigen::Ref<const v_dot_d_t> v_dot_d,
         Eigen::Ref<const Eigen::RowVectorXcd> psi) {
-        double b_kl = -2.0 * std::real(v_dot_d(active_surface, target_surface) * std::conj(psi(active_surface)) * psi(target_surface));
-        double a_kk = std::abs(psi(active_surface)) * std::abs(psi(active_surface));
-        double probability = dt * b_kl / a_kk;
-        // double probability = -2.0 * dt * std::real(v_dot_d(active_surface, target_surface) * psi(target_surface) / psi(active_surface));
+        // double b_kl = -2.0 * std::real(v_dot_d(active_surface, target_surface) * std::conj(psi(active_surface)) * psi(target_surface));
+        // double a_kk = std::abs(psi(active_surface)) * std::abs(psi(active_surface));
+        // double probability = dt * b_kl / a_kk;
+        double probability = 2.0 * dt * std::real(v_dot_d(active_surface, target_surface) * psi(target_surface) / psi(active_surface));
         return probability > 0.0 ? probability : 0.0;
     }
 
@@ -92,19 +92,19 @@ namespace rhbi {
         Eigen::Ref<const v_dot_d_t> v_dot_d,
         Eigen::Ref<const Eigen::RowVectorXcd> psi) {
         Eigen::RowVectorXd probabilities = Eigen::RowVectorXd::Zero(psi.size());
-        RowMatrixXcd rho(psi.size(), psi.size());
-        for (int ii = 0; ii < psi.size(); ++ii) {
-            for (int jj = 0; jj < psi.size(); ++jj) {
-                rho(ii, jj) = psi(ii) * std::conj(psi(jj));
-            }
-        }
+        // RowMatrixXcd rho(psi.size(), psi.size());
+        // for (int ii = 0; ii < psi.size(); ++ii) {
+        //     for (int jj = 0; jj < psi.size(); ++jj) {
+        //         rho(ii, jj) = psi(ii) * std::conj(psi(jj));
+        //     }
+        // }
         probabilities(active_surface) = 1.0;
         for (int ii = 0; ii < psi.size(); ++ii) {
             if (ii == active_surface) {
                 continue;
             }
-            // probabilities(ii) = evaluate_hopping_probability_wf(active_surface, ii, dt, v_dot_d, psi);
-            probabilities(ii) = evaluate_hopping_probability_dm(active_surface, ii, dt, v_dot_d, rho);
+            probabilities(ii) = evaluate_hopping_probability_wf(active_surface, ii, dt, v_dot_d, psi);
+            // probabilities(ii) = evaluate_hopping_probability_dm(active_surface, ii, dt, v_dot_d, rho);
             probabilities(active_surface) -= probabilities(ii);
         }
         return probabilities;
@@ -152,7 +152,7 @@ namespace rhbi {
         const mass_t& mass) {
         Eigen::RowVectorXd hopping_probabilities = get_hopping_probabilities_dm(active_surface, dt, v_dot_d, rho);
 
-        int target_surface = hop(hopping_probabilities);
+        int target_surface = hop(hopping_probabilities, active_surface);
         if (target_surface == active_surface) {
             return std::make_tuple(false, active_surface, P_current);
         }
@@ -185,7 +185,7 @@ namespace rhbi {
         const mass_t& mass) {
         Eigen::RowVectorXd hopping_probabilities = get_hopping_probabilities_wf(active_surface, dt, v_dot_d, psi);
 
-        int target_surface = hop(hopping_probabilities);
+        int target_surface = hop(hopping_probabilities, active_surface);
         if (target_surface == active_surface) {
             return std::make_tuple(false, active_surface, P_current);
         }
