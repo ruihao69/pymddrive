@@ -144,6 +144,11 @@ def main(
 ):
     n_classic_bath = 100
     hamiltonian = get_spin_boson(n_classic_bath=n_classic_bath, param_set=param_set, pulse_type=pulse_type, E0_in_au=E0, Nc=N, phi=phi, t0=t0, NF=NF)
+    print(f"{hamiltonian.get_carrier_frequency()=}")
+    print(f"{hamiltonian.driving_Omega=}")
+    print(f"{hamiltonian.ultrafast_pulse=}")
+    print(f"{hamiltonian.envelope_pulse=}")
+    print(f"{abs(hamiltonian.envelope_pulse.A)=}")
     # get the Landry Spin Boson model with a sine-squared pulse
     filename = get_filename(solver)
 
@@ -167,7 +172,7 @@ def main(
 
 # %%
 if __name__ == "__main__":
-    # ntrajs = 32
+    ntrajs = 32
 
     def estimate_NF(A: float, Omega: float, tol: float=1e-6) -> int:
         from scipy.special import jv

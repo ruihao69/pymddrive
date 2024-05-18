@@ -77,6 +77,7 @@ def get_spin_boson(
         ultrafast_pulse = MorletReal(Omega=2*E, A=E0_in_au, phi=phi, t0=t0, tau=tau)
         from pymddrive.pulses import get_carrier_frequency
         print(f"{get_carrier_frequency(ultrafast_pulse)=}")
+        print(f"in get_spin_boson {tau=}")
         envelope_pulse = Gaussian.from_quasi_floquet_morlet_real(ultrafast_pulse)
         if NF is None:
             return SpinBosonPulsed(omega_alpha=omega_alpha, g_alpha=g_alpha, E=E, V=V, Omega=Omega, lambd=lambd, kT=kT, mu_in_au=mu_in_au, pulse=ultrafast_pulse)
