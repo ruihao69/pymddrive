@@ -167,7 +167,7 @@ def main(
 
 # %%
 if __name__ == "__main__":
-    # ntrajs = 32
+    ntrajs = 32
 
     def estimate_NF(A: float, Omega: float, tol: float=1e-6) -> int:
         from scipy.special import jv
@@ -189,7 +189,7 @@ if __name__ == "__main__":
     Omega_in_au = 0.05696                 # 800 nm laser wavelength to carrier frequency in atomic units
     Omega = Omega_in_au / dimless_to_au   # light frequency in atomic units
     phi = 0.0                             # phase of the laser pulse
-    Nc = 16                                # number of cycles in the sine-squared pulse
+    Nc = 16                               # number of cycles in the sine-squared pulse
     pulse_type = 'morlet_real'            # pulse type
     T = 2 * np.pi / Omega                 # period of the light field
     tau = T * Nc / 3
@@ -202,8 +202,8 @@ if __name__ == "__main__":
     param_set = "BiasedTempelaarJCP2018Pulsed"
     # project_prefix = "data_CW_floquet_fssh-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
     # project_prefix = "data_floquet_afssh-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
-    # project_prefix = "data_floquet_fssh-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
-    project_prefix = "data_floquet_fssh-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
+    # project_prefix = "data_floquet_complexfssh-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
+    project_prefix = "data_floquet_complexfssh-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
     # project_prefix = "data_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
     # project_prefix = "data_CW_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
     # project_prefix = "data_f_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     NF = estimate_NF(A, Omega)
     # NF = None
 
-    main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
+    main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.COMPLEX_FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
     # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
     # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
 
