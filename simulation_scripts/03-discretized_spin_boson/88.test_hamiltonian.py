@@ -146,7 +146,6 @@ def get_filename(solver: NonadiabaticDynamicsMethods) -> str:
 
 def main(
     project_prefix: str,
-    ntrajs: int,
     E0: Optional[float]=None,
     Omega: Optional[float]=None,
     phi: Optional[float]=None,
@@ -163,36 +162,22 @@ def main(
 ):
     n_classic_bath = 100
     hamiltonian = get_spin_boson(n_classic_bath=n_classic_bath, param_set=param_set, pulse_type=pulse_type, E0_in_au=E0, Nc=N, phi=phi, t0=t0, NF=NF)
-    save_pulse_obj(hamiltonian, project_prefix)
-    # print(f"{hamiltonian.get_carrier_frequency()=}")
-    # print(f"{hamiltonian.driving_Omega=}")
-    # print(f"{hamiltonian.ultrafast_pulse=}")
-    # print(f"{hamiltonian.envelope_pulse=}")
-    # print(f"{abs(hamiltonian.envelope_pulse.A)=}")
-    # get the Landry Spin Boson model with a sine-squared pulse
-    filename = get_filename(solver)
-
-    # get the initial conditions
-    R0, P0 = boltzmann_sampling(ntrajs, hamiltonian.kT, hamiltonian.omega_alpha)
-    run_spin_boson(
-        R0=R0,
-        P0=P0,
-        init_state=init_state,
-        hamiltonian=hamiltonian,
-        mass=1,
-        dt=dt,
-        NF=NF,
-        data_dir=project_prefix,
-        filename=filename,
-        solver=solver,
-        basis_rep=basis_rep,
-        integrator=integrator
-    )
+    
+    t_rand = np.random.uniform(0, 10) # choose a random time
+    N = 1000
+    R, P = boltzmann_sampling(N, hamiltonian.kT, hamiltonian.omega_alpha)
+    R_rand = R[np.random.choice(N)]
+    
+    H = hamiltonian.H(t_rand, R_rand)
+    dHdR = hamiltonian.dHdR(t_rand, R_rand)
+    from scipy.linalg import ishermitian
+    
+    print(f"Hamiltonian is Hermitian: {ishermitian(H)}")
+    
 
 
 # %%
 if __name__ == "__main__":
-    ntrajs = 32
 
     def estimate_NF(A: float, Omega: float, tol: float=1e-6) -> int:
         from scipy.special import jv
@@ -222,30 +207,67 @@ if __name__ == "__main__":
     print(f"Omega: {Omega}, A: {A}, NF: {estimate_NF(A, Omega)}, tau: {tau}, t0: {t0}")
     # pulse_type = 'sine_squared_pulse'     # pulse type
     # t0 = None
-
-
-    param_set = "BiasedTempelaarJCP2018Pulsed"
-    # project_prefix = "data_CW_floquet_fssh-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
-    # project_prefix = "data_floquet_afssh-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
-    # project_prefix = "data_floquet_fssh-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
-    project_prefix = "data_floquet_fssh-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
-    # project_prefix = "data_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
-    # project_prefix = "data_CW_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
-    # project_prefix = "data_f_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
-    init_state = 0
-    dt = 1 / 20 / Omega
-    NF = estimate_NF(A, Omega)
-    # NF = 10
-    # NF = None
-
-    main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
-    # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
-    # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
-
-    # test_sampling()
-    # main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.ZVODE, dt=dt)
-    # main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, init_state=init_state, integrator=NumericalIntegrators.ZVODE, dt=dt)
-    # main(project_prefix=project_prefix, ntrajs=ntrajs, solver=NonadiabaticDynamicsMethods.AFSSH, basis_rep=BasisRepresentation.ADIABATIC, init_state=init_state, integrator=NumericalIntegrators.RK4, dt=dt)
+    
+    hamiltonian_td = get_spin_boson(n_classic_bath=100, param_set="BiasedTempelaarJCP2018Pulsed", pulse_type=pulse_type, E0_in_au=E0, Nc=Nc, phi=phi, t0=t0)
+    hamiltonian_fq = get_spin_boson(n_classic_bath=100, param_set="BiasedTempelaarJCP2018Pulsed", pulse_type=pulse_type, E0_in_au=E0, Nc=Nc, phi=phi, t0=t0, NF=estimate_NF(A, Omega))
+    
+    R, P = boltzmann_sampling(1000, hamiltonian_td.kT, hamiltonian_td.omega_alpha)
+    
+    t_rand = np.random.uniform(0, 10) # choose a random time
+    R_rand = R[np.random.choice(1000)]
+    
+    H_td = hamiltonian_td.H(t_rand, R_rand)
+    evals_td, evecs_td = np.linalg.eigh(H_td)
+    dHdR_td = hamiltonian_td.dHdR(t_rand, R_rand)   
+    H_fq = hamiltonian_fq.H(t_rand, R_rand)
+    evals_fq, evecs_fq = np.linalg.eigh(H_fq)
+    dHdR_fq = hamiltonian_fq.dHdR(t_rand, R_rand)
+    
+    import matplotlib.pyplot as plt
+    from pymddrive.models.nonadiabatic_hamiltonian import evaluate_nonadiabatic_couplings
+    
+    d_td, F_td, F_hellmann_feynman_td = evaluate_nonadiabatic_couplings(dHdR=dHdR_td, evals=evals_td, evecs=evecs_td)
+    d_fq, F_fq, F_hellmann_feynman_fq = evaluate_nonadiabatic_couplings(dHdR=dHdR_fq, evals=evals_fq, evecs=evecs_fq)
+    
+    fig = plt.figure(dpi=300, figsize=(6, 3))
+    axs = fig.subplots(1, 2)
+    sel = -1
+    axs[0].imshow(np.real(F_hellmann_feynman_td[..., sel]), cmap='viridis')
+    axs[1].imshow(np.real(F_hellmann_feynman_fq[..., sel]), cmap='viridis')
+    plt.show()
+    
+    print(f"{H_td[-1, -1]=}, {H_td[-2, -2]=}, {H_td[-2, -2] - H_td[-1, -1]=}")
+    print(f"{H_fq[-1, -1]=}, {H_fq[-2, -2]=}, {H_fq[-2, -2] - H_fq[-1, -1]=}")  
+    
+    
+    
+    sel = -1
+    print(f"{dHdR_td[-1, -1, sel]=}, {dHdR_td[-2, -2, sel]=}") 
+    print(f"{dHdR_fq[-1, -1, sel]=}, {dHdR_fq[-2, -2, sel]=}")
+    
+    import scipy.linalg as LA
+    
+    print(f"{LA.ishermitian(H_td)=}, {LA.ishermitian(H_fq)=}")
+    for ii in range(100):
+        print(f"{LA.ishermitian(F_hellmann_feynman_fq[..., ii], rtol=1e-8, atol=1e-8)}, {LA.ishermitian(F_hellmann_feynman_td[..., ii], rtol=1e-8, atol=1e-8)}")  
+        
+    print(f"{LA.norm(F_hellmann_feynman_fq.real)=}") 
+    print(f"{LA.norm(F_hellmann_feynman_fq.imag)=}") 
+    print(f"{LA.norm(np.abs(F_hellmann_feynman_fq))=}")
+    print(f"{LA.norm(d_fq.real)=}")
+    print(f"{LA.norm(d_fq.imag)=}")
+    print(f"{LA.norm(np.abs(d_fq))=}")
+    
+    print(f"{LA.norm(F_hellmann_feynman_td.real)=}") 
+    print(f"{LA.norm(F_hellmann_feynman_td.imag)=}") 
+    print(f"{LA.norm(np.abs(F_hellmann_feynman_td))=}")
+    print(f"{LA.norm(d_td.real)=}")
+    print(f"{LA.norm(d_td.imag)=}")
+    print(f"{LA.norm(np.abs(d_td))=}")
+    
+    
 
 
 # %%
+    
+

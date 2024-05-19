@@ -146,7 +146,6 @@ def get_filename(solver: NonadiabaticDynamicsMethods) -> str:
 
 def main(
     project_prefix: str,
-    ntrajs: int,
     E0: Optional[float]=None,
     Omega: Optional[float]=None,
     phi: Optional[float]=None,
@@ -163,36 +162,22 @@ def main(
 ):
     n_classic_bath = 100
     hamiltonian = get_spin_boson(n_classic_bath=n_classic_bath, param_set=param_set, pulse_type=pulse_type, E0_in_au=E0, Nc=N, phi=phi, t0=t0, NF=NF)
-    save_pulse_obj(hamiltonian, project_prefix)
-    # print(f"{hamiltonian.get_carrier_frequency()=}")
-    # print(f"{hamiltonian.driving_Omega=}")
-    # print(f"{hamiltonian.ultrafast_pulse=}")
-    # print(f"{hamiltonian.envelope_pulse=}")
-    # print(f"{abs(hamiltonian.envelope_pulse.A)=}")
-    # get the Landry Spin Boson model with a sine-squared pulse
-    filename = get_filename(solver)
-
-    # get the initial conditions
-    R0, P0 = boltzmann_sampling(ntrajs, hamiltonian.kT, hamiltonian.omega_alpha)
-    run_spin_boson(
-        R0=R0,
-        P0=P0,
-        init_state=init_state,
-        hamiltonian=hamiltonian,
-        mass=1,
-        dt=dt,
-        NF=NF,
-        data_dir=project_prefix,
-        filename=filename,
-        solver=solver,
-        basis_rep=basis_rep,
-        integrator=integrator
-    )
+    
+    t_rand = np.random.uniform(0, 10) # choose a random time
+    N = 1000
+    R, P = boltzmann_sampling(N, hamiltonian.kT, hamiltonian.omega_alpha)
+    R_rand = R[np.random.choice(N)]
+    
+    H = hamiltonian.H(t_rand, R_rand)
+    dHdR = hamiltonian.dHdR(t_rand, R_rand)
+    from scipy.linalg import ishermitian
+    
+    print(f"Hamiltonian is Hermitian: {ishermitian(H)}")
+    
 
 
 # %%
 if __name__ == "__main__":
-    ntrajs = 32
 
     def estimate_NF(A: float, Omega: float, tol: float=1e-6) -> int:
         from scipy.special import jv
@@ -231,14 +216,13 @@ if __name__ == "__main__":
     project_prefix = "data_floquet_fssh-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
     # project_prefix = "data_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
     # project_prefix = "data_CW_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
-    # project_prefix = "data_f_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
+    # project_prefix = "data_f_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
     init_state = 0
     dt = 1 / 20 / Omega
     NF = estimate_NF(A, Omega)
-    # NF = 10
     # NF = None
 
-    main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
+    main(project_prefix=project_prefix, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
     # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
     # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.DIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
 

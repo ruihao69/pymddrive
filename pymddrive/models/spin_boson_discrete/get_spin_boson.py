@@ -26,6 +26,7 @@ def get_spin_boson(
     if param_set == "TempelaarJCP2018":
         params = TempelaarJCP2018()
         E, V, Omega, lambd, kT = params.E, params.V, params.Omega, params.lambd, params.kT
+        mu_in_au = 0.04
     elif param_set == "BiasedTempelaarJCP2018":
         params = BiasedTempelaarJCP2018()
         E, V, Omega, lambd, kT = params.E, params.V, params.Omega, params.lambd, params.kT

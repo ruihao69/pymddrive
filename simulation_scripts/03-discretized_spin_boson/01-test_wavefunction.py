@@ -4,7 +4,7 @@ import scipy.sparse as sps
 
 from pymddrive.my_types import RealVector
 from pymddrive.dynamics.options import NonadiabaticDynamicsMethods, BasisRepresentation, NumericalIntegrators
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, TD_HamiltonianBase, QuasiFloquetHamiltonianBase
 from pymddrive.integrators.state import get_state
 from pymddrive.dynamics.get_dynamics import get_dynamics
 from pymddrive.dynamics.run import run_ensemble
@@ -16,7 +16,27 @@ from typing import Optional, List
 def stop_condition(t, s):
     return t > 40
     # return t > 0.01
-
+    
+def save_pulse_obj(hamiltonian: TD_HamiltonianBase, project_prefix: str):
+    # create the project_prefix directory if it does not exist
+    if not os.path.isdir(project_prefix):
+        os.makedirs(project_prefix)
+        
+    # save the pulses
+    file = os.path.join(project_prefix, "pulse_obj.npz")
+    if isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
+        ultrafast_pulse = hamiltonian.ultrafast_pulse
+        envelope_pulse = hamiltonian.envelope_pulse
+        np.savez(file, ultrafast_pulse=ultrafast_pulse, envelope_pulse=envelope_pulse, allow_pickle=True)
+    elif isinstance(hamiltonian, TD_HamiltonianBase):
+        pulse = hamiltonian.pulse
+        np.savez(file, pulse=pulse, allow_pickle=True)
+    else:
+        import warnings
+        warnings.warn("Hamiltonian is not a TD_HamiltonianBase or QuasiFloquetHamiltonianBase. No pulse object saved.")
+        # raise ValueError("Hamiltonian must be either TD_HamiltonianBase or QuasiFloquetHamiltonianBase")
+    
+    
 def test_sampling():
     n_modes = 9
     n_trajs = 10000
@@ -144,6 +164,7 @@ def main(
 ):
     n_classic_bath = 100
     hamiltonian = get_spin_boson(n_classic_bath=n_classic_bath)
+    save_pulse_obj(hamiltonian, project_prefix)
 
     dt = 1 / (10 * hamiltonian.omega_alpha[-1])
 
