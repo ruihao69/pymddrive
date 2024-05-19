@@ -10,7 +10,7 @@ from pymddrive.dynamics.nonadiabatic_solvers.math_utils import adiabatic_equatio
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.fssh_math_utils import initialize_active_surface
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.populations import compute_floquet_populations, compute_populations
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.surface_hopping_py import fssh_surface_hopping_py
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization, adiabatic_to_diabatic, diabatic_to_adiabatic
 from pymddrive.low_level.states import State
 from pymddrive.low_level.surface_hopping import fssh_surface_hopping
 
@@ -35,7 +35,9 @@ class FSSH(NonadiabaticSolverBase):
         R, P, rho_or_psi = state.get_variables()
         v = state.get_v()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
+        rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.hamiltonian._last_evecs)
         evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
+        rho_or_psi = diabatic_to_adiabatic(rho_or_psi_in_diabatic_basis, evecs)
         d, _, _ = evaluate_nonadiabatic_couplings(dHdR=dHdR, evals=evals, evecs=evecs)
         self.hamiltonian.update_last_evecs(evecs)
 
@@ -59,11 +61,12 @@ class FSSH(NonadiabaticSolverBase):
         self.cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR, nac=d, active_surface=new_active_surface)
 
         # return the state after callback, as well as the update flag for the numerical integrator
-        if hop_flag:
-            new_state = state.from_unstructured(np.concatenate([R, P_new, rho_or_psi.flatten()], dtype=np.complex128))
-            return new_state, True
-        else:
-            return state, False
+        # if hop_flag:
+        #     new_state = state.from_unstructured(np.concatenate([R, P_new, rho_or_psi.flatten()], dtype=np.complex128))
+        #     return new_state, True
+        # else:
+        #     return state, False
+        return state.from_unstructured(np.concatenate([R, P_new, rho_or_psi.flatten()], dtype=np.complex128)), True
 
     def derivative(self, t: float, state: State) -> State:
         R, P, rho_or_psi = state.get_variables()

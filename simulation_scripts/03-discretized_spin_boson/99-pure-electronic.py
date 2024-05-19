@@ -4,61 +4,20 @@ import matplotlib.pyplot as plt
 import scipy.sparse as sp
 
 from pymddrive.my_types import ComplexOperator, GenericOperator
+from pymddrive.models.nonadiabatic_hamiltonian import align_phase
 from pymddrive.models.spin_boson_discrete import get_spin_boson, boltzmann_sampling
 from pymddrive.dynamics.options import BasisRepresentation
 from pymddrive.pulses import PulseBase as Pulse
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations
-from pymddrive.low_level.floquet import get_HF_cos, get_HF_sin
+from pymddrive.low_level.floquet import get_HF_cos
 
-
-def _dim_to_dimF(dim: int, NF: int) -> int:
-    return dim * (2 * NF + 1)
-
-def _get_Floquet_offset(dim_sys: int, NF: int, Omega: float):
-    return [np.identity(dim_sys) * ii * Omega for ii in range(-NF, NF+1)]
-
-def get_HF_cos_python(
-    H0: GenericOperator, # The time-independent part of the Hamiltonian,
-    V: GenericOperator, # The time-dependent part of the Hamiltonian (times cosine function),
-    Omega: float, # The frequency of the driving field,
-    NF: int, # The number of floquet levels to consider,
-    is_gradient: bool = False,
-    to_csr: bool = False
-) -> GenericOperator:
-    """ Suppose the Hamiltonian is given by H(t) = H0 + V(t) * cos(Omega * t). """
-    dim = H0.shape[0]
-    dimF = _dim_to_dimF(dim, NF)
-    dtype = np.complex128 if np.iscomplexobj(H0) or np.iscomplexobj(V) else np.float64  
-    
-    if NF == 0:
-        return sp.bsr_matrix(H0, dtype=dtype)
-    
-    offsets = _get_Floquet_offset(dim, NF, Omega) 
-    offsets = np.zeros_like(offsets) if is_gradient else offsets
-    V_upper = V / 2
-    V_lower = V.transpose().conj() / 2
-    # V_upper = V.transpose().conj()
-    # V_lower = V 
-    
-    
-    data_first_row = (H0 + offsets[0], V_upper)
-    data_middle = ((V_lower, H0+offsets[ii+1], V_upper) for ii in range(2*NF-1))
-    data_last_row = (V_lower, H0 + offsets[-1])
-    
-    data = np.concatenate((data_first_row, *data_middle, data_last_row))
-    
-    indptr = np.concatenate([(0, ), 2+3*np.arange(0, 2*NF, dtype=int), (6*NF+1, )])
-    indices = np.concatenate([(0, 1), *(i+np.arange(0, 3) for i in range(2*NF-1)), (2*NF-1, 2*NF)])
-    
-    HF = sp.bsr_matrix((data, indices, indptr), shape=(dimF, dimF), dtype=dtype) 
-    # print(f"{LA.ishermitian(HF.toarray())=}")
-    return HF.tocsr() if to_csr else HF.toarray()
+from typing import Tuple
 
 def get_hamiltonian(
     is_floquet: bool = False,
 ) -> HamiltonianBase:
-    
+
     def estimate_NF(A: float, Omega: float, tol: float=1e-6) -> int:
         from scipy.special import jv
         # n = math.ceil(A / Omega)
@@ -70,7 +29,7 @@ def get_hamiltonian(
                 break
             NF += 1
         return NF
-    
+
     # parameters for the laser pulse
     dimless_to_au = 0.00095
     dipole = 0.04                         # dipole moment in atomic units
@@ -85,9 +44,9 @@ def get_hamiltonian(
     tau = T * Nc / 3
     t0 = 4 * tau                          # time delay for the Morlet pulse
     print(f"Omega: {Omega}, A: {A}, NF: {estimate_NF(A, Omega)}, tau: {tau}, t0: {t0}")
-    
+
     NF = estimate_NF(A, Omega) if is_floquet else None
-    
+
     param_set = "BiasedTempelaarJCP2018Pulsed"
     return get_spin_boson(
         n_classic_bath=100,
@@ -99,72 +58,176 @@ def get_hamiltonian(
         t0=t0,
         NF=NF,
     )
-        
+
 def derivative(
     H: GenericOperator,
     rho: ComplexOperator,
 ) -> ComplexOperator:
     return -1j * np.dot(H, rho) + 1j * np.dot(rho, H)
 
-def rk4(
+def derivative_adiabatic(
     H: GenericOperator,
     rho: ComplexOperator,
-    dt: float,
 ) -> ComplexOperator:
-    k1 = derivative(H, rho)
-    k2 = derivative(H, rho + dt / 2 * k1)
-    k3 = derivative(H, rho + dt / 2 * k2)
-    k4 = derivative(H, rho + dt * k3)
+    evals, _ = np.linalg.eigh(H)
+    H_diag = np.diagflat(evals)
+    return -1.j * (np.dot(H_diag, rho) - np.dot(rho, H_diag))
+
+def rk4(
+    H0: GenericOperator,
+    mu: GenericOperator,
+    t: float,
+    pulse: Pulse,
+    rho: ComplexOperator,
+    dt: float,
+    deriv=derivative,
+) -> ComplexOperator:
+    H1 = mu * pulse(t)
+    H = H0 + H1
+    k1 = deriv(H, rho)
+    
+    H1 = mu * pulse(t + dt / 2)
+    H = H0 + H1
+    k2 = deriv(H, rho + dt / 2 * k1)
+    k3 = deriv(H, rho + dt / 2 * k2)
+    
+    H1 = mu * pulse(t + dt)
+    H = H0 + H1
+    k4 = deriv(H, rho + dt * k3)
     return rho + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+
+def rk4_adiabatic(
+    H0: GenericOperator,
+    mu: GenericOperator,
+    t: float,
+    pulse: Pulse,
+    rho: ComplexOperator,
+    dt: float,
+    deriv=derivative_adiabatic,
+) -> Tuple[ComplexOperator, GenericOperator]:
+    H1 = mu * pulse(t)
+    H = H0 + H1
+    k1 = deriv(H, rho)
+    
+    H1 = mu * pulse(t + dt / 2)
+    H = H0 + H1
+    k2 = deriv(H, rho + dt / 2 * k1)
+    k3 = deriv(H, rho + dt / 2 * k2)
+    
+    H1 = mu * pulse(t + dt)
+    k4 = deriv(H, rho + dt * k3)
+    
+    return rho + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+    
+    
+    
+def rk4_floquet(
+    H0: GenericOperator,
+    mu: GenericOperator,
+    t: float,
+    envelope_pulse: Pulse,
+    rho: ComplexOperator,
+    dt: float,
+    Omega: float,
+    NF: int,
+    deriv=derivative,
+) -> ComplexOperator:
+    H1 = mu * envelope_pulse(t)
+    HF = get_HF_cos(H0, H1, Omega, NF)
+    k1 = deriv(HF, rho)
+    
+    H1 = mu * envelope_pulse(t + dt / 2)
+    HF = get_HF_cos(H0, H1, Omega, NF)
+    k2 = deriv(HF, rho + dt / 2 * k1)
+    k3 = deriv(HF, rho + dt / 2 * k2)
+    
+    H1 = mu * envelope_pulse(t + dt)
+    HF = get_HF_cos(H0, H1, Omega, NF)
+    k4 = deriv(HF, rho + dt * k3)
+    return rho + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
+    
 
 def main_mean_field(
     rho0: ComplexOperator,
-    H0: GenericOperator, 
+    H0: GenericOperator,
     mu: GenericOperator,
     ultrafast_pulse: Pulse,
     dt: float,
     save_every: int = 10,
     tfinal: float = 10,
 ) -> None:
-    nsteps = int(tfinal / dt) 
+    nsteps = int(tfinal / dt)
     time_out = np.zeros(nsteps//save_every+1, dtype=np.float64)
     populations_out = np.zeros((nsteps//save_every+1, 2), dtype=np.float64)
-    
-    t = 0.0 
+
+    t = 0.0
     rho = np.copy(rho0)
     for ii in range(nsteps):
         if ii % save_every == 0:
             time_out[ii//save_every] = t
             populations_out[ii//save_every] = np.real(np.diag(rho))
+
+        rho = rk4(H0=H0, mu=mu, t=t, pulse=ultrafast_pulse, rho=rho, dt=dt, deriv=derivative)
+        t += dt
+    return time_out, populations_out
+
+def main_mean_field_adiabatic(
+    rho0: ComplexOperator,
+    H0: GenericOperator,
+    mu: GenericOperator,
+    ultrafast_pulse: Pulse,
+    dt: float,
+    save_every: int = 10,
+    tfinal: float = 10,
+) -> None:
+    nsteps = int(tfinal / dt)
+    time_out = np.zeros(nsteps//save_every+1, dtype=np.float64)
+    populations_out = np.zeros((nsteps//save_every+1, 2), dtype=np.float64)
+
+    t = 0.0
+    _, evecs = np.linalg.eigh(H0)
+    evecs_last = np.copy(evecs)
+    rho = np.copy(evecs.T.conjugate() @ rho0 @ evecs)
+    for ii in range(nsteps):
+        if ii % save_every == 0:
+            time_out[ii//save_every] = t
+            rho_diabatic = evecs_last @ rho @ evecs_last.T.conj()
+            populations_out[ii//save_every] = np.real(np.diag(rho_diabatic))
+
+        rho = rk4_adiabatic(H0=H0, mu=mu, t=t, pulse=ultrafast_pulse, rho=rho, dt=dt,)
+        rho_diabatic = evecs_last @ rho @ evecs_last.T.conj()
         
-        H1 = mu * ultrafast_pulse(t) 
-        H = H0 + H1
-        rho = rk4(H, rho, dt)
+        H = H0 + mu * ultrafast_pulse(t)
+        _, evecs = np.linalg.eigh(H)
+        evecs = align_phase(evecs_last, evecs)
+        rho = evecs.T.conj() @ rho_diabatic @ evecs
+        evecs_last[:] = evecs
+        
         t += dt
     return time_out, populations_out
 
 def main_floquet_mean_field(
-    rho0: ComplexOperator, 
+    rho0: ComplexOperator,
     H0: GenericOperator,
     mu: GenericOperator,
     envelope_pulse: Pulse,
     dt: float,
     NF: int,
     save_every: int = 10,
-    tfinal: float = 10, 
+    tfinal: float = 10,
 ) -> None:
-    nsteps = int(tfinal / dt) 
+    nsteps = int(tfinal / dt)
     time_out = np.zeros(nsteps//save_every+1, dtype=np.float64)
     populations_out = np.zeros((nsteps//save_every+1, 2), dtype=np.float64)
-    
+
     zeros_like = np.zeros_like(rho0)
     data = [zeros_like] * NF + [rho0] + [zeros_like] * NF
     # data = [rho0] * (2 * NF + 1)
     rhoF = sp.block_diag(data).toarray()
-    
-    driving_Omega = hamiltonian_td.get_carrier_frequency() 
-    
-    t = 0.0 
+
+    driving_Omega = hamiltonian_td.get_carrier_frequency()
+
+    t = 0.0
     for ii in range(nsteps):
         if ii % save_every == 0:
             time_out[ii//save_every] = t
@@ -181,50 +244,162 @@ def main_floquet_mean_field(
                 evecs_0=None,
                 evecs_F=None
             )
-        
-        H1 = mu * envelope_pulse(t) 
-        HF = get_HF_cos_python(H0, H1, driving_Omega, NF)
-        rhoF = rk4(HF, rhoF, dt)
+        rhoF = rk4_floquet(H0=H0, mu=mu, t=t, envelope_pulse=envelope_pulse, rho=rhoF, dt=dt, Omega=driving_Omega, NF=NF, deriv=derivative)
         t += dt
     return time_out, populations_out
 
-# %% 
+def main_floquet_mean_field_adiabatic(
+    rho0: ComplexOperator,
+    H0: GenericOperator,
+    mu: GenericOperator,
+    envelope_pulse: Pulse,
+    dt: float,
+    NF: int,
+    save_every: int = 10,
+    tfinal: float = 10,
+) -> None:
+    nsteps = int(tfinal / dt)
+    time_out = np.zeros(nsteps//save_every+1, dtype=np.float64)
+    populations_out = np.zeros((nsteps//save_every+1, 2), dtype=np.float64)
+
+    zeros_like = np.zeros_like(rho0)
+    data = [zeros_like] * NF + [rho0] + [zeros_like] * NF
+    # data = [rho0] * (2 * NF + 1)
+    rhoF = sp.block_diag(data).toarray()
+
+    # unitary transformation to the adiabatic basis
+    driving_Omega = hamiltonian_td.get_carrier_frequency()
+    H1_initial = mu * envelope_pulse(0.0)
+    HF_initial = get_HF_cos(H0, H1_initial, driving_Omega, NF)
+    _, evecs_F = np.linalg.eigh(HF_initial)
+    rhoF = evecs_F.T.conj() @ rhoF @ evecs_F
+    adiabatic_populations_out = np.zeros((nsteps//save_every+1, rhoF.shape[0]), dtype=np.float64)
+
+
+    evecs_F_last = np.copy(evecs_F)
+    t = 0.0
+    for ii in range(nsteps):
+        if ii % save_every == 0:
+            time_out[ii//save_every] = t
+            # populations_out[ii//save_every] = np.real(np.diag(rho))
+            HF = get_HF_cos(H0, mu * envelope_pulse(t), driving_Omega, NF)
+
+            populations_out[ii//save_every] = compute_floquet_populations(
+                state=rhoF,
+                dynamics_basis=BasisRepresentation.ADIABATIC,
+                floquet_basis=BasisRepresentation.DIABATIC,
+                target_state_basis=BasisRepresentation.DIABATIC,
+                Omega=driving_Omega,
+                t=t,
+                NF=NF,
+                dim=2,
+                evecs_0=None,
+                evecs_F=evecs_F_last
+            )
+            adiabatic_populations_out[ii//save_every] = np.real(rhoF.diagonal())
+            # print(f"t: {t}, populations: {populations_out[ii//save_every]}, adiabatic: {adiabatic_populations_out[ii//save_every].max()}")
+        
+
+        rhoF = rk4_floquet(H0=H0, mu=mu, t=t, envelope_pulse=envelope_pulse, rho=rhoF, dt=dt, Omega=driving_Omega, NF=NF, deriv=derivative_adiabatic)
+        rhoF_diabatic = evecs_F_last @ rhoF @ evecs_F_last.T.conj()
+        t += dt
+        evals_F, evecs_F = np.linalg.eigh(HF)
+        # print(f"{t=}, {envelope_pulse(t)=}, {evals_F=}")
+        evecs_F = align_phase(evecs_F_last, evecs_F)
+        rhoF = evecs_F.T.conj() @ rhoF_diabatic @ evecs_F
+        evecs_F_last = np.copy(evecs_F)
+    return time_out, populations_out
+
+# %%
 if __name__ == "__main__":
-    hamiltonian_td = get_hamiltonian(is_floquet=False)   
-    rho0 = np.zeros((2, 2), dtype=np.complex128)   
+    hamiltonian_td = get_hamiltonian(is_floquet=False)
+    rho0 = np.zeros((2, 2), dtype=np.complex128)
     rho0[0, 0] = 1.0
+    np.random.seed(300888)   
     R,P = boltzmann_sampling(1, hamiltonian_td.get_kT(), hamiltonian_td.omega_alpha)
     R = R[0]
-    
+
     t_td, pop_td = main_mean_field(
         rho0=rho0,
         H0=hamiltonian_td.H0(R=R),
         mu=np.array([[0, 1], [1, 0]]) * hamiltonian_td.mu_in_au / hamiltonian_td.dimless2au,
         ultrafast_pulse=hamiltonian_td.pulse,
-        dt=1/(100*hamiltonian_td.omega_alpha[-1]),
+        dt=1/(20*hamiltonian_td.omega_alpha[-1]),
     )
     
+    t_adtd, pop_adtd = main_mean_field_adiabatic(
+        rho0=rho0,
+        H0=hamiltonian_td.H0(R=R),
+        mu=np.array([[0, 1], [1, 0]]) * hamiltonian_td.mu_in_au / hamiltonian_td.dimless2au,
+        ultrafast_pulse=hamiltonian_td.pulse,
+        dt=1/(20*hamiltonian_td.omega_alpha[-1]),
+    )
+
     hamiltonian_td = get_hamiltonian(is_floquet=True)
-    
+
     t_fq, pop_fq = main_floquet_mean_field(
         rho0=rho0,
         H0=hamiltonian_td.H0(R=R),
         mu=np.array([[0, 1], [1, 0]]) * hamiltonian_td.mu_in_au / hamiltonian_td.dimless2au,
         envelope_pulse=hamiltonian_td.envelope_pulse,
-        dt=1/(100*hamiltonian_td.omega_alpha[-1]),
+        dt=1/(20*hamiltonian_td.omega_alpha[-1]),
         NF=hamiltonian_td.NF,
     )
-    
+
+    t_adfq, pop_adfq = main_floquet_mean_field_adiabatic(
+        rho0=rho0,
+        H0=hamiltonian_td.H0(R=R),
+        mu=np.array([[0, 1], [1, 0]]) * hamiltonian_td.mu_in_au / hamiltonian_td.dimless2au,
+        envelope_pulse=hamiltonian_td.envelope_pulse,
+        dt=1/(20*hamiltonian_td.omega_alpha[-1]),
+        NF=hamiltonian_td.NF,
+    )
+
     NF = hamiltonian_td.NF
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(t_td, pop_td[:, 0], label="Time-dependent")
-    # ax.plot(t_fq, pop_fq[:, 0]/(2*NF+1), label="Floquet")    
-    ax.plot(t_fq, pop_fq[:, 0], label="Floquet")    
+    ax.plot(t_adtd, pop_adtd[:, 0], label="Time-dependent Adiabatic")
+    # ax.plot(t_fq, pop_fq[:, 0]/(2*NF+1), label="Floquet")
+    ax.plot(t_fq, pop_fq[:, 0], ls='-', label="Floquet")
+    ax.plot(t_adfq, pop_adfq[:, 0], ls='--', label="Floquet Adiabatic")
     ax.legend()
-    
+    plt.show()
+
+
+
+# %%
+from scipy.linalg import expm
+from tests.test_utils import get_random_O
+np.random.seed(0)
+H = get_random_O(2, is_complex=True)
+print(H)
+dt = 0.0003
+rho0 = np.zeros((2, 2), dtype=np.complex128)
+rho0[0, 0] = 1.0
+U = expm(-1j * H * dt)
+
+rho_next = np.copy(rho0)
+rho_next_linear = np.copy(rho0)
+
+evals, evecs = np.linalg.eigh(H)
+rho_adiabatic = np.copy(evecs.T.conj() @ rho0 @ evecs)
+
+
+print(f"Before dynamics {rho_adiabatic}")
+
+for ii in range(30000):
+    rho_next = U @ rho_next @ U.T.conj()
+    rho_next_linear = rho_next_linear - 1j * dt * (H @ rho_next_linear - rho_next_linear @ H)
+    rho_adiabatic = rho_adiabatic - 1j * dt * (np.diagflat(evals) @ rho_adiabatic - rho_adiabatic @ np.diagflat(evals))
+    if ii % 100 == 0:
+        print("===")
+        print(rho_next)
+        print(rho_next_linear)
+        print(evecs @ rho_adiabatic @ evecs.T.conj())
+        print("===")
         
-    
-    
-    
+print(f"After dynamics {rho_adiabatic}")
+
+
 # %%

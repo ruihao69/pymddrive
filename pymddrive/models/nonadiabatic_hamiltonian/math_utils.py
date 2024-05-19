@@ -25,8 +25,11 @@ def align_phase(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> Gen
     tmp = np.dot(prev_evecs.conjugate().T, curr_evecs)
     diag_tmp = np.diag(tmp)
     phase_factors = np.ones_like(diag_tmp)
+    # mask = np.logical_not(np.isclose(diag_tmp.real, 0))
+    # phase_factors[mask] = np.sign(diag_tmp[mask].real)
     mask = np.logical_not(np.isclose(diag_tmp, 0))
     phase_factors[mask] = diag_tmp[mask] / np.abs(diag_tmp[mask])
+    # aligned_evecs = curr_evecs / np.conjugate(phase_factors)
     aligned_evecs = curr_evecs / phase_factors
     return aligned_evecs
 
