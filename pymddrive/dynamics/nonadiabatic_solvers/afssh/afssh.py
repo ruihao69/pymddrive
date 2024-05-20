@@ -11,7 +11,7 @@ from pymddrive.dynamics.nonadiabatic_solvers.fssh.fssh_math_utils import initial
 from pymddrive.dynamics.nonadiabatic_solvers.fssh.populations import compute_floquet_populations, compute_populations
 from pymddrive.dynamics.nonadiabatic_solvers.afssh.moments_math_utils import dot_delta_P, dot_delta_R, evaluate_delta_vec_O, evaluate_delta_vec_O, delta_P_rescale
 from pymddrive.dynamics.nonadiabatic_solvers.afssh.decoherence_rates import apply_decoherence
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization, adiabatic_to_diabatic, diabatic_to_adiabatic
 from pymddrive.low_level.states import State
 from pymddrive.low_level.surface_hopping import fssh_surface_hopping
 
@@ -37,6 +37,8 @@ class AFSSH(NonadiabaticSolverBase):
         v = state.get_v()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
         evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
+        rho_in_diabatic_basis = adiabatic_to_diabatic(rho, self.hamiltonian._last_evecs)
+        rho = diabatic_to_adiabatic(rho_in_diabatic_basis, evecs)
         d, F, F_hellmann_feynman = evaluate_nonadiabatic_couplings(dHdR=dHdR, evals=evals, evecs=evecs)
         self.hamiltonian.update_last_evecs(evecs)
 

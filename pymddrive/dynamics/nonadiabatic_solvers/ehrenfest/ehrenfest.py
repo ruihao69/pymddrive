@@ -35,9 +35,10 @@ class Ehrenfest(NonadiabaticSolverBase):
         """ Callback function for the Ehrenfest solver. """
         R, P, rho_or_psi = state.get_variables()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
-        rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.hamiltonian._last_evecs)
         evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
-        rho_or_psi = diabatic_to_adiabatic(rho_or_psi_in_diabatic_basis, evecs)
+        if self.basis_representation == BasisRepresentation.ADIABATIC:
+            rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.hamiltonian._last_evecs)
+            rho_or_psi = diabatic_to_adiabatic(rho_or_psi_in_diabatic_basis, evecs)
         self.hamiltonian.update_last_evecs(evecs)
         self.cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR)
         return state.from_unstructured(np.concatenate([R, P, rho_or_psi.flatten()], dtype=np.complex128)), True
@@ -146,7 +147,7 @@ class Ehrenfest(NonadiabaticSolverBase):
                 t=t,
                 dim=self.hamiltonian.dim,
                 NF=self.hamiltonian.NF,
-                evecs_F=self.cache.evecs,
+                evecs_F=self.hamiltonian._last_evecs,
                 evecs_0=evecs_0
             )
             diabatic_populations = compute_floquet_populations(
@@ -158,12 +159,12 @@ class Ehrenfest(NonadiabaticSolverBase):
                 t=t,
                 dim=self.hamiltonian.dim,
                 NF=self.hamiltonian.NF,
-                evecs_F=self.cache.evecs,
+                evecs_F=self.hamiltonian._last_evecs,
                 evecs_0=evecs_0
             )
         else:
-            adiabatic_populations = compute_populations(rho_or_psi, self.basis_representation, BasisRepresentation.ADIABATIC, self.cache.evecs)
-            diabatic_populations = compute_populations(rho_or_psi, self.basis_representation, BasisRepresentation.DIABATIC, self.cache.evecs)
+            adiabatic_populations = compute_populations(rho_or_psi, self.basis_representation, BasisRepresentation.ADIABATIC, self.hamiltonian._last_evecs)
+            diabatic_populations = compute_populations(rho_or_psi, self.basis_representation, BasisRepresentation.DIABATIC, self.hamiltonian._last_evecs)
 
         return NonadiabaticProperties(R=R, P=P, adiabatic_populations=adiabatic_populations, diabatic_populations=diabatic_populations, KE=KE, PE=PE)
 

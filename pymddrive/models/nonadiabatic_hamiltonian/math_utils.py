@@ -156,13 +156,23 @@ def diabatic_to_adiabatic(
     O: GenericOperator,
     U: GenericOperator,
 )-> GenericOperator:
-    return np.dot(U.conjugate().T, np.dot(O, U))
+    if O.ndim == 2:
+        return np.dot(U.conjugate().T, np.dot(O, U))
+    elif O.ndim == 1:
+        return np.dot(U, O)
+    else:
+        raise ValueError(f"Invalid dimension of the operator: {O.ndim=}. Only 1 or 2 is allowed.")
 
 def adiabatic_to_diabatic(
     O: GenericOperator,
     U: GenericOperator,
 ) -> GenericOperator:
-    return np.dot(U, np.dot(O, U.conjugate().T))
+    if O.ndim == 2:
+        return np.dot(U, np.dot(O, U.conjugate().T))
+    elif O.ndim == 1:
+        return np.dot(U.conjugate().T, O)
+    else:
+        raise ValueError(f"Invalid dimension of the operator: {O.ndim=}. Only 1 or 2 is allowed.")
 
 # %%
 def _evaluate_tullyone_hamiltonian(t, r, model):
