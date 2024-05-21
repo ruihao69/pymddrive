@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import scipy.sparse as sp
 
 from pymddrive.my_types import ComplexOperator, GenericOperator
-from pymddrive.models.nonadiabatic_hamiltonian import align_phase
+from pymddrive.models.nonadiabatic_hamiltonian import align_phase, diagonalization
 from pymddrive.models.spin_boson_discrete import get_spin_boson, boltzmann_sampling
 from pymddrive.dynamics.options import BasisRepresentation
 from pymddrive.pulses import PulseBase as Pulse
@@ -68,8 +68,10 @@ def derivative(
 def derivative_adiabatic(
     H: GenericOperator,
     rho: ComplexOperator,
+    last_evecs: GenericOperator,
 ) -> ComplexOperator:
-    evals, _ = np.linalg.eigh(H)
+    # evals, _ = np.linalg.eigh(H)
+    evals, evecs = diagonalization(H, last_evecs) 
     H_diag = np.diagflat(evals)
     return -1.j * (np.dot(H_diag, rho) - np.dot(rho, H_diag))
 
@@ -80,45 +82,28 @@ def rk4(
     pulse: Pulse,
     rho: ComplexOperator,
     dt: float,
-    deriv=derivative,
+    last_evecs: GenericOperator=None,
 ) -> ComplexOperator:
+    def deriv_wrapper(HF, rho):
+        if last_evecs is None:
+            return derivative(HF, rho)
+        else:
+            return derivative_adiabatic(HF, rho, last_evecs)
+        
     H1 = mu * pulse(t)
     H = H0 + H1
-    k1 = deriv(H, rho)
+    k1 = deriv_wrapper(H, rho)
     
     H1 = mu * pulse(t + dt / 2)
     H = H0 + H1
-    k2 = deriv(H, rho + dt / 2 * k1)
-    k3 = deriv(H, rho + dt / 2 * k2)
+    k2 = deriv_wrapper(H, rho + dt / 2 * k1)
+    k3 = deriv_wrapper(H, rho + dt / 2 * k2)
     
     H1 = mu * pulse(t + dt)
     H = H0 + H1
-    k4 = deriv(H, rho + dt * k3)
+    k4 = deriv_wrapper(H, rho + dt * k3)
     return rho + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
 
-def rk4_adiabatic(
-    H0: GenericOperator,
-    mu: GenericOperator,
-    t: float,
-    pulse: Pulse,
-    rho: ComplexOperator,
-    dt: float,
-    deriv=derivative_adiabatic,
-) -> Tuple[ComplexOperator, GenericOperator]:
-    H1 = mu * pulse(t)
-    H = H0 + H1
-    k1 = deriv(H, rho)
-    
-    H1 = mu * pulse(t + dt / 2)
-    H = H0 + H1
-    k2 = deriv(H, rho + dt / 2 * k1)
-    k3 = deriv(H, rho + dt / 2 * k2)
-    
-    H1 = mu * pulse(t + dt)
-    k4 = deriv(H, rho + dt * k3)
-    
-    return rho + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
-    
     
     
 def rk4_floquet(
@@ -130,20 +115,26 @@ def rk4_floquet(
     dt: float,
     Omega: float,
     NF: int,
-    deriv=derivative,
+    last_evecs: GenericOperator=None,
 ) -> ComplexOperator:
+    def deriv_wrapper(HF, rho):
+        if last_evecs is None:
+            return derivative(HF, rho)
+        else:
+            return derivative_adiabatic(HF, rho, last_evecs)
+    
     H1 = mu * envelope_pulse(t)
     HF = get_HF_cos(H0, H1, Omega, NF)
-    k1 = deriv(HF, rho)
+    k1 = deriv_wrapper(HF, rho)
     
     H1 = mu * envelope_pulse(t + dt / 2)
     HF = get_HF_cos(H0, H1, Omega, NF)
-    k2 = deriv(HF, rho + dt / 2 * k1)
-    k3 = deriv(HF, rho + dt / 2 * k2)
+    k2 = deriv_wrapper(HF, rho + dt / 2 * k1)
+    k3 = deriv_wrapper(HF, rho + dt / 2 * k2)
     
     H1 = mu * envelope_pulse(t + dt)
     HF = get_HF_cos(H0, H1, Omega, NF)
-    k4 = deriv(HF, rho + dt * k3)
+    k4 = deriv_wrapper(HF, rho + dt * k3)
     return rho + dt / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
     
 
@@ -167,7 +158,7 @@ def main_mean_field(
             time_out[ii//save_every] = t
             populations_out[ii//save_every] = np.real(np.diag(rho))
 
-        rho = rk4(H0=H0, mu=mu, t=t, pulse=ultrafast_pulse, rho=rho, dt=dt, deriv=derivative)
+        rho = rk4(H0=H0, mu=mu, t=t, pulse=ultrafast_pulse, rho=rho, dt=dt,)
         t += dt
     return time_out, populations_out
 
@@ -194,12 +185,11 @@ def main_mean_field_adiabatic(
             rho_diabatic = evecs_last @ rho @ evecs_last.T.conj()
             populations_out[ii//save_every] = np.real(np.diag(rho_diabatic))
 
-        rho = rk4_adiabatic(H0=H0, mu=mu, t=t, pulse=ultrafast_pulse, rho=rho, dt=dt,)
+        rho = rk4(H0=H0, mu=mu, t=t, pulse=ultrafast_pulse, rho=rho, dt=dt, last_evecs=evecs_last) 
         rho_diabatic = evecs_last @ rho @ evecs_last.T.conj()
         
         H = H0 + mu * ultrafast_pulse(t)
-        _, evecs = np.linalg.eigh(H)
-        evecs = align_phase(evecs_last, evecs)
+        _, evecs = diagonalization(H, evecs_last)
         rho = evecs.T.conj() @ rho_diabatic @ evecs
         evecs_last[:] = evecs
         
@@ -244,7 +234,7 @@ def main_floquet_mean_field(
                 evecs_0=None,
                 evecs_F=None
             )
-        rhoF = rk4_floquet(H0=H0, mu=mu, t=t, envelope_pulse=envelope_pulse, rho=rhoF, dt=dt, Omega=driving_Omega, NF=NF, deriv=derivative)
+        rhoF = rk4_floquet(H0=H0, mu=mu, t=t, envelope_pulse=envelope_pulse, rho=rhoF, dt=dt, Omega=driving_Omega, NF=NF, )
         t += dt
     return time_out, populations_out
 
@@ -300,12 +290,10 @@ def main_floquet_mean_field_adiabatic(
             # print(f"t: {t}, populations: {populations_out[ii//save_every]}, adiabatic: {adiabatic_populations_out[ii//save_every].max()}")
         
 
-        rhoF = rk4_floquet(H0=H0, mu=mu, t=t, envelope_pulse=envelope_pulse, rho=rhoF, dt=dt, Omega=driving_Omega, NF=NF, deriv=derivative_adiabatic)
+        rhoF = rk4_floquet(H0=H0, mu=mu, t=t, envelope_pulse=envelope_pulse, rho=rhoF, dt=dt, Omega=driving_Omega, NF=NF, last_evecs=evecs_F_last,)
         rhoF_diabatic = evecs_F_last @ rhoF @ evecs_F_last.T.conj()
         t += dt
-        evals_F, evecs_F = np.linalg.eigh(HF)
-        # print(f"{t=}, {envelope_pulse(t)=}, {evals_F=}")
-        evecs_F = align_phase(evecs_F_last, evecs_F)
+        _, evecs_F = diagonalization(HF, evecs_F_last)
         rhoF = evecs_F.T.conj() @ rhoF_diabatic @ evecs_F
         evecs_F_last = np.copy(evecs_F)
     return time_out, populations_out
@@ -359,9 +347,9 @@ if __name__ == "__main__":
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(t_td, pop_td[:, 0], label="Time-dependent")
-    ax.plot(t_adtd, pop_adtd[:, 0], label="Time-dependent Adiabatic")
+    ax.plot(t_adtd, pop_adtd[:, 0], ls='--', label="Time-dependent Adiabatic")
     # ax.plot(t_fq, pop_fq[:, 0]/(2*NF+1), label="Floquet")
-    ax.plot(t_fq, pop_fq[:, 0], ls='-', label="Floquet")
+    ax.plot(t_fq, pop_fq[:, 0], ls='-.', label="Floquet")
     ax.plot(t_adfq, pop_adfq[:, 0], ls='--', label="Floquet Adiabatic")
     ax.legend()
     plt.show()

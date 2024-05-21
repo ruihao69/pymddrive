@@ -37,7 +37,8 @@ class Ehrenfest(NonadiabaticSolverBase):
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
         evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
         if self.basis_representation == BasisRepresentation.ADIABATIC:
-            rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.hamiltonian._last_evecs)
+            # rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.hamiltonian._last_evecs)
+            rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.cache.evecs)
             rho_or_psi = diabatic_to_adiabatic(rho_or_psi_in_diabatic_basis, evecs)
         self.hamiltonian.update_last_evecs(evecs)
         self.cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR)
@@ -50,7 +51,8 @@ class Ehrenfest(NonadiabaticSolverBase):
         if self.basis_representation == BasisRepresentation.DIABATIC:
             dR, dP, drho = self.derivative_diabatic(v, rho, H, dHdR, self.cache.F_langevin)
         elif self.basis_representation == BasisRepresentation.ADIABATIC:
-            dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.hamiltonian._last_evecs)
+            # dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.hamiltonian._last_evecs)
+            dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.cache.evecs)
         else:
             raise ValueError("Unsupported basis representation.")
         return state.from_unstructured(np.concatenate([dR, dP, drho.flatten()], dtype=np.complex128))
@@ -71,7 +73,9 @@ class Ehrenfest(NonadiabaticSolverBase):
         quantum_representation = QuantumRepresentation.WAVEFUNCTION if rho_or_psi.ndim > 1 else QuantumRepresentation.DENSITY_MATRIX
 
         H, dHdR = evaluate_hamiltonian(0.0, R, hamiltonian)
-        evals, evecs = diagonalization(H, hamiltonian._last_evecs)
+        # evals, evecs = diagonalization(H, hamiltonian._last_evecs)
+        evals, evecs = diagonalization(H, prev_evecs=None)
+        hamiltonian.update_last_evecs(evecs)
         d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
 
         cache = Cache.from_dimensions(dim_elec=dim_hamiltonian, dim_nucl=dim_nuclear)
@@ -147,7 +151,8 @@ class Ehrenfest(NonadiabaticSolverBase):
                 t=t,
                 dim=self.hamiltonian.dim,
                 NF=self.hamiltonian.NF,
-                evecs_F=self.hamiltonian._last_evecs,
+                # evecs_F=self.hamiltonian._last_evecs,
+                evecs_F=self.cache.evecs,
                 evecs_0=evecs_0
             )
             diabatic_populations = compute_floquet_populations(
@@ -159,7 +164,8 @@ class Ehrenfest(NonadiabaticSolverBase):
                 t=t,
                 dim=self.hamiltonian.dim,
                 NF=self.hamiltonian.NF,
-                evecs_F=self.hamiltonian._last_evecs,
+                # evecs_F=self.hamiltonian._last_evecs,
+                evecs_F=self.cache.evecs,
                 evecs_0=evecs_0
             )
         else:
