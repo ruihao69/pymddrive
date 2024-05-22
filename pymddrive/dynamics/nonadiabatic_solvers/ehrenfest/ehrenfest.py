@@ -39,10 +39,11 @@ class Ehrenfest(NonadiabaticSolverBase):
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
         # evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
         evals, evecs, phase_correction = diagonalization(H, prev_evecs=self.hamiltonian._last_evecs)
-        if self.cum_phase_corr is None:
-            self.cum_phase_corr = np.copy(phase_correction)
-        else:
-            np.copyto(self.cum_phase_corr, phase_correction)
+        # if self.cum_phase_corr is None:
+        #     self.cum_phase_corr = np.copy(phase_correction)
+        # else:
+        #     np.copyto(self.cum_phase_corr, phase_correction)
+        self.cum_phase_corr = phase_correction
         # if self.basis_representation == BasisRepresentation.ADIABATIC:
         #     # rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.hamiltonian._last_evecs)
         #     rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.cache.evecs)
