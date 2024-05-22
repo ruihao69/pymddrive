@@ -38,10 +38,10 @@ class Ehrenfest(NonadiabaticSolverBase):
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
         # evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
         evals, evecs, _ = diagonalization(H, prev_evecs=self.hamiltonian._last_evecs)
-        # if self.basis_representation == BasisRepresentation.ADIABATIC:
+        if self.basis_representation == BasisRepresentation.ADIABATIC:
             # rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.hamiltonian._last_evecs)
-            # rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.cache.evecs)
-            # rho_or_psi = diabatic_to_adiabatic(rho_or_psi_in_diabatic_basis, evecs)
+            rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.cache.evecs)
+            rho_or_psi = diabatic_to_adiabatic(rho_or_psi_in_diabatic_basis, evecs)
         self.hamiltonian.update_last_evecs(evecs)
         self.cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR)
         return state.from_unstructured(np.concatenate([R, P, rho_or_psi.flatten()], dtype=np.complex128)), True
