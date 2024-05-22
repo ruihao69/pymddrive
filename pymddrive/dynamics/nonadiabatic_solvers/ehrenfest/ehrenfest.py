@@ -81,7 +81,7 @@ class Ehrenfest(NonadiabaticSolverBase):
 
         H, dHdR = evaluate_hamiltonian(0.0, R, hamiltonian)
         # evals, evecs = diagonalization(H, hamiltonian._last_evecs)
-        evals, evecs, _ = diagonalization(H, prev_evecs=None)
+        evals, evecs, phase_correction = diagonalization(H, prev_evecs=None)
         hamiltonian.update_last_evecs(evecs)
         d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
 
@@ -95,7 +95,8 @@ class Ehrenfest(NonadiabaticSolverBase):
             quantum_representation=quantum_representation,
             basis_representation=basis_representation,
             hamiltonian=hamiltonian,
-            cache=cache
+            cache=cache,
+            cum_phase_corr=phase_correction,
         )
 
     @staticmethod
