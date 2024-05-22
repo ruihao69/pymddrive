@@ -1,9 +1,10 @@
 # %%
 import numpy as np
 import numpy.linalg as LA
+from numba import njit
 from nptyping import NDArray, Shape, Float64
 
-from pymddrive.my_types import GenericOperator, GenericVectorOperator, RealVector
+from pymddrive.my_types import RealOperator, ComplexOperator, GenericOperator, GenericVectorOperator, RealVector, ComplexVector, GenericVector
 
 from typing import Tuple, Optional
 
@@ -29,9 +30,54 @@ def align_phase(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> Gen
     # phase_factors[mask] = np.sign(diag_tmp[mask].real)
     mask = np.logical_not(np.isclose(diag_tmp, 0))
     phase_factors[mask] = diag_tmp[mask] / np.abs(diag_tmp[mask])
-    # aligned_evecs = curr_evecs / np.conjugate(phase_factors)
     aligned_evecs = curr_evecs / phase_factors
     return aligned_evecs
+
+@njit
+def get_phase_correction_real(prev_evecs: RealOperator, curr_evecs: RealOperator) -> GenericOperator:
+    phase_correction = np.zeros(curr_evecs.shape[0], dtype=np.float64)
+    for ii in range(curr_evecs.shape[1]):
+        tmp1 = np.ascontiguousarray(prev_evecs[:, ii])
+        tmp2 = np.ascontiguousarray(curr_evecs[:, ii])
+        phase_correction[ii] = np.sign(np.dot(tmp1, tmp2))
+    return phase_correction
+
+@njit
+def get_phase_correction_complex(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> GenericOperator:
+    phase_correction = np.zeros(curr_evecs.shape[0], dtype=np.complex128)
+    for ii in range(curr_evecs.shape[1]):
+        tmp1 = np.ascontiguousarray(prev_evecs[:, ii])
+        tmp2 = np.ascontiguousarray(curr_evecs[:, ii])
+        tmpval: np.complex128 = np.dot(tmp1.conjugate(), tmp2)
+        phase_correction[ii] = 1.0 if np.isclose(tmpval, 0) else tmpval / np.abs(tmpval)
+    return phase_correction
+
+def get_phase_correction(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> GenericOperator:
+    if np.iscomplexobj(prev_evecs) or np.iscomplexobj(curr_evecs):
+        return get_phase_correction_complex(prev_evecs, curr_evecs)
+    else:
+        return get_phase_correction_real(prev_evecs, curr_evecs)
+    
+def get_corrected_psi(psi: ComplexVector, phase_correction: ComplexVector) -> ComplexVector:
+    return psi * phase_correction 
+
+@njit
+def get_corrected_rho(rho: ComplexOperator, phase_correction: ComplexVector) -> ComplexVector:
+    rho_corrected = np.copy(rho)
+    for ii in range(rho.shape[1]):
+        for jj in range(ii + 1, rho.shape[0]):
+            rho_corrected[ii, jj] = rho[ii, jj] * (phase_correction[ii] * np.conjugate(phase_correction[jj]))
+            rho_corrected[jj, ii] = rho_corrected[ii, jj].conjugate()
+    return rho_corrected
+
+def get_corrected_rho_or_psi(rho_or_psi: GenericOperator, phase_correction: GenericVector) -> GenericVector:
+    if rho_or_psi.ndim == 1:
+        return get_corrected_psi(rho_or_psi, phase_correction)
+    elif rho_or_psi.ndim == 2:
+        return get_corrected_rho(rho_or_psi, phase_correction)
+    else:
+        raise ValueError(f"Invalid dimension of the operator: {rho_or_psi.ndim=}. Only 1 or 2 is allowed.")
+    
 
 def nac_phase_following(d_prev: GenericVectorOperator, d_curr: GenericVectorOperator) -> GenericVectorOperator:
     """A wrapper function for numba routine '_nac_phase_following' to calculate the
@@ -127,11 +173,16 @@ def adjust_nac_phase(d_prev: GenericVectorOperator, d_curr: GenericVectorOperato
     return d_corr
 
 
-def diagonalization(hamiltonian: GenericOperator, prev_evecs: Optional[GenericOperator]=None) -> Tuple[RealVector, GenericOperator]:
+# def diagonalization(hamiltonian: GenericOperator, prev_evecs: Optional[GenericOperator]=None) -> Tuple[RealVector, GenericOperator]:
+#     evals, evecs = LA.eigh(hamiltonian)
+#     evecs = align_phase(prev_evecs, evecs) if np.sum(np.shape(prev_evecs)) > 0 else evecs
+#     evecs = np.ascontiguousarray(np.real(evecs)) if np.allclose(evecs.imag, 0) else evecs
+#     return evals, evecs
+
+def diagonalization(hamiltonian: GenericOperator, prev_evecs: Optional[GenericOperator]=None) -> Tuple[RealVector, GenericOperator, GenericVector]:
     evals, evecs = LA.eigh(hamiltonian)
-    evecs = align_phase(prev_evecs, evecs) if np.sum(np.shape(prev_evecs)) > 0 else evecs
-    evecs = np.ascontiguousarray(np.real(evecs)) if np.allclose(evecs.imag, 0) else evecs
-    return evals, evecs
+    phase_correction = get_phase_correction(prev_evecs, evecs) if np.sum(np.shape(prev_evecs)) > 0 else np.ones(hamiltonian.shape[1])
+    return evals, evecs / phase_correction, phase_correction
 
 
 def diagonalize_2d_real_symmetric(

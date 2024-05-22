@@ -10,6 +10,7 @@ from pymddrive.dynamics.nonadiabatic_solvers.math_utils import expected_value, d
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.ehrenfest_math_utils import mean_force_adiabatic_representation
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations, compute_populations
 from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization, adiabatic_to_diabatic, diabatic_to_adiabatic
+from pymddrive.models.nonadiabatic_hamiltonian.math_utils import get_corrected_rho_or_psi
 from pymddrive.low_level.states import State
 
 
@@ -35,11 +36,12 @@ class Ehrenfest(NonadiabaticSolverBase):
         """ Callback function for the Ehrenfest solver. """
         R, P, rho_or_psi = state.get_variables()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
-        evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
-        if self.basis_representation == BasisRepresentation.ADIABATIC:
+        # evals, evecs = diagonalization(H, self.hamiltonian._last_evecs)
+        evals, evecs, _ = diagonalization(H, prev_evecs=self.hamiltonian._last_evecs)
+        # if self.basis_representation == BasisRepresentation.ADIABATIC:
             # rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.hamiltonian._last_evecs)
-            rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.cache.evecs)
-            rho_or_psi = diabatic_to_adiabatic(rho_or_psi_in_diabatic_basis, evecs)
+            # rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.cache.evecs)
+            # rho_or_psi = diabatic_to_adiabatic(rho_or_psi_in_diabatic_basis, evecs)
         self.hamiltonian.update_last_evecs(evecs)
         self.cache.update_cache(H=H, evals=evals, evecs=evecs, dHdR=dHdR)
         return state.from_unstructured(np.concatenate([R, P, rho_or_psi.flatten()], dtype=np.complex128)), True
@@ -74,7 +76,7 @@ class Ehrenfest(NonadiabaticSolverBase):
 
         H, dHdR = evaluate_hamiltonian(0.0, R, hamiltonian)
         # evals, evecs = diagonalization(H, hamiltonian._last_evecs)
-        evals, evecs = diagonalization(H, prev_evecs=None)
+        evals, evecs, _ = diagonalization(H, prev_evecs=None)
         hamiltonian.update_last_evecs(evecs)
         d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
 
@@ -114,7 +116,8 @@ class Ehrenfest(NonadiabaticSolverBase):
         last_evecs: GenericOperator
     ) -> Tuple[RealVector, RealVector, Union[ComplexVector, ComplexOperator]]:
         # diagonalize the Hamiltonian
-        evals, evecs = diagonalization(H, last_evecs)
+        # evals, evecs = diagonalization(H, last_evecs)
+        evals, evecs, phase_correction = diagonalization(H, prev_evecs=last_evecs)
         # compute the nonadiabatic couplings
         d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         # evaluate the v_dot_d term
@@ -123,6 +126,7 @@ class Ehrenfest(NonadiabaticSolverBase):
         R_dot = v
         P_dot = mean_force_adiabatic_representation(F, evals, d, rho_or_psi) + F_langevin
         rho_or_psi_dot = adiabatic_equations_of_motion(rho_or_psi, evals, v_dot_d)
+        rho_or_psi_dot = get_corrected_rho_or_psi(rho_or_psi_dot, phase_correction)
         return R_dot, P_dot, rho_or_psi_dot
 
     # Implement the Ehrenfest specific methods
@@ -137,7 +141,7 @@ class Ehrenfest(NonadiabaticSolverBase):
 
         if isinstance(self.hamiltonian, QuasiFloquetHamiltonianBase):
             H0 = self.hamiltonian.H0(R=R)
-            _, evecs_0 = diagonalization(H0, prev_evecs=self.evecs_0)
+            _, evecs_0, _ = diagonalization(H0, prev_evecs=self.evecs_0)
             if self.evecs_0 is None:
                 self.evecs_0 = np.copy(evecs_0)
             else:

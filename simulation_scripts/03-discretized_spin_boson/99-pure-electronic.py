@@ -186,12 +186,12 @@ def main_mean_field_adiabatic(
             populations_out[ii//save_every] = np.real(np.diag(rho_diabatic))
 
         rho = rk4(H0=H0, mu=mu, t=t, pulse=ultrafast_pulse, rho=rho, dt=dt, last_evecs=evecs_last) 
-        rho_diabatic = evecs_last @ rho @ evecs_last.T.conj()
+        # rho_diabatic = evecs_last @ rho @ evecs_last.T.conj()
         
-        H = H0 + mu * ultrafast_pulse(t)
-        _, evecs = diagonalization(H, evecs_last)
-        rho = evecs.T.conj() @ rho_diabatic @ evecs
-        evecs_last[:] = evecs
+        # H = H0 + mu * ultrafast_pulse(t)
+        # _, evecs = diagonalization(H, evecs_last)
+        # rho = evecs.T.conj() @ rho_diabatic @ evecs
+        # evecs_last[:] = evecs
         
         t += dt
     return time_out, populations_out
