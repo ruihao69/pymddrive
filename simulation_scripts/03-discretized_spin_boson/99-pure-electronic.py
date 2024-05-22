@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import scipy.sparse as sp
 
 from pymddrive.my_types import ComplexOperator, GenericOperator
-from pymddrive.models.nonadiabatic_hamiltonian import align_phase, diagonalization
+from pymddrive.models.nonadiabatic_hamiltonian import diagonalization
+from pymddrive.models.nonadiabatic_hamiltonian.math_utils import get_corrected_rho_or_psi
 from pymddrive.models.spin_boson_discrete import get_spin_boson, boltzmann_sampling
 from pymddrive.dynamics.options import BasisRepresentation
 from pymddrive.pulses import PulseBase as Pulse
@@ -71,9 +72,10 @@ def derivative_adiabatic(
     last_evecs: GenericOperator,
 ) -> ComplexOperator:
     # evals, _ = np.linalg.eigh(H)
-    evals, evecs = diagonalization(H, last_evecs) 
+    evals, evecs, phase_correction = diagonalization(H, last_evecs) 
     H_diag = np.diagflat(evals)
-    return -1.j * (np.dot(H_diag, rho) - np.dot(rho, H_diag))
+    rho_dot = -1.j * (np.dot(H_diag, rho) - np.dot(rho, H_diag))
+    return get_corrected_rho_or_psi(rho_or_psi=rho_dot, phase_correction=phase_correction)
 
 def rk4(
     H0: GenericOperator,
@@ -186,12 +188,13 @@ def main_mean_field_adiabatic(
             populations_out[ii//save_every] = np.real(np.diag(rho_diabatic))
 
         rho = rk4(H0=H0, mu=mu, t=t, pulse=ultrafast_pulse, rho=rho, dt=dt, last_evecs=evecs_last) 
-        # rho_diabatic = evecs_last @ rho @ evecs_last.T.conj()
+        rho_diabatic = evecs_last @ rho @ evecs_last.T.conj()
         
-        # H = H0 + mu * ultrafast_pulse(t)
-        # _, evecs = diagonalization(H, evecs_last)
-        # rho = evecs.T.conj() @ rho_diabatic @ evecs
-        # evecs_last[:] = evecs
+        H = H0 + mu * ultrafast_pulse(t)
+        _, evecs, phase_correction = diagonalization(H, evecs_last)
+        rho = get_corrected_rho_or_psi(rho_or_psi=rho, phase_correction=phase_correction)
+        rho = evecs.T.conj() @ rho_diabatic @ evecs
+        evecs_last[:] = evecs
         
         t += dt
     return time_out, populations_out
@@ -291,11 +294,17 @@ def main_floquet_mean_field_adiabatic(
         
 
         rhoF = rk4_floquet(H0=H0, mu=mu, t=t, envelope_pulse=envelope_pulse, rho=rhoF, dt=dt, Omega=driving_Omega, NF=NF, last_evecs=evecs_F_last,)
-        rhoF_diabatic = evecs_F_last @ rhoF @ evecs_F_last.T.conj()
+        HF = get_HF_cos(H0, mu * envelope_pulse(t), driving_Omega, NF)
+        _, evecs_F, phase_correction = diagonalization(HF, evecs_F_last)
+        rhoF = get_corrected_rho_or_psi(rho_or_psi=rhoF, phase_correction=phase_correction)
+        rho_F_diabatic = evecs_F_last @ rhoF @ evecs_F_last.T.conj() 
+        rhoF = evecs_F.T.conj() @ rho_F_diabatic @ evecs_F
+        evecs_F_last[:] = evecs_F
+        # rhoF_diabatic = evecs_F_last @ rhoF @ evecs_F_last.T.conj()
         t += dt
-        _, evecs_F = diagonalization(HF, evecs_F_last)
-        rhoF = evecs_F.T.conj() @ rhoF_diabatic @ evecs_F
-        evecs_F_last = np.copy(evecs_F)
+        # _, evecs_F = diagonalization(HF, evecs_F_last)
+        # rhoF = evecs_F.T.conj() @ rhoF_diabatic @ evecs_F
+        # evecs_F_last = np.copy(evecs_F)
     return time_out, populations_out
 
 # %%

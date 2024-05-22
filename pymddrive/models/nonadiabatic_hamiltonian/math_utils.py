@@ -35,21 +35,24 @@ def align_phase(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> Gen
 
 @njit
 def get_phase_correction_real(prev_evecs: RealOperator, curr_evecs: RealOperator) -> GenericOperator:
+    TOL = 1e-10
     phase_correction = np.zeros(curr_evecs.shape[0], dtype=np.float64)
     for ii in range(curr_evecs.shape[1]):
         tmp1 = np.ascontiguousarray(prev_evecs[:, ii])
         tmp2 = np.ascontiguousarray(curr_evecs[:, ii])
-        phase_correction[ii] = np.sign(np.dot(tmp1, tmp2))
+        dotval: float = np.dot(tmp1, tmp2)
+        phase_correction[ii] = 1.0 if np.abs(dotval) < TOL else np.sign(dotval)
     return phase_correction
 
 @njit
 def get_phase_correction_complex(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> GenericOperator:
+    TOL = 1e-10
     phase_correction = np.zeros(curr_evecs.shape[0], dtype=np.complex128)
     for ii in range(curr_evecs.shape[1]):
         tmp1 = np.ascontiguousarray(prev_evecs[:, ii])
         tmp2 = np.ascontiguousarray(curr_evecs[:, ii])
         tmpval: np.complex128 = np.dot(tmp1.conjugate(), tmp2)
-        phase_correction[ii] = 1.0 if np.isclose(tmpval, 0) else tmpval / np.abs(tmpval)
+        phase_correction[ii] = 1.0 if np.abs(tmpval) < TOL else tmpval / np.abs(tmpval)
     return phase_correction
 
 def get_phase_correction(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> GenericOperator:
