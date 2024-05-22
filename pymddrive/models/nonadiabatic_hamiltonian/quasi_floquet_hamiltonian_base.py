@@ -66,7 +66,7 @@ class QuasiFloquetHamiltonianBase(HamiltonianBase):
 
     def H(self, t: float, R: RealVector) -> GenericOperator:
         H0 = self.H0(R)
-        H1 = self.H1(t, R) * np.exp(1.j*selfself.driving_Omega*t)
+        H1 = self.H1(t, R) 
         return self._get_HF(H0, H1, self.driving_Omega, self.NF)
 
     def dHdR(self, t: float, R: RealVector) -> GenericVectorOperator:

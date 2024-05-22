@@ -41,7 +41,8 @@ class Gaussian(PulseBase):
         """
         # with phase factor
         t0 = morlet.t0; Omega = morlet.Omega; phi = morlet.phi
-        phase_factor = np.exp(-1.0j * (Omega * t0 - phi))
+        # phase_factor = np.exp(-1.0j * (Omega * t0 - phi))
+        phase_factor = np.exp(1.0j * (Omega * t0 - phi)) 
         gaussian_complex_A: complex = morlet.A * phase_factor
         return cls(A=gaussian_complex_A, t0=t0, tau=morlet.tau)
     
