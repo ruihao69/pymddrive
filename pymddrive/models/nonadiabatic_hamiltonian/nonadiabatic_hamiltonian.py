@@ -5,8 +5,11 @@ from nptyping import NDArray, Shape
 
 from pymddrive.my_types import RealVector, GenericOperator, GenericVectorOperator, RealVectorOperator, RealOperator
 from pymddrive.models.nonadiabatic_hamiltonian.hamiltonian_base import HamiltonianBase as Hamiltonian
+from pymddrive.models.nonadiabatic_hamiltonian.td_hamiltonian_base import TD_HamiltonianBase
+from pymddrive.models.nonadiabatic_hamiltonian.quasi_floquet_hamiltonian_base import QuasiFloquetHamiltonianBase
+from pymddrive.models.floquet.floquet import get_grad_HF_Et_upper
 
-from typing import Tuple, Any
+from typing import Tuple, Any, Union
 
 
 def evaluate_hamiltonian(
@@ -17,6 +20,68 @@ def evaluate_hamiltonian(
     H = hamiltonian.H(t, R)
     dHdR = hamiltonian.dHdR(t, R)
     return H, dHdR
+
+def evaluate_pulse_NAC(
+    t: float,
+    R: RealVector,
+    hamiltonian: Union[TD_HamiltonianBase, QuasiFloquetHamiltonianBase],
+    evals: RealVector,
+    evecs: GenericOperator,
+) -> GenericOperator:
+    H1 = hamiltonian.H1(t, R)
+    if isinstance(hamiltonian, TD_HamiltonianBase):
+        pulse_value = hamiltonian.pulse(t)
+        pulse_gradient = hamiltonian.pulse.gradient(t)
+        grad_H = H1 / pulse_value
+        return evaluate_pulse_NAC_TD(pulse_gradient, grad_H, evals, evecs)
+    elif isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
+        pulse_value = hamiltonian.envelope_pulse(t)
+        pulse_gradient = hamiltonian.envelope_pulse.gradient(t)
+        grad_H1 = H1 / pulse_value
+        grad_H_upper = get_grad_HF_Et_upper(hamiltonian.floquet_type, grad_H1, hamiltonian.NF)
+        return evaluate_pulse_NAC_TD(pulse_gradient, grad_H_upper, evals, evecs) + evaluate_pulse_NAC_TD(np.conjugate(pulse_gradient), grad_H_upper.T.conjugate(), evals, evecs)
+        
+        
+def evaluate_pulse_NAC_TD(
+    pulse_gradient: float, # note: the current implementation don't support complex pulse value, yet
+    grad_H: RealOperator,
+    evals: RealVector,
+    evecs: RealOperator,
+) -> GenericOperator:
+    if np.iscomplexobj(grad_H) or np.iscomplexobj(evecs):
+        return evaluate_pulse_NAC_TD_complex(pulse_gradient, grad_H, evals, evecs)
+    else:
+        return evaluate_pulse_NAC_TD_real(pulse_gradient, grad_H, evals, evecs)
+
+@njit
+def evaluate_pulse_NAC_TD_real(
+    pulse_gradient: float, # note: the current implementation don't support complex pulse value, yet
+    grad_H: RealOperator,
+    evals: RealVector,
+    evecs: RealOperator,
+) -> RealOperator:
+    nac_pulse = np.dot(evecs.T, np.dot(grad_H, evecs))
+    for ii in range(evals.shape[0]):
+        nac_pulse[ii, ii] = 0.0
+        for jj in range(ii+1, evals.shape[0]):
+            nac_pulse[ii, jj] = grad_H[ii, jj] / (evals[ii] - evals[jj]) * pulse_gradient
+            nac_pulse[jj, ii] = -nac_pulse[ii, jj]
+    return nac_pulse
+
+@njit
+def evaluate_pulse_NAC_TD_complex(
+    pulse_gradient: float, # note: the current implementation don't support complex pulse value, yet
+    grad_H: GenericOperator,
+    evals: RealVector,
+    evecs: GenericOperator,
+) -> RealOperator:
+    nac_pulse = np.zeros((evecs.shape[0], evecs.shape[0]), dtype=np.complex128)
+    nac_pulse[:] = np.dot(evecs.T.conjugate(), np.dot(grad_H, evecs))
+    for ii in range(evals.shape[0]):
+        nac_pulse[ii, ii] = 0.0
+        for jj in range(ii+1, evals.shape[0]):
+            nac_pulse[ii, jj] = grad_H[ii, jj] / (evals[ii] - evals[jj]) * pulse_gradient
+            nac_pulse[jj, ii] = -nac_pulse[ii, jj].conjugate()
 
 def evaluate_nonadiabatic_couplings(
     dHdR: GenericVectorOperator,
