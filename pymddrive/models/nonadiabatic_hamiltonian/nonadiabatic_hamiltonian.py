@@ -21,25 +21,38 @@ def evaluate_hamiltonian(
     dHdR = hamiltonian.dHdR(t, R)
     return H, dHdR
 
-def evaluate_pulse_NAC(
-    t: float,
+def evaluate_pulse_gradient(
+    t: float, 
     R: RealVector,
     hamiltonian: Union[TD_HamiltonianBase, QuasiFloquetHamiltonianBase],
-    evals: RealVector,
-    evecs: GenericOperator,
-) -> GenericOperator:
-    H1 = hamiltonian.H1(t, R)
+) -> Tuple[float, GenericOperator]:
     if isinstance(hamiltonian, TD_HamiltonianBase):
+        H1 = hamiltonian.H1(t, R)
         pulse_value = hamiltonian.pulse(t)
         pulse_gradient = hamiltonian.pulse.gradient(t)
-        grad_H = H1 / pulse_value
-        return evaluate_pulse_NAC_TD(pulse_gradient, grad_H, evals, evecs)
+        return pulse_gradient, H1 / pulse_value
     elif isinstance(hamiltonian, QuasiFloquetHamiltonianBase):
+        H1 = hamiltonian.H1(t, R)
         pulse_value = hamiltonian.envelope_pulse(t)
         pulse_gradient = hamiltonian.envelope_pulse.gradient(t)
-        grad_H1 = H1 / pulse_value
-        grad_H_upper = get_grad_HF_Et_upper(hamiltonian.floquet_type, grad_H1, hamiltonian.NF)
+        return pulse_gradient, get_grad_HF_Et_upper(hamiltonian.floquet_type, H1 / pulse_value, hamiltonian.NF)
+    else:
+        return 0, 0
+
+def evaluate_pulse_NAC(
+    pulse_gradient: float, # note: the current implementation don't support complex pulse value, yet
+    grad_H: RealOperator,
+    evals: RealVector,
+    evecs: GenericOperator,
+    is_floquet: bool = False,
+) -> GenericOperator:
+    if pulse_gradient == 0:
+        return 0
+    elif is_floquet:
+        grad_H_upper = grad_H
         return evaluate_pulse_NAC_TD(pulse_gradient, grad_H_upper, evals, evecs) + evaluate_pulse_NAC_TD(np.conjugate(pulse_gradient), grad_H_upper.T.conjugate(), evals, evecs)
+    else:
+        return evaluate_pulse_NAC_TD(pulse_gradient, grad_H, evals, evecs)
         
         
 def evaluate_pulse_NAC_TD(
@@ -49,7 +62,7 @@ def evaluate_pulse_NAC_TD(
     evecs: RealOperator,
 ) -> GenericOperator:
     if np.iscomplexobj(grad_H) or np.iscomplexobj(evecs):
-        return evaluate_pulse_NAC_TD_complex(pulse_gradient, grad_H, evals, evecs)
+        return evaluate_pulse_NAC_TD_complex(pulse_gradient, grad_H.astype(np.complex128), evals, evecs.astype(np.complex128))
     else:
         return evaluate_pulse_NAC_TD_real(pulse_gradient, grad_H, evals, evecs)
 
@@ -82,6 +95,7 @@ def evaluate_pulse_NAC_TD_complex(
         for jj in range(ii+1, evals.shape[0]):
             nac_pulse[ii, jj] = grad_H[ii, jj] / (evals[ii] - evals[jj]) * pulse_gradient
             nac_pulse[jj, ii] = -nac_pulse[ii, jj].conjugate()
+    return nac_pulse
 
 def evaluate_nonadiabatic_couplings(
     dHdR: GenericVectorOperator,

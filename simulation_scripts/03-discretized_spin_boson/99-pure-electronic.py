@@ -125,7 +125,10 @@ def derivative_adiabatic_floquet(
 ) -> ComplexOperator:
     evals, evecs, phase_correction = diagonalization(H, last_evecs) 
     pulse_dot = get_pulse_dot(pulse, t)
-    nac = get_nac(mu, evals, evecs, pulse_dot) + get_nac(mu.conjugate().T, evals, evecs, np.conjugate(pulse_dot))
+    nac1 = get_nac(mu, evals, evecs, pulse_dot)
+    nac2 = get_nac(mu.conjugate().T, evals, evecs, np.conjugate(pulse_dot))
+    # print(f"nac1: {nac1}, nac2: {nac2}")
+    nac = nac1 + nac2
     # H_diag = np.diagflat(evals)
     H = np.diagflat(evals) - 1.j * nac
     rho_dot = -1.j * (np.dot(H, rho) - np.dot(rho, H))

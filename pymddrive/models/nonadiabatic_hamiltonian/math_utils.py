@@ -48,9 +48,13 @@ def get_phase_correction_real(prev_evecs: RealOperator, curr_evecs: RealOperator
 def get_phase_correction_complex(prev_evecs: GenericOperator, curr_evecs: GenericOperator) -> GenericOperator:
     TOL = 1e-10
     phase_correction = np.zeros(curr_evecs.shape[0], dtype=np.complex128)
+    tmp1 = np.zeros(curr_evecs.shape[0], dtype=np.complex128)
+    tmp2 = np.zeros(curr_evecs.shape[0], dtype=np.complex128)
     for ii in range(curr_evecs.shape[1]):
-        tmp1 = np.ascontiguousarray(prev_evecs[:, ii])
-        tmp2 = np.ascontiguousarray(curr_evecs[:, ii])
+        # tmp1 = np.ascontiguousarray(prev_evecs[:, ii], dtype=np.complex128)
+        # tmp2 = np.ascontiguousarray(curr_evecs[:, ii], dtype=np.complex128)
+        tmp1[:] = prev_evecs[:, ii] 
+        tmp2[:] = curr_evecs[:, ii]
         tmpval: np.complex128 = np.dot(tmp1.conjugate(), tmp2)
         phase_correction[ii] = 1.0 if np.abs(tmpval) < TOL else tmpval / np.abs(tmpval)
     return phase_correction

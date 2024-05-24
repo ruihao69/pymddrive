@@ -231,12 +231,13 @@ if __name__ == "__main__":
     # project_prefix = "data_floquet_fssh-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
     # project_prefix = "data_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
     # project_prefix = "data_CW_ehrenfest_diabatic-E0_0.0925-Omega_0.05696-N_8-phi_0.0"
-    project_prefix = "data_f_ehrenfest_adiabatic-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
+    # project_prefix = "data_f_ehrenfest_adiabatic-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
+    project_prefix = "data_ehrenfest_adiabatic-E0_0.0925-Omega_0.05696-N_16-phi_0.0"
     init_state = 0
     dt = 1 / 20 / Omega
     NF = estimate_NF(A, Omega)
     # NF = 10
-    # NF = None
+    NF = None
 
     main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.EHRENFEST, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)
     # main(project_prefix=project_prefix, ntrajs=ntrajs, E0=E0, Omega=Omega, N=Nc, phi=phi, pulse_type=pulse_type, solver=NonadiabaticDynamicsMethods.FSSH, basis_rep=BasisRepresentation.ADIABATIC, integrator=NumericalIntegrators.RK4, NF=NF, dt=dt, init_state=init_state, param_set=param_set, t0=t0)

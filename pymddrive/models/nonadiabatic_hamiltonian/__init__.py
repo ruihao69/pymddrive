@@ -6,6 +6,7 @@ from .nonadiabatic_hamiltonian import evaluate_hamiltonian
 from .nonadiabatic_hamiltonian import evaluate_nonadiabatic_couplings
 from .nonadiabatic_hamiltonian import vectorized_diagonalization
 from .nonadiabatic_hamiltonian import evaluate_pulse_NAC
+from .nonadiabatic_hamiltonian import evaluate_pulse_gradient
 
 from .math_utils import diagonalization
 from .math_utils import diabatic_to_adiabatic
@@ -25,5 +26,6 @@ __all__ = [
     "nac_phase_following",
     'vectorized_diagonalization',
     'align_phase',
+    'evaluate_pulse_gradient',
     'evaluate_pulse_NAC',
 ]
