@@ -15,6 +15,9 @@ class UnitPulse(PulseBase):
     def _pulse_func(self, t: RealNumber) -> AnyNumber:
         return self.A
     
+    def _gradient_func(self, t: RealNumber) -> AnyNumber:
+        return 0.0
+    
     @classmethod
     def from_cosine_pulse(cls, cosine_pulse: "CosinePulse") -> "UnitPulse":
         return cls(A=cosine_pulse.A)

@@ -17,7 +17,10 @@ class SineSquarePulse(PulseBase):
 
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
         return SineSquarePulse.sine_square_pulse(self.A, self.Omega, self.N, self.phi, time)
-
+    
+    def _gradient_func(self, time: RealNumber) -> AnyNumber:
+        return SineSquarePulse.sine_square_pulse_gradient(self.A, self.Omega, self.N, self.phi, time)
+    
     @staticmethod
     def sine_square_pulse(
         A: AnyNumber,
@@ -27,6 +30,17 @@ class SineSquarePulse(PulseBase):
         time: RealNumber
     ) -> AnyNumber:
         return A * np.square(np.sin(0.5*Omega/N*time)) * np.sin(Omega * time + phi)
+    
+    @staticmethod
+    def sine_square_pulse_gradient(
+        A: AnyNumber,
+        Omega: RealNumber,
+        N: int,
+        phi: RealNumber,
+        time: RealNumber
+    ) -> AnyNumber:
+        # Omega*sin(Omega*t/(2*N))**2*cos(Omega*t + phi) + Omega*sin(Omega*t/(2*N))*sin(Omega*t + phi)*cos(Omega*t/(2*N))/N
+        return A * (Omega * np.square(np.sin(0.5*Omega/N*time)) * np.cos(Omega*time + phi) + Omega * np.sin(Omega*time + phi) * np.sin(0.5*Omega/N*time) * np.cos(0.5*Omega/N*time) / N)
 
 
 # %% the temperary testting/debugging code

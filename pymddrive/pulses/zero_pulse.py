@@ -5,3 +5,6 @@ class ZeroPulse(PulseBase):
         
     def _pulse_func(self, t: RealNumber) -> AnyNumber:
         return 0
+    
+    def _gradient_func(self, t: RealNumber) -> AnyNumber:
+        return 0

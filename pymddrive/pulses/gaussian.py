@@ -16,6 +16,9 @@ class Gaussian(PulseBase):
 
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
         return Gaussian.gaussian_pulse(self.A, self.t0, self.tau, time)
+    
+    def _gradient_func(self, time: RealNumber) -> AnyNumber:
+        return Gaussian.gaussian_pulse_gradient(self.A, self.t0, self.tau, time)
         
     @staticmethod
     def gaussian_pulse(
@@ -25,6 +28,15 @@ class Gaussian(PulseBase):
         time: RealNumber
     ) -> AnyNumber:
         return A * np.exp(-0.5 * (time - t0)**2 / tau**2) 
+    
+    @staticmethod
+    def gaussian_pulse_gradient(
+        A: AnyNumber,
+        t0: RealNumber,
+        tau: RealNumber,
+        time: RealNumber
+    ) -> AnyNumber:
+        return -A * (time - t0) / tau**2 * np.exp(-0.5 * (time - t0)**2 / tau**2)   
     
     @classmethod
     def from_quasi_floquet_morlet_real(cls, morlet: MorletReal)->"Gaussian":

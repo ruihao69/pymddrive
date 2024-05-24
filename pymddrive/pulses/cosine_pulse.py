@@ -14,6 +14,9 @@ class CosinePulse(PulseBase):
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
         return self.A * np.cos(self.Omega * time)
     
+    def _gradient_func(self, time: RealNumber) -> AnyNumber:
+        return -self.A * self.Omega * np.sin(self.Omega * time)
+    
 if __name__ == "__main__":
     A = 1.00
     Omega = 1.00

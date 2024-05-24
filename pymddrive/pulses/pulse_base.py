@@ -45,6 +45,31 @@ class PulseBase(ABC):
             self.Omega = Omega
         else:
             raise ValueError(f"After the pulse has been initialized, you can only set the carrier frequency with a real number, not {Omega}")
-    
+        
+    def gradient(self, t: float) -> float:
+        """
+        Args:
+            t (float): the time
+
+        Returns:
+            float: the gradient for the pulse
+        """
+        if hasattr(self, '_gradient_func'):
+            return self._gradient_func(t)
+        else:
+            return PulseBase.finite_deference_gradient(self, t) 
+        
+    @staticmethod
+    def finite_deference_gradient(pulse, t: float) -> float:
+        """Ad-hoc finite difference implementation of the gradient for the pulse.
+
+        Args:
+            t (float): the time
+
+        Returns:
+            float: the gradient for the pulse
+        """
+        delta = 1e-6
+        return (pulse(t + delta) - pulse(t - delta)) / (2 * delta)
         
 # %%

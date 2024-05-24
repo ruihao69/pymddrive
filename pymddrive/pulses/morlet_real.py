@@ -17,6 +17,9 @@ class MorletReal(PulseBase):
 
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
         return MorletReal.real_morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
+    
+    def _gradient_func(self, time: RealNumber) -> AnyNumber:
+        return MorletReal.real_morlet_pulse_gradient(self.A, self.t0, self.tau, self.Omega, self.phi, time)
 
     @staticmethod
     def real_morlet_pulse(
@@ -32,6 +35,17 @@ class MorletReal(PulseBase):
         
         # real-valued Morlet wavelet without the phase factor
         # return A * np.cos(Omega * time) * np.exp(-0.5 * (time - t0)**2 / tau**2)
+        
+    @staticmethod
+    def real_morlet_pulse_gradient(
+        A: AnyNumber,
+        t0: RealNumber,
+        tau: RealNumber,
+        Omega: RealNumber,
+        phi: RealNumber,
+        time: RealNumber
+    ) -> AnyNumber:
+        return -A * Omega * np.sin(Omega * (time - t0) + phi) * np.exp(-0.5 * (time - t0)**2 / tau**2) - A * (time - t0) / tau**2 * np.cos(Omega * (time - t0) + phi) * np.exp(-0.5 * (time - t0)**2 / tau**2)
     
 # %% The temperary testting/debugging code
 def _test_debug_morlet_real():

@@ -18,6 +18,9 @@ class Morlet(PulseBase):
 
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
         return Morlet.morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
+    
+    def _gradient_func(self, time: RealNumber) -> AnyNumber:
+        return Morlet.morlet_pulse_gradient(self.A, self.t0, self.tau, self.Omega, self.phi, time)
 
     @staticmethod
     def morlet_pulse(
@@ -29,6 +32,17 @@ class Morlet(PulseBase):
         time: RealNumber
     ) -> complex:
         return A * np.exp(-1j * (Omega * (time - t0) + phi)) * np.exp(-0.5 * (time - t0)**2 / tau**2)
+    
+    @staticmethod
+    def morlet_pulse_gradient(
+        A: AnyNumber,
+        t0: RealNumber,
+        tau: RealNumber,
+        Omega: RealNumber,
+        phi: RealNumber,
+        time: RealNumber
+    ) -> AnyNumber:
+        return -1j * A * Omega * np.exp(-1j * (Omega * (time - t0) + phi)) * np.exp(-0.5 * (time - t0)**2 / tau**2) - A * (time - t0) / tau**2 * np.exp(-1j * (Omega * (time - t0) + phi)) * np.exp(-0.5 * (time - t0)**2 / tau**2) 
 
 
 # %% the temperary testting/debugging code
