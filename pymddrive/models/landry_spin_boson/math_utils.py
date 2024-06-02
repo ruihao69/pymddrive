@@ -18,10 +18,11 @@ def get_sigma_y() -> GenericOperator:
     return np.array([[0, -1j], [1j, 0]])
 
 def mu_Et(mu: GenericOperator, Et: Union[float, complex]) -> GenericOperator:
-    if not np.iscomplexobj(Et):
-        return mu * Et
-    else:
-        return _mu_Et(mu, Et)
+    # if not np.iscomplexobj(Et):
+    #     return mu * Et
+    # else:
+    #     return _mu_Et(mu, Et)
+    return mu * Et
 
 @njit
 def _mu_Et(mu: GenericOperator, Et: complex) -> GenericOperator:
@@ -35,10 +36,11 @@ def _mu_Et(mu: GenericOperator, Et: complex) -> GenericOperator:
     return mu_Et
 
 def dmu_dR_Et(dmu_dR: GenericVectorOperator, Et: Union[float, complex]) -> GenericVectorOperator:
-    if not np.iscomplexobj(Et):
-        return dmu_dR * Et
-    else:
-        return _dmu_dR_Et(dmu_dR, Et)
+    # if not np.iscomplexobj(Et):
+    #     return dmu_dR * Et
+    # else:
+    #     return _dmu_dR_Et(dmu_dR, Et)
+    return dmu_dR * Et
     
 @njit
 def _dmu_dR_Et(dmu_dR: GenericVectorOperator, Et: Union[float, complex]) -> GenericVectorOperator:

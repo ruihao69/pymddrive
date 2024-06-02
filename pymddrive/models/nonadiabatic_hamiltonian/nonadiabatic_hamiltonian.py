@@ -49,8 +49,13 @@ def evaluate_pulse_NAC(
     if pulse_gradient == 0:
         return 0
     elif is_floquet:
-        grad_H_upper = grad_H
-        return evaluate_pulse_NAC_TD(pulse_gradient, grad_H_upper, evals, evecs) + evaluate_pulse_NAC_TD(np.conjugate(pulse_gradient), grad_H_upper.T.conjugate(), evals, evecs)
+        grad_H_upper = -grad_H
+        grad_H_lower = -grad_H.conjugate().T
+        # return evaluate_pulse_NAC_TD(pulse_gradient, grad_H_upper, evals, evecs) + evaluate_pulse_NAC_TD(np.conjugate(pulse_gradient), grad_H_lower, evals, evecs)
+        return evaluate_pulse_NAC_TD(pulse_gradient, grad_H_lower, evals, evecs) + evaluate_pulse_NAC_TD(np.conjugate(pulse_gradient), grad_H_upper, evals, evecs)
+        # grad_H = grad_H + grad_H.conjugate().T
+        # print(f"{pulse_gradient=}")
+        # return evaluate_pulse_NAC_TD(pulse_gradient, grad_H, evals, evecs)
     else:
         return evaluate_pulse_NAC_TD(pulse_gradient, grad_H, evals, evecs)
         
@@ -77,9 +82,9 @@ def evaluate_pulse_NAC_TD_real(
     for ii in range(evals.shape[0]):
         nac_pulse[ii, ii] = 0.0
         for jj in range(ii+1, evals.shape[0]):
-            nac_pulse[ii, jj] = grad_H[ii, jj] / (evals[ii] - evals[jj]) * pulse_gradient
+            nac_pulse[ii, jj] = grad_H[ii, jj] / (evals[ii] - evals[jj]) # * pulse_gradient
             nac_pulse[jj, ii] = -nac_pulse[ii, jj]
-    return nac_pulse
+    return nac_pulse * pulse_gradient
 
 @njit
 def evaluate_pulse_NAC_TD_complex(
@@ -93,9 +98,9 @@ def evaluate_pulse_NAC_TD_complex(
     for ii in range(evals.shape[0]):
         nac_pulse[ii, ii] = 0.0
         for jj in range(ii+1, evals.shape[0]):
-            nac_pulse[ii, jj] = grad_H[ii, jj] / (evals[ii] - evals[jj]) * pulse_gradient
+            nac_pulse[ii, jj] = grad_H[ii, jj] / (evals[ii] - evals[jj]) # * pulse_gradient
             nac_pulse[jj, ii] = -nac_pulse[ii, jj].conjugate()
-    return nac_pulse
+    return nac_pulse * pulse_gradient
 
 def evaluate_nonadiabatic_couplings(
     dHdR: GenericVectorOperator,
@@ -103,7 +108,10 @@ def evaluate_nonadiabatic_couplings(
     evecs: GenericOperator,
 ) -> Tuple[NDArray[Shape['A, A, B'], Any], NDArray[Shape['A, B'], Any], NDArray[Shape['A, A, B'], Any]]:
     if np.iscomplexobj(dHdR) or np.iscomplexobj(evecs):
-        return evaluate_nonadiabatic_couplings_complex(dHdR, evals, evecs)
+        try:
+            return evaluate_nonadiabatic_couplings_complex(dHdR, evals, evecs)
+        except ZeroDivisionError:
+            raise ZeroDivisionError(f"Conical intersection detected. Please check the Hamiltonian matrix. Print the eigenvalues {evals}")
     else:
         return evaluate_nonadiabatic_couplings_real(dHdR, evals, evecs)
 

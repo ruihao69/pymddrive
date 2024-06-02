@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+from pymddrive.pulses.pulse_base import PulseBase
 from pymddrive.pulses.gaussian import Gaussian
 
 class TestGaussian(unittest.TestCase):
@@ -35,9 +36,10 @@ class TestGaussian(unittest.TestCase):
         t0 = 0.0
         tau = 1.0
         time = np.random.uniform(-3*tau, 3*tau)
-        expected_result = -A * (time - t0) / tau**2 * np.exp(-0.5 * (time - t0)**2 / tau**2)
         gaussian = Gaussian(A=A, t0=t0, tau=tau)
-        result = gaussian._gradient_func(time)
+        expected_result = PulseBase.finite_deference_gradient(gaussian, time)
+        result = gaussian.gradient(time)
+        # result = gaussian._gradient_func(time)
         self.assertAlmostEqual(result, expected_result)
 
 if __name__ == '__main__':

@@ -2,14 +2,14 @@ import attr
 import numpy as np
 from attrs import define, field
 
-from pymddrive.my_types import RealVector, ComplexVector, ComplexOperator, GenericOperator, GenericDiagonalVectorOperator, GenericVectorOperator, GenericVector
+from pymddrive.my_types import RealVector, ComplexVector, ComplexOperator, GenericOperator, GenericVectorOperator, GenericVector
 from pymddrive.dynamics.cache import Cache
 from pymddrive.dynamics.options import BasisRepresentation, QuantumRepresentation
 from pymddrive.dynamics.nonadiabatic_solvers.nonadiabatic_solver_base import NonadiabaticSolverBase, NonadiabaticProperties
 from pymddrive.dynamics.nonadiabatic_solvers.math_utils import expected_value, diabatic_equations_of_motion, adiabatic_equations_of_motion, compute_v_dot_d
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.ehrenfest_math_utils import mean_force_adiabatic_representation
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations, compute_populations
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization, adiabatic_to_diabatic, diabatic_to_adiabatic, evaluate_pulse_NAC, evaluate_pulse_gradient
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization, evaluate_pulse_NAC, evaluate_pulse_gradient
 from pymddrive.models.nonadiabatic_hamiltonian.math_utils import get_corrected_rho_or_psi
 from pymddrive.low_level.states import State
 
@@ -129,7 +129,9 @@ class Ehrenfest(NonadiabaticSolverBase):
         # evals, evecs = diagonalization(H, last_evecs)
         evals, evecs, phase_correction = diagonalization(H, prev_evecs=last_evecs)
         # phase_correction_relative =  phase_correction / last_phase_correction
-        phase_correction_relative = phase_correction
+        # phase_correction_relative = phase_correction / last_phase_correction
+        # phase_correction_relative = last_phase_correction 
+        phase_correction_relative = phase_correction / last_phase_correction
         # compute the nonadiabatic couplings
         d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
         # evaluate the v_dot_d term

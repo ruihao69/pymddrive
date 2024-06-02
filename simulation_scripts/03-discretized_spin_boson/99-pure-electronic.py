@@ -184,18 +184,27 @@ def get_cos_dHF_dE(
     tmp = np.hstack((tmp, hpatch))
     return 0.5 * (tmp + tmp.T.conj())   
 
-def get_cos_dHF_dE_lower(
+def get_cos_dHF_dE_upper(
     H1,
     NF: int,
     dim: int
 ):
-    data = (H1 for _ in range(2*NF))
-    diag_tmp = LA.block_diag(*data)
-    vpatch = np.zeros((dim, diag_tmp.shape[1]), dtype=np.complex128)
-    tmp = np.vstack((vpatch, diag_tmp))
-    hpatch = np.zeros((tmp.shape[0], dim), dtype=np.complex128)
-    tmp = np.hstack((tmp, hpatch))
-    return 0.5 * tmp    
+    # data = (H1 for _ in range(2*NF))
+    # diag_tmp = LA.block_diag(*data)
+    # vpatch = np.zeros((dim, diag_tmp.shape[1]), dtype=np.complex128)
+    # tmp = np.vstack((vpatch, diag_tmp))
+    # hpatch = np.zeros((tmp.shape[0], dim), dtype=np.complex128)
+    # tmp = np.hstack((tmp, hpatch))
+    # return 0.5 * tmp    
+    dim: int = H1.shape[0]
+    dtype = H1.dtype
+    
+    dimF = (2 * NF + 1) * dim
+    grad_HF_Et_upper = np.zeros((dimF, dimF), dtype=dtype)
+    data = (H1 * 0.5 for _ in range(2 * NF))
+    # use broadcasting to fill the upper 
+    grad_HF_Et_upper[:(dimF-dim), dim:] = LA.block_diag(*data)
+    return grad_HF_Et_upper
     
     
 def rk4_floquet(
@@ -214,7 +223,7 @@ def rk4_floquet(
         if last_evecs is None:
             return derivative(HF, rho)
         else:
-            return derivative_adiabatic_floquet(t, HF, get_cos_dHF_dE_lower(mu, NF, dim=2).T.conj(), envelope_pulse, rho, last_evecs, last_phase_correction)
+            return derivative_adiabatic_floquet(t, HF, get_cos_dHF_dE_upper(mu, NF, dim=2), envelope_pulse, rho, last_evecs, last_phase_correction)
     
     H1 = mu * envelope_pulse(t)
     HF = get_HF_cos(H0, H1, Omega, NF)
