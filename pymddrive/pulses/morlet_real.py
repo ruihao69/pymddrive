@@ -6,6 +6,8 @@ import numpy as np
 from pymddrive.my_types import AnyNumber, RealNumber
 from pymddrive.pulses.pulse_base import PulseBase
 
+from typing import Union
+
 @define
 class MorletReal(PulseBase):
     A: AnyNumber = field(on_setattr=attr.setters.frozen)
@@ -46,6 +48,13 @@ class MorletReal(PulseBase):
         time: RealNumber
     ) -> AnyNumber:
         return -A * Omega * np.sin(Omega * (time - t0) + phi) * np.exp(-0.5 * (time - t0)**2 / tau**2) - A * (time - t0) / tau**2 * np.cos(Omega * (time - t0) + phi) * np.exp(-0.5 * (time - t0)**2 / tau**2)
+    
+    @staticmethod 
+    def _cannonical_amplitude(t: RealNumber, A: AnyNumber, Omega: RealNumber, phi: RealNumber, t0: RealNumber, tau: RealNumber) -> Union[complex, float]:
+        return A * np.exp(1.0j * (phi - Omega * t0)) * np.exp(-0.5 * (t - t0)**2 / tau**2)
+        
+    def cannonical_amplitude(self, t: float) -> Union[complex, float]:
+        return MorletReal._cannonical_amplitude(t, self.A, self.Omega, self.phi, self.t0, self.tau)
     
 # %% The temperary testting/debugging code
 def _test_debug_morlet_real():

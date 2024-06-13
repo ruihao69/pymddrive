@@ -5,7 +5,7 @@ This module defines the Pulse and MultiPulse classes for handling pulse signals.
 import attr
 from attrs import define, field
 
-from typing import Optional
+from typing import Optional, Union
 from numbers import Real
 from collections import OrderedDict
 from abc import ABC, abstractmethod
@@ -71,5 +71,24 @@ class PulseBase(ABC):
         """
         delta = 1e-6
         return (pulse(t + delta) - pulse(t - delta)) / (2 * delta)
+    
+    
+    @abstractmethod
+    def cannonical_amplitude(self, t: float) -> Union[complex, float]:
+        """The 'cannonical' amplitude of the pulse.
+        
+        In dipole approximation, the electric field of the pulse is given by
+            E(t) = 0.5 * [\epsilon(t)e^{i\Omega t} + \epsilon^*(t)e^{-i\Omega t}] 
+                 = Re[\epsilon(t)] cos(\Omega t) - Im[\epsilon(t)] sin(\Omega t)
+        This function returns the complex amplitude \epsilon(t) of the pulse.
+
+        Args:
+            t (float): the time
+
+        Returns:
+            Union[complex, float]: the complex amplitude of the pulse
+        """
+        raise NotImplementedError("The cannonical_amplitude method must be implemented in the subclass.")
+       
         
 # %%

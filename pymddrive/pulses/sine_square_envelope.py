@@ -20,6 +20,9 @@ class SineSquareEnvelope(PulseBase):
     
     def _gradient_func(self, time: RealNumber) -> AnyNumber:
         return SineSquareEnvelope.sine_square_gradient(self.A, self.Omega, self.N, time)
+    
+    def cannonical_amplitude(self, t: float) -> complex:
+        raise NotImplementedError(f"Envelope pulse 'SineSquareEnvelope' does not support the method <cannonical_amplitude>.")
 
     @staticmethod
     def sine_square(

@@ -6,6 +6,8 @@ import numpy as np
 from pymddrive.my_types import AnyNumber, RealNumber
 from pymddrive.pulses.pulse_base import PulseBase
 
+from typing import Union
+
 
 @define
 class Morlet(PulseBase):
@@ -21,6 +23,9 @@ class Morlet(PulseBase):
     
     def _gradient_func(self, time: RealNumber) -> AnyNumber:
         return Morlet.morlet_pulse_gradient(self.A, self.t0, self.tau, self.Omega, self.phi, time)
+    
+    def cannonical_amplitude(self, t: float) -> Union[complex, float]:
+        raise NotImplementedError(f"Pulse 'Morlet' does not support the method <cannonical_amplitude>.")
 
     @staticmethod
     def morlet_pulse(

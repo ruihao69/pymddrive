@@ -8,6 +8,8 @@ from pymddrive.my_types import AnyNumber, RealNumber
 from pymddrive.pulses.morlet import Morlet
 from pymddrive.pulses.morlet_real import MorletReal
 
+from typing import Union
+
 @define
 class Gaussian(PulseBase):
     A: AnyNumber = field(default=float('nan'), on_setattr=attr.setters.frozen)
@@ -19,6 +21,9 @@ class Gaussian(PulseBase):
     
     def _gradient_func(self, time: RealNumber) -> AnyNumber:
         return Gaussian.gaussian_pulse_gradient(self.A, self.t0, self.tau, time)
+    
+    def cannonical_amplitude(self, t: float) -> Union[float, complex]:
+        raise NotImplementedError(f"Envelope pulse 'Gaussian' does not support the method <cannonical_amplitude>.")
         
     @staticmethod
     def gaussian_pulse(

@@ -17,6 +17,9 @@ class CosinePulse(PulseBase):
     def _gradient_func(self, time: RealNumber) -> AnyNumber:
         return -self.A * self.Omega * np.sin(self.Omega * time)
     
+    def cannonical_amplitude(self, t: float) -> float:
+        return self.A 
+    
 if __name__ == "__main__":
     A = 1.00
     Omega = 1.00

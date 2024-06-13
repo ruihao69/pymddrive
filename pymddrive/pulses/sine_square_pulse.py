@@ -21,6 +21,9 @@ class SineSquarePulse(PulseBase):
     def _gradient_func(self, time: RealNumber) -> AnyNumber:
         return SineSquarePulse.sine_square_pulse_gradient(self.A, self.Omega, self.N, self.phi, time)
     
+    def cannonical_amplitude(self, t: float) -> complex:
+        raise NotImplementedError(f"<cannonical_amplitude> is not implemented for the pulse 'SineSquarePulse'.")
+    
     @staticmethod
     def sine_square_pulse(
         A: AnyNumber,
