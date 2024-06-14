@@ -140,6 +140,66 @@ def compute_v_dot_d(v: RealVector, dc: GenericVectorOperator) -> GenericOperator
     """
     return np.tensordot(v, dc, axes=([0], [2]))
 
+@njit
+def floquet_expval_rho_2(
+    O_F: GenericOperator,
+    rho_F: ComplexOperator,
+    Omega: float,
+    t: float,
+    NF: int, 
+    dim: int
+) -> float:
+    OF_rhoF = np.dot(O_F, rho_F)
+    expval_cplx: complex = 0.0
+    n = 0
+    for ii in range(dim):
+        for m in range(-NF, NF+1):
+            IN = ii + (m + NF) * dim
+            I0 = ii + (n + NF) * dim
+            expval_cplx += np.exp(1j*m*Omega*t) * OF_rhoF[IN, I0]
+    return np.real(expval_cplx)
+
+@njit
+def floquet_expval_rho_3(
+    O_F: GenericVectorOperator,
+    rho_F: ComplexOperator,
+    Omega: float,
+    t: float,
+    NF: int, 
+    dim: int
+) -> RealVector:
+    expval = np.zeros((O_F.shape[2],), dtype=np.float64)
+    O_tmp = np.zeros((O_F.shape[0], O_F.shape[1]), dtype=np.complex128)
+    for inuc in range(O_F.shape[2]):
+        O_tmp[:] = np.ascontiguousarray(O_F[..., inuc])
+        OF_rhoF = np.dot(O_tmp, rho_F)
+        expval_cplx: complex = 0.0
+        n = 0
+        for ii in range(dim):
+            for m in range(-NF, NF+1):
+                IN = ii + (m + NF) * dim
+                I0 = ii + (n + NF) * dim
+                expval_cplx += np.exp(1j*m*Omega*t) * OF_rhoF[IN, I0]
+        expval[inuc] = np.real(expval_cplx)
+    return expval
+
+def floquet_expval_rho(
+    O_F: Union[GenericOperator, GenericVectorOperator],
+    rho_F: ComplexOperator,
+    Omega: float,
+    t: float,
+    NF: int, 
+    dim: int
+):
+    if O_F.ndim == 2:
+        return floquet_expval_rho_2(O_F, rho_F, Omega, t, NF, dim)
+    elif O_F.ndim == 3:
+        return floquet_expval_rho_3(O_F, rho_F, Omega, t, NF, dim)
+    else:
+        raise ValueError(f"Unsupported operator dimension: {O_F.ndim}")
+    
+    
+
    
 
 # %%

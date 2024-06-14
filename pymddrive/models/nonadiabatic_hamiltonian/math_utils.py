@@ -66,13 +66,15 @@ def get_phase_correction(prev_evecs: GenericOperator, curr_evecs: GenericOperato
         return get_phase_correction_real(prev_evecs, curr_evecs)
     
 def get_corrected_psi(psi: ComplexVector, phase_correction: ComplexVector) -> ComplexVector:
-    return psi * phase_correction 
+    # This phase correction *is* the Eq.4 of J. Phys. Chem. Lett. 2018, 9, 6096−6102
+    return psi * phase_correction
 
 @njit
 def get_corrected_rho(rho: ComplexOperator, phase_correction: ComplexVector) -> ComplexVector:
     rho_corrected = np.copy(rho)
     for ii in range(rho.shape[1]):
         for jj in range(ii + 1, rho.shape[0]):
+            # this phase is deduced from the Eq.4 of J. Phys. Chem. Lett. 2018, 9, 6096−6102
             rho_corrected[ii, jj] = rho[ii, jj] * (phase_correction[ii] * np.conjugate(phase_correction[jj]))
             rho_corrected[jj, ii] = rho_corrected[ii, jj].conjugate()
     return rho_corrected
@@ -189,7 +191,12 @@ def adjust_nac_phase(d_prev: GenericVectorOperator, d_curr: GenericVectorOperato
 def diagonalization(hamiltonian: GenericOperator, prev_evecs: Optional[GenericOperator]=None) -> Tuple[RealVector, GenericOperator, GenericVector]:
     evals, evecs = LA.eigh(hamiltonian)
     phase_correction = get_phase_correction(prev_evecs, evecs) if np.sum(np.shape(prev_evecs)) > 0 else np.ones(hamiltonian.shape[1])
-    return evals, evecs / phase_correction, phase_correction
+    # Note the phase correction is applied to the column of the evecs
+    # see the description below Eq.S30 of A Simple Phase Correction 
+    # Makes a Big Difference in Nonadiabatic Molecular Dynamics by
+    # Alexey V. Akimov*, 2017, JCTC
+    # return evals, evecs / phase_correction[:, None], phase_correction
+    return evals, evecs * np.conjugate(phase_correction), phase_correction
 
 
 def diagonalize_2d_real_symmetric(

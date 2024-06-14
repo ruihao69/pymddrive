@@ -6,11 +6,12 @@ from pymddrive.my_types import RealVector, ComplexVector, ComplexOperator, Gener
 from pymddrive.dynamics.cache import Cache
 from pymddrive.dynamics.options import BasisRepresentation, QuantumRepresentation
 from pymddrive.dynamics.nonadiabatic_solvers.nonadiabatic_solver_base import NonadiabaticSolverBase, NonadiabaticProperties
-from pymddrive.dynamics.nonadiabatic_solvers.math_utils import expected_value, diabatic_equations_of_motion, adiabatic_equations_of_motion, compute_v_dot_d
+from pymddrive.dynamics.nonadiabatic_solvers.math_utils import expected_value, diabatic_equations_of_motion, adiabatic_equations_of_motion, compute_v_dot_d, floquet_expval_rho
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.ehrenfest_math_utils import mean_force_adiabatic_representation
 from pymddrive.dynamics.nonadiabatic_solvers.ehrenfest.populations import compute_floquet_populations, compute_populations
-from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization, evaluate_pulse_NAC, evaluate_pulse_gradient
-from pymddrive.models.nonadiabatic_hamiltonian.math_utils import get_corrected_rho_or_psi
+from pymddrive.models.nonadiabatic_hamiltonian import HamiltonianBase, QuasiFloquetHamiltonianBase, evaluate_hamiltonian, evaluate_nonadiabatic_couplings, diagonalization, evaluate_pulse_NAC, evaluate_pulse_gradient 
+from pymddrive.models.nonadiabatic_hamiltonian.nonadiabatic_hamiltonian import evaluate_nonadiabatic_couplings2, evaluate_pulse_NAC2 
+from pymddrive.models.nonadiabatic_hamiltonian.math_utils import get_corrected_rho_or_psi, adiabatic_to_diabatic
 from pymddrive.low_level.states import State
 
 from typing import Tuple, Union
@@ -40,7 +41,10 @@ class Ehrenfest(NonadiabaticSolverBase):
         #     self.cum_phase_corr = np.copy(phase_correction)
         # else:
         #     np.copyto(self.cum_phase_corr, phase_correction)
-        self.cum_phase_corr = phase_correction
+        # if self.basis_representation == BasisRepresentation.ADIABATIC:
+        #     phase_correction_relative = phase_correction / self.cum_phase_corr
+        #     self.cum_phase_corr = phase_correction
+        #     rho_or_psi = get_corrected_rho_or_psi(rho_or_psi, phase_correction_relative)
         # if self.basis_representation == BasisRepresentation.ADIABATIC:
         #     # rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.hamiltonian._last_evecs)
         #     rho_or_psi_in_diabatic_basis = adiabatic_to_diabatic(rho_or_psi, self.cache.evecs)
@@ -53,13 +57,19 @@ class Ehrenfest(NonadiabaticSolverBase):
         R, P, rho = state.get_variables()
         H, dHdR = evaluate_hamiltonian(t, R, self.hamiltonian)
         v = state.get_v()
+        is_floquet = isinstance(self.hamiltonian, QuasiFloquetHamiltonianBase)
         if self.basis_representation == BasisRepresentation.DIABATIC:
-            dR, dP, drho = self.derivative_diabatic(v, rho, H, dHdR, self.cache.F_langevin)
+            if is_floquet:
+                dR, dP, drho = self.derivative_diabatic_Floquet(v, rho, H, dHdR, self.cache.F_langevin, Omega=self.hamiltonian.get_carrier_frequency(), t=t, NF=self.hamiltonian.NF, dim=self.hamiltonian.dim)
+            else:
+                dR, dP, drho = self.derivative_diabatic(v, rho, H, dHdR, self.cache.F_langevin)
         elif self.basis_representation == BasisRepresentation.ADIABATIC:
             # dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.hamiltonian._last_evecs)
             pulse_gradient, grad_H = evaluate_pulse_gradient(t, R, self.hamiltonian)
-            is_floquet = isinstance(self.hamiltonian, QuasiFloquetHamiltonianBase)
-            dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.cache.evecs, self.cum_phase_corr, pulse_gradient, grad_H, is_floquet)
+            if is_floquet:
+                dR, dP, drho = self.derivative_adiabatic_Floquet(v, rho, H, dHdR, self.cache.F_langevin, self.hamiltonian._last_evecs, self.cum_phase_corr, pulse_gradient, grad_H, is_floquet, t=t, Omega=self.hamiltonian.get_carrier_frequency(), NF=self.hamiltonian.NF, dim=self.hamiltonian.dim)
+            else:
+                dR, dP, drho = self.derivative_adiabatic(v, rho, H, dHdR, self.cache.F_langevin, self.hamiltonian._last_evecs, self.cum_phase_corr, pulse_gradient, grad_H, is_floquet)
         else:
             raise ValueError("Unsupported basis representation.")
         return state.from_unstructured(np.concatenate([dR, dP, drho.flatten()], dtype=np.complex128))
@@ -111,6 +121,27 @@ class Ehrenfest(NonadiabaticSolverBase):
         P_dot = -expected_value(dHdR, rho_or_psi) + F_langevin
         rho_or_psi_dot = diabatic_equations_of_motion(rho_or_psi, H)
         return R_dot, P_dot, rho_or_psi_dot
+    
+    @staticmethod
+    def derivative_diabatic_Floquet(
+        v: RealVector,
+        rho_or_psi: Union[ComplexVector, ComplexOperator],
+        H: GenericOperator,
+        dHdR: GenericVectorOperator,
+        F_langevin: RealVector,
+        Omega: float = None,
+        t: float = None,
+        NF: int = None,
+        dim: int = None
+    ) -> Tuple[RealVector, RealVector, Union[ComplexVector, ComplexOperator]]:
+        R_dot = v
+        if NF is None:
+            P_dot = -expected_value(dHdR, rho_or_psi) + F_langevin
+        else:
+            P_dot = -floquet_expval_rho(dHdR, rho_or_psi, Omega=Omega, t=t, NF=NF, dim=dim) + F_langevin
+        rho_or_psi_dot = diabatic_equations_of_motion(rho_or_psi, H)
+        return R_dot, P_dot, rho_or_psi_dot  
+    
 
     @staticmethod
     def derivative_adiabatic(
@@ -128,12 +159,9 @@ class Ehrenfest(NonadiabaticSolverBase):
         # diagonalize the Hamiltonian
         # evals, evecs = diagonalization(H, last_evecs)
         evals, evecs, phase_correction = diagonalization(H, prev_evecs=last_evecs)
-        # phase_correction_relative =  phase_correction / last_phase_correction
-        # phase_correction_relative = phase_correction / last_phase_correction
-        # phase_correction_relative = last_phase_correction 
-        phase_correction_relative = phase_correction / last_phase_correction
         # compute the nonadiabatic couplings
-        d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
+        # d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
+        d, F, _ = evaluate_nonadiabatic_couplings2(dHdR, evals, evecs, phase_correction)
         # evaluate the v_dot_d term
         v_dot_d = compute_v_dot_d(v, d)
         # compute the nac due to the pulse
@@ -142,7 +170,47 @@ class Ehrenfest(NonadiabaticSolverBase):
         R_dot = v
         P_dot = mean_force_adiabatic_representation(F, evals, d, rho_or_psi) + F_langevin
         rho_or_psi_dot = adiabatic_equations_of_motion(rho_or_psi, evals, v_dot_d + nac_pulse)
-        rho_or_psi_dot = get_corrected_rho_or_psi(rho_or_psi_dot, phase_correction_relative)
+        return R_dot, P_dot, rho_or_psi_dot
+    
+    @staticmethod
+    def derivative_adiabatic_Floquet(
+        v: RealVector,
+        rho_or_psi: Union[ComplexVector, ComplexOperator],
+        H: GenericOperator,
+        dHdR: GenericVectorOperator,
+        F_langevin: RealVector,
+        last_evecs: GenericOperator,
+        last_phase_correction: GenericVector,
+        pulse_gradient: Union[float,complex],
+        grad_H: GenericOperator,
+        is_floquet: bool,
+        t: float = None,
+        Omega: float = None,
+        NF: int = None,
+        dim: int = None
+    ) -> Tuple[RealVector, RealVector, Union[ComplexVector, ComplexOperator]]:
+        # diagonalize the Hamiltonian
+        # evals, evecs = diagonalization(H, last_evecs)
+        evals, evecs, phase_correction = diagonalization(H, prev_evecs=last_evecs)
+        # compute the nonadiabatic couplings
+        # d, F, F_hellmann_feynman = evaluate_nonadiabatic_couplings(dHdR, evals, evecs)
+        d, F, F_hellmann_feynman = evaluate_nonadiabatic_couplings2(dHdR, evals, evecs, phase_correction)
+        # evaluate the v_dot_d term
+        v_dot_d = compute_v_dot_d(v, d)
+        # compute the nac due to the pulse
+        # nac_pulse = evaluate_pulse_NAC(pulse_gradient, grad_H, evals, evecs, is_floquet)
+        nac_pulse = evaluate_pulse_NAC2(pulse_gradient, grad_H, evals, evecs, phase_correction, is_floquet)
+
+        R_dot = v
+        if NF is None:
+            # P_dot = mean_force_adiabatic_representation(F, evals, d, rho_or_psi) + F_langevin
+            P_dot = expected_value(F_hellmann_feynman, rho_or_psi) + F_langevin
+        else:
+            rho_or_psi_diabatic = adiabatic_to_diabatic(rho_or_psi, evecs)
+            P_dot = -floquet_expval_rho(dHdR, rho_or_psi_diabatic, Omega=Omega, t=t, NF=NF, dim=dim) + F_langevin
+            # P_dot = floquet_expval_rho(F_hellmann_feynman, rho_or_psi, Omega=Omega, t=t, NF=NF, dim=dim) + F_langevin
+            
+        rho_or_psi_dot = adiabatic_equations_of_motion(rho_or_psi, evals, v_dot_d + nac_pulse)
         return R_dot, P_dot, rho_or_psi_dot
 
     # Implement the Ehrenfest specific methods

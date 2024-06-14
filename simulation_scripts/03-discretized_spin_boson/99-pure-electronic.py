@@ -111,8 +111,8 @@ def derivative_adiabatic(
     # H_diag = np.diagflat(evals)
     H = np.diagflat(evals) - 1.j * nac
     rho_dot = -1.j * (np.dot(H, rho) - np.dot(rho, H))
-    return get_corrected_rho_or_psi(rho_or_psi=rho_dot, phase_correction=phase_correction/last_phase_correction)
-    # return rho_dot
+    # return get_corrected_rho_or_psi(rho_or_psi=rho_dot, phase_correction=phase_correction/last_phase_correction)
+    return rho_dot
 
 def derivative_adiabatic_floquet(
     t: float,
@@ -132,8 +132,8 @@ def derivative_adiabatic_floquet(
     # H_diag = np.diagflat(evals)
     H = np.diagflat(evals) - 1.j * nac
     rho_dot = -1.j * (np.dot(H, rho) - np.dot(rho, H))
-    return get_corrected_rho_or_psi(rho_or_psi=rho_dot, phase_correction=phase_correction/last_phase_correction)
-    # return rho_dot 
+    # return get_corrected_rho_or_psi(rho_or_psi=rho_dot, phase_correction=phase_correction/last_phase_correction)
+    return rho_dot 
 
 
 def rk4(
@@ -293,7 +293,7 @@ def main_mean_field_adiabatic(
         
         H = H0 + mu * ultrafast_pulse(t)
         _, evecs, phase_correction = diagonalization(H, evecs_last)
-        # rho = get_corrected_rho_or_psi(rho_or_psi=rho, phase_correction=phase_correction)
+        rho = get_corrected_rho_or_psi(rho_or_psi=rho, phase_correction=phase_correction/phase_correction_last)
         # rho = evecs.T.conj() @ rho_diabatic @ evecs
         evecs_last[:] = evecs
         phase_correction_last[:] = phase_correction
@@ -399,7 +399,8 @@ def main_floquet_mean_field_adiabatic(
         rhoF = rk4_floquet(H0=H0, mu=mu, t=t, envelope_pulse=envelope_pulse, rho=rhoF, dt=dt, Omega=driving_Omega, NF=NF, last_evecs=evecs_F_last, last_phase_correction=phase_correction_last)
         HF = get_HF_cos(H0, mu * envelope_pulse(t), driving_Omega, NF)
         _, evecs_F, phase_correction = diagonalization(HF, evecs_F_last)
-        # rhoF = get_corrected_rho_or_psi(rho_or_psi=rhoF, phase_correction=phase_correction)
+        print(f"t: {t}, {np.abs(phase_correction/phase_correction_last)=}")
+        # rhoF = get_corrected_rho_or_psi(rho_or_psi=rhoF, phase_correction=phase_correction_last)
         # rho_F_diabatic = evecs_F_last @ rhoF @ evecs_F_last.T.conj() 
         # rhoF = evecs_F.T.conj() @ rho_F_diabatic @ evecs_F
         evecs_F_last[:] = evecs_F
@@ -464,6 +465,16 @@ if __name__ == "__main__":
     # ax.plot(t_fq, pop_fq[:, 0]/(2*NF+1), label="Floquet")
     ax.plot(t_fq, pop_fq[:, 0], ls='-.', label="Floquet")
     ax.plot(t_adfq, pop_adfq[:, 0], ls='--', label="Floquet Adiabatic")
+    ax.legend()
+    plt.show()
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(t_td, np.sum(pop_td, axis=1), label="Time-dependent")
+    ax.plot(t_adtd, np.sum(pop_adtd, axis=1), ls='--', label="Time-dependent Adiabatic")
+    # ax.plot(t_fq, pop_fq[:, 0]/(2*NF+1), label="Floquet")
+    ax.plot(t_fq, np.sum(pop_fq, axis=1), ls='-.', label="Floquet")
+    ax.plot(t_adfq, np.sum(pop_adfq, axis=1), ls='--', label="Floquet Adiabatic")
     ax.legend()
     plt.show()
 

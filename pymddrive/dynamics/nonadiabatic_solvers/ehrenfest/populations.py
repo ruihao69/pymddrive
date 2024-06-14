@@ -73,6 +73,97 @@ def compute_populations_from_rhoF_ddd_impl(
     return populations
 
 @njit
+def compute_populations_from_rhoF_ddd_impl2(
+    rhoF: BlockFloquetOperator, 
+    Omega: float, 
+    t: float, 
+    NF: int, 
+    dim: int,
+    evecs_0: GenericOperator,
+    evecs_F: GenericOperator,
+) -> RealVector:
+    populations = np.zeros(dim, dtype=np.float64)
+    nn: int = 0
+    for ii in range(dim):
+        accum: complex = 0.0 + 0.0j
+        for mm in range(-NF, NF+1):
+            accum += rhoF[mm+NF, nn+NF, ii, ii] * np.exp(1j * (mm - nn) * Omega * t)
+        populations[ii] = accum.real
+    return populations
+
+
+def compute_populations_from_rhoF_ddd_impl3(
+    rhoF: BlockFloquetOperator, 
+    Omega: float, 
+    t: float, 
+    NF: int, 
+    dim: int,
+    evecs_0: GenericOperator,
+    evecs_F: GenericOperator,
+) -> RealVector:
+    def get_projector_iF(ii: int, NF: int, dim: int) -> GenericOperator:
+        import scipy.sparse as sps
+        projector_i = np.zeros((dim, dim), dtype=np.complex128)
+        projector_i[ii, ii] = 1.0
+        return sps.block_diag([projector_i] * (2 * NF + 1)).toarray()
+    
+    projectors = [get_projector_iF(ii, NF, dim) for ii in range(dim)]
+    return np.array([np.real(np.trace(np.dot(rhoF, projector))) for projector in projectors])
+
+def compute_populations_from_rhoF_ddd_impl4(
+    rhoF: BlockFloquetOperator, 
+    Omega: float, 
+    t: float, 
+    NF: int, 
+    dim: int,
+    evecs_0: GenericOperator,
+    evecs_F: GenericOperator,
+) -> RealVector:
+    def get_projector_iF(ii: int, NF: int, dim: int) -> GenericOperator:
+        import scipy.sparse as sps
+        projector_i = np.zeros((dim, dim), dtype=np.complex128)
+        projector_i[ii, ii] = 1.0
+        return sps.block_diag([projector_i] * (2 * NF + 1)).toarray()
+    
+    projectors = [get_projector_iF(ii, NF, dim) for ii in range(dim)]
+    rhoF_proj = [np.dot(rhoF, proj_iF) for proj_iF in projectors]
+    
+    def calculate_populations(rhoF_proj: BlockFloquetOperator, NF: int) -> RealVector:
+        accum: complex = 0.0 + 0.0j
+        # nn = 0
+        for ii in range(dim):
+            for mm in range(-NF, NF+1):
+                for nn in range(-NF, NF+1):
+                    accum += rhoF_proj[mm+NF, nn+NF, ii, ii] * np.exp(1j * (mm - nn) * Omega * t)
+        return accum.real
+    return np.array([calculate_populations(get_rhoF(rhoF_proj, NF, dim), NF) for rhoF_proj in rhoF_proj])
+
+def compute_populations_from_rhoF_ddd_impl5(
+    rhoF: BlockFloquetOperator, 
+    Omega: float, 
+    t: float, 
+    NF: int, 
+    dim: int,
+    evecs_0: GenericOperator,
+    evecs_F: GenericOperator,
+) -> RealVector:
+    def get_projector_iF(ii: int, NF: int, dim: int) -> GenericOperator:
+        projector_i = np.zeros((dim, dim), dtype=np.complex128)
+        projector_i[ii, ii] = 1.0
+        Detection = np.zeros(((2 * NF + 1) * dim, (2 * NF + 1) * dim), dtype=np.complex128)
+        for m in range(-NF, NF+1):
+            for n in range(-NF, NF+1):
+                for i in range(dim):
+                    for j in range(dim):
+                        Detection[i + m * dim, j + n * dim] = projector_i[i, j] * np.exp(1j * Omega * (m - n) * t)
+        return Detection
+    
+    Detections = [get_projector_iF(ii, NF, dim) for ii in range(dim)]
+    rhoF_proj = [np.dot(D, rhoF) for D in Detections]
+    return np.array([np.real(np.trace(rhoF_proj_i)) for rhoF_proj_i in rhoF_proj])
+    
+
+@njit
 def compute_rho_from_rhoF_ddd_impl(
     rhoF: BlockFloquetOperator,
     Omega: float,
@@ -87,7 +178,7 @@ def compute_rho_from_rhoF_ddd_impl(
         for jj in range(dim):
             for mm in range(-NF, NF+1):
                 for nn in range(-NF, NF+1):
-                    rho[ii, jj] += rhoF[mm+NF, nn+NF, ii, jj] * np.exp(1j * (mm - nn) * Omega * t)
+                    rho[ii, jj] += rhoF[mm+NF, nn+NF, ii, jj] * np.exp(-1j * (mm - nn) * Omega * t)
     return rho
 
 def compute_floquet_populations_from_rho_ddd(
@@ -101,6 +192,11 @@ def compute_floquet_populations_from_rho_ddd(
 ) -> RealVector:
     rhoF = get_rhoF(rho, NF, dim)
     return compute_populations_from_rhoF_ddd_impl(rhoF, Omega, t, NF, dim, evecs_0, evecs_F)
+    # return compute_populations_from_rhoF_ddd_impl2(rhoF, Omega, t, NF, dim, evecs_0, evecs_F)
+    # rhoF = rho
+    # return compute_populations_from_rhoF_ddd_impl3(rhoF, Omega, t, NF, dim, evecs_0, evecs_F)
+    # return compute_populations_from_rhoF_ddd_impl4(rhoF, Omega, t, NF, dim, evecs_0, evecs_F)
+    # return compute_populations_from_rhoF_ddd_impl5(rhoF, Omega, t, NF, dim, evecs_0, evecs_F)
 
 def compute_floquet_populations_from_rho_dda(
     rho: GenericOperator,
