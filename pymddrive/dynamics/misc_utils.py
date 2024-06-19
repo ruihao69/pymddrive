@@ -1,6 +1,6 @@
 # %%
 import numpy as np
-from numpy.typing import ArrayLike  
+from numpy.typing import ArrayLike
 import scipy.sparse as sp
 
 from pymddrive.low_level.states import State
@@ -17,10 +17,10 @@ from collections import namedtuple
 HamiltonianRetureType = namedtuple('HamiltonianRetureType', 'H, dHdR, evals, evecs, d, F')
 
 def eval_nonadiabatic_hamiltonian(
-    t: float, R: ArrayLike, hamiltonian: HamiltonianBase, 
+    t: float, R: ArrayLike, hamiltonian: HamiltonianBase,
     basis_rep: BasisRepresentation=BasisRepresentation.ADIABATIC,
     eval_deriv_cp: bool=False,
-) -> HamiltonianRetureType: 
+) -> HamiltonianRetureType:
     flag_reshape = False
     flag_evec_following = True if basis_rep == BasisRepresentation.ADIABATIC else False
     # flag_evec_following = False
@@ -31,12 +31,12 @@ def eval_nonadiabatic_hamiltonian(
         H, dHdR, evals, evecs = evaluate_hamiltonian(t, R, hamiltonian, enable_evec_following=flag_evec_following)
     H = H.toarray() if sp.issparse(H) else H
     dHdR = dHdR.toarray() if sp.issparse(dHdR) else dHdR
-        
+
     if basis_rep == BasisRepresentation.Adiabatic or eval_deriv_cp:
-        d, F = evaluate_nonadiabatic_couplings(dHdR, evals, evecs,)
+        d, F, _ = evaluate_nonadiabatic_couplings(dHdR, evals, evecs,)
     else:
         d, F = None, None
-        
+
     if flag_reshape:
         dHdR = dHdR[:, :, np.newaxis]
         d = d[np.newaxis, :, :] if d is not None else None
@@ -51,11 +51,11 @@ def eval_nonadiabatic_hamiltonian(
     return HamiltonianRetureType(H=H, dHdR=dHdR, evals=evals, evecs=evecs, d=d, F=F)
 
 def estimate_scatter_dt(
-    deriv: callable, 
-    r_bounds: tuple, 
-    s0: State, 
+    deriv: callable,
+    r_bounds: tuple,
+    s0: State,
     cache: Any,
-    nsample: Real=30, 
+    nsample: Real=30,
     t_bounds: Tuple[Real]=None
 ) -> float:
     _, p0, rho0 = s0.get_variables()
@@ -76,14 +76,14 @@ def valid_real_positive_value(value: Real) -> bool:
         return True, flag_pos, flag_real
     else:
         return False, flag_pos, flag_real
-    
+
 def assert_valid_real_positive_value(value: float) -> None:
     flag, flag_pos, flag_real = valid_real_positive_value(value)
     if not flag:
         raise ValueError(f"The value {value} is not a valid real positive number. The flags are {flag_pos=}, {flag_real=}.")
-    
+
 def numerate_file_name(file_name: str, n: int, suffix: Optional[str]=None) -> str:
-    splited_name = file_name.split('.') 
+    splited_name = file_name.split('.')
     extention = splited_name[-1]
     file_name = '.'.join(splited_name[:-1])
     numbers = f"{n:05d}"
@@ -91,5 +91,5 @@ def numerate_file_name(file_name: str, n: int, suffix: Optional[str]=None) -> st
         return ".".join([file_name, numbers, suffix, extention])
     else:
         return ".".join([file_name, numbers, extention])
-    
+
 # %%

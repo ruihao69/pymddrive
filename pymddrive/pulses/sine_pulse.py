@@ -13,3 +13,9 @@ class SinePulse(PulseBase):
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
         self.Omega: RealNumber
         return self.A * np.sin(self.Omega * time)
+    
+    def _gradient_func(self, time: RealNumber) -> AnyNumber:
+        return self.A * self.Omega * np.cos(self.Omega * time)
+    
+    def cannonical_amplitude(self, t: float) -> complex:
+        return (-1.0j) * self.A

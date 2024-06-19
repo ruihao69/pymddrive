@@ -9,6 +9,7 @@ import os
 import glob
 from typing import List, Tuple
 from enum import Enum
+POP_NAN_THRESHOLD = 0.3
 
 def check_filenames(files: List[str]) -> Tuple[bool, List[str]]:
     """The files should be of the form '*.*.nc'. Where the first field is the description, and the second field is the ensemble index.
@@ -49,6 +50,14 @@ def find_trajectories(project_dir: str) -> Tuple[List[str]]:
     # return [netcdf_file(file, 'r', version=1) for file in traj_files], scatter_type
     return traj_files
 
+def mask_populations(populations: np.ndarray) -> np.ndarray:
+    mask1 = (populations > 1 + POP_NAN_THRESHOLD) 
+    mask2 = (populations < -POP_NAN_THRESHOLD)
+    populations[mask1] = np.nan
+    populations[mask2] = np.nan
+    return populations
+    
+
 def load_single_pymddrive_nc(nc_filename: str) -> Tuple[np.ndarray]:
     with open(nc_filename, 'rb') as f:
         nc = netcdf_file(f)
@@ -57,6 +66,8 @@ def load_single_pymddrive_nc(nc_filename: str) -> Tuple[np.ndarray]:
         P = np.array(nc.variables['P'].data) 
         adiabatic_populations = np.array(nc.variables['adiabatic_populations'].data) 
         diabatic_populations = np.array(nc.variables['diabatic_populations'].data) 
+        adiabatic_populations = mask_populations(adiabatic_populations)
+        diabatic_populations = mask_populations(diabatic_populations)
         KE = np.array(nc.variables['KE'].data)  
         PE = np.array(nc.variables['PE'].data) 
     return (t, R, P, adiabatic_populations, diabatic_populations, KE, PE)
@@ -66,7 +77,7 @@ def load_all_pymddrive_nc(nc_files: List[str]) -> Tuple[np.ndarray]:
         delayed(load_single_pymddrive_nc)(ncfile) for ncfile in nc_files
     )
     return all_data
-    
+
 
 def get_t_longest_len(all_data: List[Tuple[np.ndarray]]) -> Tuple[int, np.ndarray]:
     def get_t_single_traj(one_data: str) -> np.ndarray:
@@ -119,8 +130,10 @@ def ensemble_avg(all_data: List[Tuple[np.ndarray]]) -> Tuple[np.ndarray]:
     
     R_avg = np.nanmean(r_ensemble, axis=0)
     P_avg = np.nanmean(p_ensemble, axis=0)    
-    a_pop_avg = a_pop_ensemble.mean(axis=0)
-    d_pop_avg = d_pop_ensemble.mean(axis=0)
+    # a_pop_avg = a_pop_ensemble.mean(axis=0)
+    # d_pop_avg = d_pop_ensemble.mean(axis=0)
+    a_pop_avg = np.nanmean(a_pop_ensemble, axis=0)
+    d_pop_avg = np.nanmean(d_pop_ensemble, axis=0)  
     ke_avg = ke_ensemble.mean(axis=0)
     pe_avg = pe_ensemble.mean(axis=0)   
     return t_longest, R_avg, P_avg, a_pop_avg, d_pop_avg, ke_avg, pe_avg

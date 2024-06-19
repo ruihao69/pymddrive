@@ -22,17 +22,26 @@ def _preprocess_classical_variable(classical_var: Union[float, NDArray[np.float6
     return np_classical_var
 
 def _preprocess_quantum_variable(quantum_var: NDArray[np.complex128]) -> NDArray[np.complex128]:
-    if quantum_var.ndim != 2:
+    if (quantum_var.ndim != 2) and (quantum_var.ndim != 1):
         raise ValueError(f"Invalid shape for quantum variable: {quantum_var.shape}")
     return quantum_var if np.iscomplexobj(quantum_var) else quantum_var.astype(np.complex128)
 
 def process_classical_variables(*classical_vars: Union[float, NDArray[np.float64]]) -> Tuple[Optional[NDArray[np.float64]], Optional[NDArray[np.float64]]]:
     return tuple(_preprocess_classical_variable(var) for var in classical_vars)
 
-def get_state(mass: float, R: Optional[Union[float, NDArray[np.float64]]], P: Optional[Union[float, NDArray[np.float64]]], rho_or_psi: Optional[NDArray[np.complex128]]) -> State:
+def get_state(mass: float, R: Optional[Union[float, NDArray[np.float64]]], P: Optional[Union[float, NDArray[np.float64]]], rho_or_psi: Optional[NDArray[np.complex128]], is_afssh: bool=False) -> State:
     R, P, rho_or_psi = preprocess_variables(R, P, rho_or_psi)
     if (R is not None) and (P is not None) and (rho_or_psi is not None):
-        return State(R, P, mass, rho_or_psi)
+        if not is_afssh:
+            return State(R, P, mass, rho_or_psi)
+        else:
+            n_nuclear = R.shape[0]
+            n_electronic = rho_or_psi.shape[0]  
+            delta_R = np.zeros((n_electronic, n_electronic, n_nuclear), dtype=np.complex128)
+            delta_P = np.zeros((n_electronic, n_electronic, n_nuclear), dtype=np.complex128)
+            if rho_or_psi.ndim == 1:
+                raise ValueError(f"As of now, A-FSSH state only supports density matrix representation")
+            return State(R, P, mass, rho_or_psi, delta_R, delta_P)
     elif (R is not None) and (P is not None):
         return State(R, P, mass)
     elif (R is None) and (P is None) and (rho_or_psi is not None):

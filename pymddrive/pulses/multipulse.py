@@ -63,6 +63,18 @@ class MultiPulse(PulseBase):
             float: The calculated pulse value.
         """
         return sum(p(time) for p in self.pulses)
+    
+    def gradient(self, t: float) -> float:
+        """
+        Calculate the gradient at the given time.
+
+        Args:
+            t (float): The time value.
+
+        Returns:
+            float: The calculated gradient.
+        """
+        return sum(p.gradient(t) for p in self.pulses)
 # %% testing/debugging code
 def _test_debug_multipulse():
     import numpy as np

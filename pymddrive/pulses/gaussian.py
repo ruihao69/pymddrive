@@ -8,6 +8,8 @@ from pymddrive.my_types import AnyNumber, RealNumber
 from pymddrive.pulses.morlet import Morlet
 from pymddrive.pulses.morlet_real import MorletReal
 
+from typing import Union
+
 @define
 class Gaussian(PulseBase):
     A: AnyNumber = field(default=float('nan'), on_setattr=attr.setters.frozen)
@@ -16,6 +18,12 @@ class Gaussian(PulseBase):
 
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
         return Gaussian.gaussian_pulse(self.A, self.t0, self.tau, time)
+    
+    def _gradient_func(self, time: RealNumber) -> AnyNumber:
+        return Gaussian.gaussian_pulse_gradient(self.A, self.t0, self.tau, time)
+    
+    def cannonical_amplitude(self, t: float) -> Union[float, complex]:
+        raise NotImplementedError(f"Envelope pulse 'Gaussian' does not support the method <cannonical_amplitude>.")
         
     @staticmethod
     def gaussian_pulse(
@@ -25,6 +33,15 @@ class Gaussian(PulseBase):
         time: RealNumber
     ) -> AnyNumber:
         return A * np.exp(-0.5 * (time - t0)**2 / tau**2) 
+    
+    @staticmethod
+    def gaussian_pulse_gradient(
+        A: AnyNumber,
+        t0: RealNumber,
+        tau: RealNumber,
+        time: RealNumber
+    ) -> AnyNumber:
+        return -A * (time - t0) / tau**2 * np.exp(-0.5 * (time - t0)**2 / tau**2)   
     
     @classmethod
     def from_quasi_floquet_morlet_real(cls, morlet: MorletReal)->"Gaussian":
@@ -40,14 +57,15 @@ class Gaussian(PulseBase):
             Gaussian: A <Gaussian> pulse resides in the upper right non-diagonal quadrant of the quasi-Floquet Hamiltonian.
         """
         # with phase factor
-        # t0 = morlet.t0; Omega = morlet.Omega; phi = morlet.phi
+        t0 = morlet.t0; Omega = morlet.Omega; phi = morlet.phi
         # phase_factor = np.exp(-1.0j * (Omega * t0 - phi))
-        # gaussian_complex_A: complex = morlet.A * phase_factor
-        # return cls(A=gaussian_complex_A, t0=t0, tau=morlet.tau)
+        phase_factor = np.exp(1.0j * (Omega * t0 - phi)) 
+        gaussian_complex_A: complex = morlet.A * phase_factor
+        return cls(A=gaussian_complex_A, t0=t0, tau=morlet.tau)
     
         # without phase factor
-        t0 = morlet.t0
-        return cls(A=morlet.A, t0=t0, tau=morlet.tau)
+        # t0 = morlet.t0
+        # return cls(A=morlet.A, t0=t0, tau=morlet.tau)
     
     @classmethod
     def from_quasi_floquet_morlet(cls, morlet: Morlet)->"Gaussian":

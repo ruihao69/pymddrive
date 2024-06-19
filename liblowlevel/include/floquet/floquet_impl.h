@@ -40,9 +40,9 @@ void fill_HF_offdiagonal_cosine(
   const size_t dim = V.rows();
   for (size_t block_index = 0; block_index < 2 * NF; ++block_index) {
     // fill the upper triangular part of the block
-    HF.block(block_index * dim, (block_index + 1) * dim, dim, dim) = V;
+    HF.block(block_index * dim, (block_index + 1) * dim, dim, dim) = V * 0.5;
     // fill the lower triangular part of the block
-    HF.block((block_index + 1) * dim, block_index * dim, dim, dim) = V.adjoint();
+    HF.block((block_index + 1) * dim, block_index * dim, dim, dim) = V.adjoint() * 0.5;
   }
 }
 
@@ -55,9 +55,9 @@ void fill_HF_offdiagonal_sine(
   const size_t dim = V.rows();
   for (size_t block_index = 0; block_index < 2 * NF; ++block_index) {
     // fill the upper triangular part of the block
-    HF.block(block_index * dim, (block_index + 1) * dim, dim, dim) = V / constants::IM;
+    HF.block(block_index * dim, (block_index + 1) * dim, dim, dim) = V / constants::IM * 0.5;
     // fill the lower triangular part of the block
-    HF.block((block_index + 1) * dim, block_index * dim, dim, dim) = V.adjoint() / (-constants::IM);
+    HF.block((block_index + 1) * dim, block_index * dim, dim, dim) = V.adjoint() / (-constants::IM) * 0.5;
   }
 }
 
@@ -143,8 +143,8 @@ void fill_dHF_dR_offdiagonal_cosine(
     for (int i = 0; i < dim_electronic; ++i) {
       for (int j = 0; j < dim_electronic; ++j) {
         for (int k = 0; k < dime_nuclear; ++k) {
-          dHF_dR(block_i * dim_electronic + i, block_j * dim_electronic + j, k) = dV_dR(i, j, k);
-          dHF_dR(block_j * dim_electronic + j, block_i * dim_electronic + i, k) = dV_dR_conj(i, j, k);
+          dHF_dR(block_i * dim_electronic + i, block_j * dim_electronic + j, k) = dV_dR(i, j, k) * 0.5;
+          dHF_dR(block_j * dim_electronic + j, block_i * dim_electronic + i, k) = dV_dR_conj(i, j, k) * 0.5;
         }
       }
     }
@@ -172,8 +172,8 @@ void fill_dHF_dR_offdiagonal_sine(
     for (int i = 0; i < dim_electronic; ++i) {
       for (int j = 0; j < dim_electronic; ++j) {
         for (int k = 0; k < dime_nuclear; ++k) {
-          dHF_dR(block_i * dim_electronic + i, block_j * dim_electronic + j, k) = dV_dR(i, j, k) / constants::IM;
-          dHF_dR(block_j * dim_electronic + j, block_i * dim_electronic + i, k) = dV_dR_conj(i, j, k) / (-constants::IM);
+          dHF_dR(block_i * dim_electronic + i, block_j * dim_electronic + j, k) = dV_dR(i, j, k) / constants::IM * 0.5;
+          dHF_dR(block_j * dim_electronic + j, block_i * dim_electronic + i, k) = dV_dR_conj(i, j, k) / (-constants::IM) * 0.5;
         }
       }
     }

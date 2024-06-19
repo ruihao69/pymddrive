@@ -17,7 +17,7 @@ void _eom_wave_function_diabatic(
     Eigen::Ref<const Eigen::VectorXcd> psi,  // Wave function
     Eigen::Ref<Eigen::VectorXcd> d_psi_dt    // Time derivative of wave function
 ) {
-  d_psi_dt.noalias() = -constants::IM * H * psi;
+  d_psi_dt.noalias() = -constants::IM * (H * psi);
 }
 
 template <typename H_t>
@@ -25,7 +25,7 @@ Eigen::VectorXcd eom_wave_function_diabatic(
     Eigen::Ref<const H_t> H,                // Hamiltonian
     Eigen::Ref<const Eigen::VectorXcd> psi  // Wave function
 ) {
-  Eigen::VectorXcd d_psi_dt = Eigen::VectorXcd::Zero(H.cols());
+  Eigen::VectorXcd d_psi_dt(H.cols());
   _eom_wave_function_diabatic(H, psi, d_psi_dt);
   return d_psi_dt;
 }

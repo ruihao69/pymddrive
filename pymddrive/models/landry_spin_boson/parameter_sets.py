@@ -29,6 +29,41 @@ class SymmetricDoubleWell:
     kT: float = 0.00095
     lambd: float = np.sqrt(Er * M * Omega_nuclear**2 / 2)
     
+@dataclass(frozen=True)
+class ResonantDoubleWell:  
+    Omega_nuclear: float = 0.0009113 # 200 cm-1
+    M: float = 1836 # proton mass in atomic units
+    V: float = 0.0005 # weak coupling
+    Er: float = 0.00475
+    epsilon0: float = 0.05695 # energy difference between the two wells
+                              # intended to be resonant with the laser frequency
+    gamma: float = 0.04275
+    kT: float = 0.00095
+    lambd: float = np.sqrt(Er * M * Omega_nuclear**2 / 2)
+    
+@dataclass(frozen=True)
+class AmberJCTC2016:
+    Omega_nuclear: float = 0.0009113    
+    M: float = 1836
+    V: float = 0.000228
+    Er: float = 0.029042
+    epsilon0: float = 0.05695
+    kT: float = 0.0018224881 # 575.5 K
+    gamma: float = 0.0009113 # moderate friction
+    lambd: float = np.sqrt(Er * M * Omega_nuclear**2 / 2)
+    
+@dataclass(frozen=True)
+class MarcusNormalRegime:
+    Omega_nuclear: float = 0.001823
+    M: float = 1836
+    V: float = 0.0054676
+    Er: float = 0.029042
+    epsilon0: float = 0.020 # 0.5442 eV
+    kT: float = 0.001823 # 300 K
+    gamma: float = 0.0054676 # moderate friction
+    lambd: float = np.sqrt(Er * M * Omega_nuclear**2 / 2)
+    
+    
     
 def main(landry_p, label: str):
     import numpy as np

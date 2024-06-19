@@ -18,30 +18,30 @@ class TullyOneTD_type2(TD_HamiltonianBase):
     dim: int = field(default=2, init=False)
 
     def __repr__(self) -> str:
-        return f"Nonadiabatic Hamiltonian TullyOneTD_type1(A={self.A}, B={self.B}, C={self.C}, D={self.D}, pulse={self.pulse})" 
-    
+        return f"Nonadiabatic Hamiltonian TullyOneTD_type1(A={self.A}, B={self.B}, C={self.C}, D={self.D}, pulse={self.pulse})"
+
     def _H0_vector(self, R: RealVector) -> RealVectorOperator:
         V11 = TullyOne.V11(R, self.A, self.B)
         _zeros = np.zeros_like(V11)
         return np.array([[V11, _zeros], [_zeros, -V11]])
 
-    def H0(self, R: RealVector) -> RealOperator: 
+    def H0(self, R: RealVector) -> RealOperator:
         return np.sum(self._H0_vector(R), axis=-1)
-    
+
     def _H1_vector(self, t: float, R: RealVector) -> GenericVectorOperator:
         V12 = self.pulse(t) * TullyOne.V12(R, self.C, self.D)
         _zeros = np.zeros_like(V12)
         return np.array([[_zeros, V12], [V12, _zeros]])
-    
+
     def H1(self, t: float, R: RealVector) -> GenericOperator:
         return np.sum(self._H1_vector(t, R), axis=-1)
-    
+
     def _H_vector(self, t: float, R: RealVector) -> GenericVectorOperator:
-        return self._H0_vector(R) + self._H1_vector(t, R) 
-   
-    def dH0dR(self, R: RealVector) -> RealVectorOperator: 
+        return self._H0_vector(R) + self._H1_vector(t, R)
+
+    def dH0dR(self, R: RealVector) -> RealVectorOperator:
         dV11dR = TullyOne.dV11dR(R, self.A, self.B)
-        _zeros = np.zeros_like(dV11dR)  
+        _zeros = np.zeros_like(dV11dR)
         return np.array([[dV11dR, _zeros], [_zeros, -dV11dR]])
 
     def dH1dR(self, t: float, R: RealVector) -> GenericVectorOperator:
@@ -55,49 +55,49 @@ if __name__ == "__main__":
     from pymddrive.models.nonadiabatic_hamiltonian import vectorized_diagonalization
     from pymddrive.models.nonadiabatic_hamiltonian import evaluate_nonadiabatic_couplings
     from pymddrive.pulses import MorletReal
-    
+
     mr = MorletReal(A=1, t0=0, tau=1, Omega=10.0, phi=0)
-    
+
     print(f"{mr(0.0)=}")
-    
+
     tully_one = TullyOneTD_type2(pulse=mr, A=0.01, B=1.6, C=0.005, D=1.0)
-    
+
     R = np.linspace(-10, 10, 1000)
     H = tully_one._H_vector(0.0, R)
-    
-    time = np.linspace(0, 12, 3000) 
+
+    time = np.linspace(0, 12, 3000)
     pulse = np.array([tully_one.pulse(tt) for tt in time])
-    
+
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(time, pulse, lw=.5)
     ax.set_xlabel("Time")
     ax.set_ylabel("Pulse Signal")
     plt.show()
-    
+
     evals_list, evecs_list = vectorized_diagonalization(H)
-    
+
     nac_list = np.zeros((H.shape[0], H.shape[0], H.shape[-1], R.shape[0]), dtype=H.dtype)
     F_list = np.zeros((H.shape[0], H.shape[-1], R.shape[0]), dtype=H.dtype)
     for kk in range(H.shape[-1]):
         dHdR = tully_one.dHdR(0.0, np.array([R[kk]]))
-        nac_list[..., kk], F_list[..., kk] = evaluate_nonadiabatic_couplings(dHdR, evals_list[:, kk], evecs_list[:, :, kk])
+        nac_list[..., kk], F_list[..., kk], _ = evaluate_nonadiabatic_couplings(dHdR, evals_list[:, kk], evecs_list[:, :, kk])
 
-    
+
     print(H.shape)
     print(evals_list.shape)
     print(evecs_list.shape)
-    
+
     fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.plot(R, H[0, 0, :], label="H11")
     ax.plot(R, H[1, 1, :], label="H22")
-    
+
     ax.plot(R, evals_list[0, :], label="E1")
     ax.plot(R, evals_list[1, :], label="E2")
-    
-    ax.plot(R, -nac_list[0, 1, 0, :]/50, label="NAC12")    
-    
+
+    ax.plot(R, -nac_list[0, 1, 0, :]/50, label="NAC12")
+
     ax.legend()
     plt.show()
 # %%

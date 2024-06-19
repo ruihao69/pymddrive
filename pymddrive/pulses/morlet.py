@@ -6,6 +6,8 @@ import numpy as np
 from pymddrive.my_types import AnyNumber, RealNumber
 from pymddrive.pulses.pulse_base import PulseBase
 
+from typing import Union
+
 
 @define
 class Morlet(PulseBase):
@@ -18,6 +20,12 @@ class Morlet(PulseBase):
 
     def _pulse_func(self, time: RealNumber) -> AnyNumber:
         return Morlet.morlet_pulse(self.A, self.t0, self.tau, self.Omega, self.phi, time)
+    
+    def _gradient_func(self, time: RealNumber) -> AnyNumber:
+        return Morlet.morlet_pulse_gradient(self.A, self.t0, self.tau, self.Omega, self.phi, time)
+    
+    def cannonical_amplitude(self, t: float) -> Union[complex, float]:
+        raise NotImplementedError(f"Pulse 'Morlet' does not support the method <cannonical_amplitude>.")
 
     @staticmethod
     def morlet_pulse(
@@ -29,6 +37,17 @@ class Morlet(PulseBase):
         time: RealNumber
     ) -> complex:
         return A * np.exp(-1j * (Omega * (time - t0) + phi)) * np.exp(-0.5 * (time - t0)**2 / tau**2)
+    
+    @staticmethod
+    def morlet_pulse_gradient(
+        A: AnyNumber,
+        t0: RealNumber,
+        tau: RealNumber,
+        Omega: RealNumber,
+        phi: RealNumber,
+        time: RealNumber
+    ) -> AnyNumber:
+        return -1j * A * Omega * np.exp(-1j * (Omega * (time - t0) + phi)) * np.exp(-0.5 * (time - t0)**2 / tau**2) - A * (time - t0) / tau**2 * np.exp(-1j * (Omega * (time - t0) + phi)) * np.exp(-0.5 * (time - t0)**2 / tau**2) 
 
 
 # %% the temperary testting/debugging code

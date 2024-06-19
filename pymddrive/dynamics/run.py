@@ -98,7 +98,8 @@ def run_dynamics_zvode(
    
     _R, _, _rho = dynamics.s0.get_variables()
     traj_writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
-    restart_writer = RestartWriter(dim_elec=_rho.shape[0], dim_nucl=dynamics.solver.get_dim_nuclear())
+    is_density_matrix = (_rho.ndim == 2)
+    restart_writer = RestartWriter(dim_elec=_rho.shape[0], dim_nucl=dynamics.solver.get_dim_nuclear(), is_density_matrix=is_density_matrix)
     if (restart_every is not None) and not isinstance(restart_every, int):
         raise ValueError(f"The {restart_every=} is not an integer.")
     elif restart_every is None:
@@ -111,10 +112,12 @@ def run_dynamics_zvode(
             traj_writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE)
             if break_condition(t, s):
                 # write the last frame of the restart file
-                restart_writer.write_frame(t=t, R=s.get_R(), P=s.get_P(), rho=s.get_rho())
+                R, P, rho_or_psi = s.get_variables()
+                restart_writer.write_frame(t=t, R=R, P=P, rho_or_psi=rho_or_psi)
                 break
         if (istep % restart_every) == 0:
-            restart_writer.write_frame(t=t, R=s.get_R(), P=s.get_P(), rho=s.get_rho())
+            R, P, rho_or_psi = s.get_variables()
+            restart_writer.write_frame(t=t, R=R, P=P, rho_or_psi=rho_or_psi)
         t, s = step_zvode(t)
     if filename is None:
         warnings.warn(f"You haven't provided an directory for the output file, you'll get nothing. Nonetheless, you can find the temperary data file at {writer.fn}.")
@@ -165,7 +168,8 @@ def run_dynamics_rk4(
        
     _R, _, _rho = dynamics.s0.get_variables()
     traj_writer = PropertiesWriter(dim_elec=dynamics.solver.get_dim_electronic(), dim_nucl=dynamics.solver.get_dim_nuclear())
-    restart_writer = RestartWriter(dim_elec=_rho.shape[0], dim_nucl=dynamics.solver.get_dim_nuclear())
+    is_density_matrix = (_rho.ndim == 2)
+    restart_writer = RestartWriter(dim_elec=_rho.shape[0], dim_nucl=dynamics.solver.get_dim_nuclear(), is_density_matrix=is_density_matrix)
     
     if (restart_every is not None) and not isinstance(restart_every, int):
         raise ValueError(f"The {restart_every=} is not an integer.")
@@ -180,10 +184,12 @@ def run_dynamics_rk4(
             properties = dynamics.solver.calculate_properties(t, s)
             traj_writer.write_frame(t=t, R=properties.R, P=properties.P, adiabatic_populations=properties.adiabatic_populations, diabatic_populations=properties.diabatic_populations, KE=properties.KE, PE=properties.PE) 
             if break_condition(t, s):
-                restart_writer.write_frame(t=t, R=s.get_R(), P=s.get_P(), rho=s.get_rho())
+                R, P, rho_or_psi = s.get_variables()
+                restart_writer.write_frame(t=t, R=R, P=P, rho_or_psi=rho_or_psi)
                 break
         if (istep % restart_every) == 0:
-            restart_writer.write_frame(t=t, R=s.get_R(), P=s.get_P(), rho=s.get_rho())
+            R, P, rho_or_psi = s.get_variables()
+            restart_writer.write_frame(t=t, R=R, P=P, rho_or_psi=rho_or_psi)
         t, s = step_rk4(t, s) 
     
     if filename is None:

@@ -7,6 +7,10 @@ add_compile_options(-O3)              # Generic maximum code optimization
 add_compile_options(-ftree-vectorize) # SIMD vectorize the loops
 add_compile_options(-funroll-loops)   # explicit optimize the loops
 add_compile_options(-Wall -Wextra -Wpedantic) # Enable warning
+# if on Linux, add the following options
+if(UNIX AND NOT APPLE)
+    add_compile_options(-fPIC)
+endif()
 # add_compile_options(-DNDEBUG)          # Disable assert
 # add_compile_options(-march=native)    # Enable the native architecture
 # apply this: -DEIGEN_DONT_VECTORIZE
